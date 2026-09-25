@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 const menu = [
   ["🤖", "مدیر هوشمند", "تحلیل و مدیریت هوشمند"],
   ["💬", "صدایار", "پاسخگویی هوشمند کارکنان"],
+  ["❓", "سؤالات بی‌پاسخ", "موضوعات نیازمند پاسخ"],
   ["🔴", "مسائل نیازمند توجه", "موضوعات مهم"],
   ["⚠️", "مسائل و دغدغه‌ها", "ثبت و پیگیری مسائل"],
   ["🔁", "مسائل پرتکرار", "موضوعات مشابه و تکراری"],
@@ -27,7 +28,8 @@ export default function Home() {
     messages: 0,
     issues: 0,
     ideas: 0,
-    polls: 0
+    polls: 0,
+    unanswered: 0
   });
 
   useEffect(() => {
@@ -37,7 +39,13 @@ export default function Home() {
         const data = await response.json();
 
         if (data.stats) {
-          setStats(data.stats);
+          setStats({
+            messages: data.stats.messages ?? 0,
+            issues: data.stats.issues ?? 0,
+            ideas: data.stats.ideas ?? 0,
+            polls: data.stats.polls ?? 0,
+            unanswered: data.stats.unanswered ?? 0
+          });
         }
       } catch {
         // در صورت نبود اتصال، آمار صفر باقی می‌ماند.
@@ -82,6 +90,11 @@ export default function Home() {
   function openSection(title: string) {
     if (title === "مدیر هوشمند") {
       window.location.href = "/manager";
+      return;
+    }
+
+    if (title === "سؤالات بی‌پاسخ") {
+      window.location.href = "/unanswered";
       return;
     }
 
@@ -229,6 +242,15 @@ export default function Home() {
           </div>
         </div>
 
+        <div className="statCard">
+          <span>❓</span>
+
+          <div>
+            <small>سؤالات بی‌پاسخ</small>
+            <strong>{stats.unanswered}</strong>
+          </div>
+        </div>
+
       </section>
 
       <section className="managerPanel">
@@ -285,11 +307,11 @@ export default function Home() {
 
           <div>
             <strong>
-              بررسی انسانی
+              {stats.unanswered}
             </strong>
 
             <span>
-              تصمیم نهایی با مدیر سامانه
+              سؤال نیازمند بررسی
             </span>
           </div>
 
@@ -394,4 +416,4 @@ export default function Home() {
 
     </main>
   );
-}
+            }
