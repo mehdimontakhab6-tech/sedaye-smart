@@ -79,6 +79,20 @@ export default function Home() {
     }
   }
 
+  function openSection(title: string) {
+    if (title === "پیشنهادهای کارکنان") {
+      window.location.href = "/ideas";
+      return;
+    }
+
+    if (title === "مسائل و دغدغه‌ها") {
+      window.location.href = "/issues";
+      return;
+    }
+
+    setActive(title);
+  }
+
   return (
     <main className="page">
 
@@ -226,7 +240,7 @@ export default function Home() {
             <button
               className="card"
               key={title}
-              onClick={() => setActive(title)}
+              onClick={() => openSection(title)}
             >
 
               <div className="icon">
@@ -299,4 +313,4 @@ export default function Home() {
 
     </main>
   );
-      }
+                   }
