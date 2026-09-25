@@ -40,7 +40,7 @@ export default function Home() {
           setStats(data.stats);
         }
       } catch {
-        // آمار در صورت نبود اتصال، صفر باقی می‌ماند.
+        // در صورت نبود اتصال، آمار صفر باقی می‌ماند.
       }
     }
 
@@ -72,7 +72,7 @@ export default function Home() {
       );
     } catch {
       setAnswer(
-        "ارتباط با صدایار برقرار نشد. موضوع می‌تواند برای بررسی مدیر سامانه ثبت شود."
+        "ارتباط با صدایار برقرار نشد."
       );
     } finally {
       setLoading(false);
@@ -97,6 +97,7 @@ export default function Home() {
     <main className="page">
 
       <header className="top">
+
         <div>
           <div className="brand">
             🤖 صدای هوشمند
@@ -111,11 +112,13 @@ export default function Home() {
           <span>●</span>
           سامانه آماده است
         </div>
+
       </header>
 
       <section className="hero">
 
         <div className="heroText">
+
           <span className="eyebrow">
             مرکز فرماندهی هوشمند
           </span>
@@ -128,11 +131,13 @@ export default function Home() {
             مدیریت هوشمند مسائل، پیشنهادها، پرسش‌ها
             و دانش کارکنان در یک محیط یکپارچه.
           </p>
+
         </div>
 
         <div className="assistantBox">
 
           <div className="assistantTitle">
+
             <span>💬</span>
 
             <div>
@@ -142,6 +147,7 @@ export default function Home() {
                 پاسخگوی هوشمند کارکنان
               </small>
             </div>
+
           </div>
 
           <div className="ask">
@@ -195,7 +201,7 @@ export default function Home() {
           <span>⚠️</span>
 
           <div>
-            <small>مسائل در انتظار بررسی</small>
+            <small>مسائل ثبت‌شده</small>
             <strong>{stats.issues}</strong>
           </div>
         </div>
@@ -204,7 +210,7 @@ export default function Home() {
           <span>💡</span>
 
           <div>
-            <small>پیشنهادهای جدید</small>
+            <small>پیشنهادهای کارکنان</small>
             <strong>{stats.ideas}</strong>
           </div>
         </div>
@@ -220,10 +226,78 @@ export default function Home() {
 
       </section>
 
+      <section className="managerPanel">
+
+        <div className="managerHeader">
+
+          <div>
+            <span className="eyebrow">
+              🤖 مدیر هوشمند
+            </span>
+
+            <h2>
+              وضعیت سامانه
+            </h2>
+          </div>
+
+          <span className="managerStatus">
+            آماده تحلیل
+          </span>
+
+        </div>
+
+        <div className="managerGrid">
+
+          <div>
+            <strong>
+              {stats.issues}
+            </strong>
+
+            <span>
+              پرونده مسئله
+            </span>
+          </div>
+
+          <div>
+            <strong>
+              {stats.ideas}
+            </strong>
+
+            <span>
+              پیشنهاد ثبت‌شده
+            </span>
+          </div>
+
+          <div>
+            <strong>
+              {stats.messages}
+            </strong>
+
+            <span>
+              پیام دریافتی
+            </span>
+          </div>
+
+          <div>
+            <strong>
+              بررسی انسانی
+            </strong>
+
+            <span>
+              تصمیم نهایی با مدیر سامانه
+            </span>
+          </div>
+
+        </div>
+
+      </section>
+
       <div className="sectionTitle">
 
         <div>
-          <span>مرکز مدیریت</span>
+          <span>
+            مرکز مدیریت
+          </span>
 
           <h2>
             ابزارهای هوشمند سامانه
@@ -240,7 +314,9 @@ export default function Home() {
             <button
               className="card"
               key={title}
-              onClick={() => openSection(title)}
+              onClick={() =>
+                openSection(title)
+              }
             >
 
               <div className="icon">
@@ -313,4 +389,4 @@ export default function Home() {
 
     </main>
   );
-                   }
+            }
