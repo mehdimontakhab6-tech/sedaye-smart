@@ -68,7 +68,13 @@ export default function UnansweredPage() {
       }
 
       setMessage("پاسخ با موفقیت ثبت شد.");
+
       await loadQuestions();
+
+      setAnswers((current) => ({
+        ...current,
+        [id]: ""
+      }));
     } catch {
       setMessage("ارتباط با سامانه برقرار نشد.");
     } finally {
@@ -101,4 +107,144 @@ export default function UnansweredPage() {
 
         <div className="heroText">
 
-         
+          <span className="eyebrow">
+            📚 تکمیل بانک دانش
+          </span>
+
+          <h1>
+            سؤالات نیازمند پاسخ
+          </h1>
+
+          <p>
+            سؤالات بی‌پاسخ را بررسی کنید و پس از
+            تأیید، پاسخ آنها را در بانک دانش ثبت کنید.
+          </p>
+
+        </div>
+
+      </section>
+
+      {message && (
+        <div className="empty">
+          {message}
+        </div>
+      )}
+
+      {loading ? (
+
+        <div className="empty">
+          در حال دریافت سؤالات...
+        </div>
+
+      ) : questions.length === 0 ? (
+
+        <div className="empty">
+          🎉 در حال حاضر سؤال بی‌پاسخی ثبت نشده است.
+        </div>
+
+      ) : (
+
+        <section className="issueList">
+
+          {questions.map((item) => (
+
+            <article
+              className="issue"
+              key={item.id}
+            >
+
+              <div className="issueTop">
+
+                <div>
+
+                  <span className="tracking">
+                    سؤال نیازمند بررسی
+                  </span>
+
+                  <h2>
+                    {item.question}
+                  </h2>
+
+                </div>
+
+                <span className="issueStatus">
+                  {item.status}
+                </span>
+
+              </div>
+
+              <textarea
+                value={
+                  answers[item.id] ??
+                  item.answer ??
+                  ""
+                }
+                onChange={(e) =>
+                  setAnswers({
+                    ...answers,
+                    [item.id]: e.target.value
+                  })
+                }
+                placeholder="پاسخ تأییدشده را وارد کنید..."
+                style={{
+                  width: "100%",
+                  minHeight: "130px",
+                  marginTop: "18px",
+                  padding: "14px",
+                  border: "1px solid #dce5f4",
+                  borderRadius: "14px",
+                  fontFamily: "inherit",
+                  fontSize: "13px",
+                  lineHeight: "2",
+                  resize: "vertical",
+                  boxSizing: "border-box"
+                }}
+              />
+
+              <button
+                onClick={() => saveAnswer(item.id)}
+                disabled={saving === item.id}
+                style={{
+                  marginTop: "12px",
+                  border: "none",
+                  borderRadius: "12px",
+                  padding: "11px 18px",
+                  background: "#1769e0",
+                  color: "white",
+                  fontFamily: "inherit",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  opacity:
+                    saving === item.id ? 0.6 : 1
+                }}
+              >
+                {saving === item.id
+                  ? "در حال ثبت..."
+                  : "ثبت پاسخ"}
+              </button>
+
+              <div className="issueMeta">
+
+                <span>
+                  وضعیت: {item.status}
+                </span>
+
+                <span>
+                  {new Date(
+                    item.created_at
+                  ).toLocaleDateString("fa-IR")}
+                </span>
+
+              </div>
+
+            </article>
+
+          ))}
+
+        </section>
+
+      )}
+
+    </main>
+  );
+}
