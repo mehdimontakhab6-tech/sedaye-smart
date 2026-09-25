@@ -104,9 +104,16 @@ export async function POST(req: Request) {
     });
   }
 
+  await supabase
+    .from("unanswered_questions")
+    .insert({
+      question,
+      status: "جدید"
+    });
+
   return NextResponse.json({
     answer:
-      "پاسخ تأییدشده‌ای برای این سؤال در بانک دانش پیدا نشد و موضوع باید توسط مدیر سامانه بررسی شود.",
+      "پاسخ تأییدشده‌ای برای این سؤال در بانک دانش پیدا نشد. سؤال شما برای بررسی مدیر سامانه ثبت شد.",
     needs_review: true
   });
 }
