@@ -1,10 +1,47 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export async function POST(req: Request) {
-  const { question } = await req.json();
+function normalize(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  if (!question?.trim()) {
+function words(text: string) {
+  return normalize(text)
+    .split(" ")
+    .filter((word) => word.length > 2);
+}
+
+function similarity(a: string, b: string) {
+  const first = new Set(words(a));
+  const second = new Set(words(b));
+
+  if (!first.size || !second.size) {
+    return 0;
+  }
+
+  let common = 0;
+
+  for (const word of first) {
+    if (second.has(word)) {
+      common++;
+    }
+  }
+
+  return common / Math.max(first.size, second.size);
+}
+
+export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({}));
+
+  const question = body?.question?.trim();
+
+  if (!question) {
     return NextResponse.json({
       answer: "لطفاً سؤال خود را وارد کنید."
     });
@@ -22,23 +59,54 @@ export async function POST(req: Request) {
 
   const supabase = createClient(url, key);
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("knowledge")
-    .select("title,content")
+    .select("id,title,content")
     .eq("approved", true)
-    .ilike("title", `%${question.trim()}%`)
-    .limit(3);
+    .limit(100);
 
-  if (data?.length) {
+  if (error) {
     return NextResponse.json({
-      answer: data
-        .map((x) => `**${x.title}**\n${x.content}`)
-        .join("\n\n")
+      answer:
+        "در دریافت اطلاعات بانک دانش خطایی رخ داد."
+    });
+  }
+
+  let bestItem = null;
+  let bestScore = 0;
+
+  for (const item of data ?? []) {
+    const titleScore = similarity(
+      question,
+      item.title
+    );
+
+    const contentScore = similarity(
+      question,
+      item.content
+    );
+
+    const score =
+      titleScore * 0.7 +
+      contentScore * 0.3;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestItem = item;
+    }
+  }
+
+  if (bestItem && bestScore >= 0.2) {
+    return NextResponse.json({
+      answer: bestItem.content,
+      source: bestItem.title,
+      confidence: Number(bestScore.toFixed(2))
     });
   }
 
   return NextResponse.json({
     answer:
-      "پاسخ تأییدشده‌ای برای این سؤال در بانک دانش پیدا نشد و موضوع باید توسط مدیر سامانه بررسی شود."
+      "پاسخ تأییدشده‌ای برای این سؤال در بانک دانش پیدا نشد و موضوع باید توسط مدیر سامانه بررسی شود.",
+    needs_review: true
   });
 }
