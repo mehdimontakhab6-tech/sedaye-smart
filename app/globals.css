@@ -105,3 +105,61 @@
     gap: 6px;
   }
 }
+.managerPanel {
+  background: white;
+  border: 1px solid #e4e9f2;
+  border-radius: 20px;
+  padding: 22px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 25px rgba(30, 45, 75, 0.05);
+}
+
+.managerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.managerHeader h2 {
+  margin: 5px 0 0;
+  font-size: 20px;
+}
+
+.managerStatus {
+  background: #e9f8ef;
+  color: #17834b;
+  padding: 8px 13px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.managerGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.managerGrid > div {
+  background: #f7f9fc;
+  border-radius: 14px;
+  padding: 15px;
+}
+
+.managerGrid strong {
+  display: block;
+  font-size: 21px;
+  margin-bottom: 6px;
+}
+
+.managerGrid span {
+  color: #687386;
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .managerGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
