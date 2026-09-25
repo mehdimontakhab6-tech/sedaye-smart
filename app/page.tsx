@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const menu = [
   ["🤖", "مدیر هوشمند", "تحلیل و مدیریت هوشمند"],
@@ -22,6 +22,30 @@ export default function Home() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [stats, setStats] = useState({
+    messages: 0,
+    issues: 0,
+    ideas: 0,
+    polls: 0
+  });
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const response = await fetch("/api/dashboard");
+        const data = await response.json();
+
+        if (data.stats) {
+          setStats(data.stats);
+        }
+      } catch {
+        // آمار در صورت نبود اتصال، صفر باقی می‌ماند.
+      }
+    }
+
+    loadStats();
+  }, []);
 
   async function askAssistant() {
     if (!question.trim()) return;
@@ -60,7 +84,10 @@ export default function Home() {
 
       <header className="top">
         <div>
-          <div className="brand">🤖 صدای هوشمند</div>
+          <div className="brand">
+            🤖 صدای هوشمند
+          </div>
+
           <p>
             سامانه هوشمند گروه «صدای کارکنان ثبت احوال»
           </p>
@@ -73,6 +100,7 @@ export default function Home() {
       </header>
 
       <section className="hero">
+
         <div className="heroText">
           <span className="eyebrow">
             مرکز فرماندهی هوشمند
@@ -83,16 +111,19 @@ export default function Home() {
           </h1>
 
           <p>
-            مدیریت هوشمند مسائل، پیشنهادها، پرسش‌ها و
-            دانش کارکنان در یک محیط یکپارچه.
+            مدیریت هوشمند مسائل، پیشنهادها، پرسش‌ها
+            و دانش کارکنان در یک محیط یکپارچه.
           </p>
         </div>
 
         <div className="assistantBox">
+
           <div className="assistantTitle">
             <span>💬</span>
+
             <div>
               <strong>صدایار</strong>
+
               <small>
                 پاسخگوی هوشمند کارکنان
               </small>
@@ -100,6 +131,7 @@ export default function Home() {
           </div>
 
           <div className="ask">
+
             <input
               value={question}
               onChange={(e) =>
@@ -121,6 +153,7 @@ export default function Home() {
                 ? "در حال بررسی..."
                 : "پرسش"}
             </button>
+
           </div>
 
           {answer && (
@@ -128,98 +161,140 @@ export default function Home() {
               {answer}
             </div>
           )}
+
         </div>
+
       </section>
 
       <section className="stats">
+
         <div className="statCard">
           <span>📩</span>
+
           <div>
             <small>پیام‌های دریافتی</small>
-            <strong>۰</strong>
+            <strong>{stats.messages}</strong>
           </div>
         </div>
 
         <div className="statCard">
           <span>⚠️</span>
+
           <div>
             <small>مسائل در انتظار بررسی</small>
-            <strong>۰</strong>
+            <strong>{stats.issues}</strong>
           </div>
         </div>
 
         <div className="statCard">
           <span>💡</span>
+
           <div>
             <small>پیشنهادهای جدید</small>
-            <strong>۰</strong>
+            <strong>{stats.ideas}</strong>
           </div>
         </div>
 
         <div className="statCard">
           <span>🗳️</span>
+
           <div>
             <small>نظرسنجی‌های فعال</small>
-            <strong>۰</strong>
+            <strong>{stats.polls}</strong>
           </div>
         </div>
+
       </section>
 
       <div className="sectionTitle">
+
         <div>
           <span>مرکز مدیریت</span>
-          <h2>ابزارهای هوشمند سامانه</h2>
+
+          <h2>
+            ابزارهای هوشمند سامانه
+          </h2>
         </div>
+
       </div>
 
       <section className="grid">
+
         {menu.map(
           ([icon, title, description]) => (
+
             <button
               className="card"
               key={title}
               onClick={() => setActive(title)}
             >
+
               <div className="icon">
                 {icon}
               </div>
 
               <div className="cardText">
-                <h3>{title}</h3>
-                <p>{description}</p>
+
+                <h3>
+                  {title}
+                </h3>
+
+                <p>
+                  {description}
+                </p>
+
               </div>
 
               <span className="arrow">
                 ←
               </span>
+
             </button>
+
           )
         )}
+
       </section>
 
       {active !== "داشبورد" && (
+
         <section className="selected">
+
           <div className="selectedIcon">
             🔹
           </div>
 
           <div>
-            <span>بخش انتخاب‌شده</span>
-            <h2>{active}</h2>
+
+            <span>
+              بخش انتخاب‌شده
+            </span>
+
+            <h2>
+              {active}
+            </h2>
+
             <p>
-              این بخش در مرحله بعد به صورت کامل
-              پیاده‌سازی و به بانک اطلاعاتی متصل
-              خواهد شد.
+              این بخش آماده اتصال به داده‌ها و
+              امکانات اختصاصی سامانه است.
             </p>
+
           </div>
+
         </section>
+
       )}
 
       <footer>
-        <strong>صدای هوشمند</strong>
+
+        <strong>
+          صدای هوشمند
+        </strong>
+
         <span>
           هم‌صدایی برای تحول و بهبود
         </span>
+
       </footer>
 
     </main>
