@@ -80,6 +80,11 @@ export default function Home() {
   }
 
   function openSection(title: string) {
+    if (title === "مدیر هوشمند") {
+      window.location.href = "/manager";
+      return;
+    }
+
     if (title === "پیشنهادهای کارکنان") {
       window.location.href = "/ideas";
       return;
@@ -389,4 +394,4 @@ export default function Home() {
 
     </main>
   );
-            }
+}
