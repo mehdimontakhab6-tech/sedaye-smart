@@ -1,44 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 type KnowledgeRow = {
   title: string | null;
   content: string | null;
   approved: boolean | null;
 };
-
-type CloudflareAI = {
-  run: (
-    model: string,
-    input: {
-      messages: Array<{
-        role: "system" | "user" | "assistant";
-        content: string;
-      }>;
-    }
-  ) => Promise<unknown>;
-};
-
-type CloudflareEnv = {
-  AI?: CloudflareAI;
-  NEXT_PUBLIC_SUPABASE_URL?: string;
-  SUPABASE_SERVICE_ROLE_KEY?: string;
-};
-
-function getRuntimeEnv(): CloudflareEnv {
-  const processEnv =
-    typeof process !== "undefined" && process.env
-      ? process.env
-      : {};
-
-  return {
-    AI: undefined,
-    NEXT_PUBLIC_SUPABASE_URL:
-      processEnv.NEXT_PUBLIC_SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY:
-      processEnv.SUPABASE_SERVICE_ROLE_KEY,
-  };
-}
 
 function normalizeText(text: string): string {
   return text
@@ -140,54 +108,71 @@ async function tryWorkersAI(
   question: string,
   knowledge: KnowledgeRow[]
 ): Promise<string | null> {
-  /*
-   * در این نسخه مستقیماً cloudflare:workers را import نمی‌کنیم.
-   * بنابراین next build با Webpack دچار UnhandledSchemeError نمی‌شود.
-   *
-   * اگر AI binding در runtime در دسترس باشد، می‌توانیم در مرحله بعد
-   * آن را به شکل سازگار با OpenNext متصل کنیم.
-   */
-
   const context = knowledge
-    .slice(0, 20)
+    .slice(0, 30)
     .map(
       (item, index) =>
-        `${index + 1}. ${item.title ?? ""}\n${item.content ?? ""}`
+        `[منبع ${index + 1}] ${item.title ?? ""}\n${item.content ?? ""}`
     )
     .join("\n\n");
 
-  if (!context) {
+  try {
+    const { env } = getCloudflareContext();
+
+    const ai = (env as any).AI;
+
+    if (!ai || typeof ai.run !== "function") {
+      console.error("Workers AI binding AI is not available.");
+      return null;
+    }
+
+    const system = `تو «صدایار»، عضو تیم هوش مصنوعی گروه «صدای کارکنان ثبت احوال» هستی.
+
+وظیفه تو پاسخ‌گویی دقیق، محترمانه و کاربردی به فارسی است.
+
+قوانین:
+- اگر اطلاعات بانک دانش برای پاسخ کافی است، از آن استفاده کن.
+- اطلاعات موجود در بانک دانش را تحریف نکن.
+- اگر سؤال عمومی است و پاسخ آن را می‌دانی، پاسخ روشن و مفید بده.
+- اگر موضوع رسمی، حساس یا نیازمند تأیید سازمانی است، صریحاً بگو که نیاز به بررسی انسانی دارد.
+- هیچ اطلاعاتی را جعل نکن.
+- پاسخ را کوتاه، واضح و مرحله‌ای بنویس.
+- هدف سامانه کمک به کارکنان، ثبت مسائل، پیشنهادها، تجربه‌ها و پرسش‌ها و هدایت درست آنهاست.
+
+بانک دانش تأییدشده سامانه:
+
+${context || "در حال حاضر منبع تأییدشده‌ای در بانک دانش وجود ندارد."}`;
+
+    const result = await ai.run(
+      "@cf/meta/llama-3.1-8b-instruct-fast",
+      {
+        messages: [
+          {
+            role: "system",
+            content: system,
+          },
+          {
+            role: "user",
+            content: question,
+          },
+        ],
+      }
+    );
+
+    const answer =
+      typeof result === "string"
+        ? result
+        : result &&
+            typeof result === "object" &&
+            "response" in result
+          ? String((result as any).response ?? "")
+          : "";
+
+    return answer.trim() || null;
+  } catch (error) {
+    console.error("Workers AI error:", error);
     return null;
   }
-
-  /*
-   * فعلاً پاسخ مبتنی بر بانک دانش را برمی‌گردانیم.
-   * این باعث می‌شود سامانه بدون وابستگی مستقیم به cloudflare:workers
-   * بتواند Build و Deploy شود.
-   */
-
-  const ranked = knowledge
-    .map((item) => {
-      const text = `${item.title ?? ""} ${item.content ?? ""}`;
-      return {
-        item,
-        score: similarity(question, text),
-      };
-    })
-    .filter((x) => x.score >= 0.2)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-
-  if (ranked.length === 0) {
-    return null;
-  }
-
-  return ranked
-    .map(
-      ({ item }) =>
-        `${item.title ? `📌 ${item.title}\n` : ""}${item.content ?? ""}`
-    )
-    .join("\n\n");
 }
 
 export async function POST(request: NextRequest) {
@@ -211,10 +196,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const env = getRuntimeEnv();
+    const runtimeProcessEnv =
+      typeof process !== "undefined" && process.env
+        ? process.env
+        : {};
 
-    const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl =
+      runtimeProcessEnv.NEXT_PUBLIC_SUPABASE_URL;
+
+    const serviceRoleKey =
+      runtimeProcessEnv.SUPABASE_SERVICE_ROLE_KEY;
 
     let knowledge: KnowledgeRow[] = [];
 
@@ -222,10 +213,6 @@ export async function POST(request: NextRequest) {
       knowledge = await getKnowledge(
         supabaseUrl,
         serviceRoleKey
-      );
-    } else {
-      console.error(
-        "Supabase environment variables are not configured."
       );
     }
 
@@ -238,7 +225,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         ok: true,
         answer,
-        source: "knowledge",
+        source: "workers-ai",
         needs_review: false,
       });
     }
@@ -270,4 +257,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-        }
+      }
