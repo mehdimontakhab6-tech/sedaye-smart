@@ -5,40 +5,50 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const { env } = getCloudflareContext();
+
     const ai = (env as any).AI;
 
     if (!ai) {
-      return Response.json(
-        {
-          ok: false,
-          error: "Cloudflare AI binding پیدا نشد."
-        },
-        { status: 500 }
-      );
+      return Response.json({
+        ok: false,
+        step: "binding",
+        error: "AI binding پیدا نشد"
+      });
     }
 
-    const result = await ai.run("@cf/meta/llama-3.1-8b-instruct-fast", {
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful Persian assistant."
-        },
-        {
-          role: "user",
-          content: "در یک جمله بگو هوش مصنوعی فعال است."
+    const result = await ai.run(
+      "@cf/google/gemma-4-26b-a4b-it",
+      {
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful Persian assistant."
+          },
+          {
+            role: "user",
+            content: "فقط بنویس: هوش مصنوعی سامانه فعال است."
+          }
+        ],
+        chat_template_kwargs: {
+          enable_thinking: false
         }
-      ]
-    });
+      }
+    );
 
     return Response.json({
       ok: true,
+      step: "ai",
       result
     });
+
   } catch (error) {
     return Response.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : String(error)
+        step: "runtime",
+        error: error instanceof Error
+          ? error.message
+          : String(error)
       },
       { status: 500 }
     );
