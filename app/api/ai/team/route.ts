@@ -53,39 +53,18 @@ function extractText(result: ModelResult): string {
     return result.text.trim();
   }
 
-  if (Array.isArray(result?.content)) {
-    const text = result.content
-      .map((item: any) => {
-        if (typeof item === "string") return item;
-        return item?.text || item?.content || "";
-      })
-      .join("");
-
-    if (text.trim()) return text.trim();
-  }
-
-  if (typeof choice?.message?.reasoning_content === "string") {
-    return choice.message.reasoning_content.trim();
-  }
-
-  if (typeof result?.reasoning_content === "string") {
-    return result.reasoning_content.trim();
-  }
-
   return "";
 }
 
 async function runModel(
   model: string,
   messages: AIMessage[],
-  maxTokens = 1500
+  maxTokens = 1200
 ): Promise<string> {
   const { env } = getCloudflareContext();
 
   if (!env?.AI) {
-    throw new Error(
-      "اتصال به موتور هوش مصنوعی Cloudflare برقرار نیست."
-    );
+    throw new Error("اتصال به موتور هوش مصنوعی Cloudflare برقرار نیست.");
   }
 
   const options: any = {
@@ -106,9 +85,7 @@ async function runModel(
 
   if (!text) {
     throw new Error(
-      `مدل ${model} اجرا شد اما پاسخ قابل استخراج نبود. ساختار: ${Object.keys(
-        result || {}
-      ).join(", ")}`
+      `مدل ${model} پاسخ قابل استخراج برنگرداند.`
     );
   }
 
@@ -131,7 +108,6 @@ function cleanRoute(route: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-
     const question = String(body?.question || "").trim();
 
     if (!question) {
@@ -143,149 +119,150 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ---------------------------------------------------------
-    // مرحله ۱: مدیر پاسخگو هوشمند
-    // ---------------------------------------------------------
+    // =========================================================
+    // 1. مدیر پاسخگو هوشمند
+    // =========================================================
 
-    const managerPrompt: AIMessage[] = [
-      {
-        role: "system",
-        content: `
+    let route = "GENERAL";
+    let managerError = "";
+
+    try {
+      const managerRaw = await runModel(
+        MODELS.manager,
+        [
+          {
+            role: "system",
+            content: `
 تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
 
-وظیفه تو تشخیص نوع درخواست کاربر است.
-
-درخواست را فقط در یکی از چهار دسته زیر قرار بده:
+درخواست کاربر را فقط در یکی از این چهار دسته قرار بده:
 
 GENERAL
 OFFICIAL
 ANALYSIS
 SUGGESTION
 
-GENERAL:
-پرسش عمومی، گفت‌وگوی معمولی یا درخواست ساده.
-
-OFFICIAL:
-موضوع مربوط به مقررات، بخشنامه، دستورالعمل، رویه رسمی یا اطلاعات رسمی سازمان.
-
-ANALYSIS:
-تحلیل مسائل، بررسی روندها، مقایسه، دسته‌بندی یا تحلیل داده و دیدگاه‌ها.
-
-SUGGESTION:
-درخواست پیشنهاد، ایده، راهکار یا بهبود فرآیند.
+GENERAL = پرسش عمومی یا گفت‌وگوی معمولی
+OFFICIAL = مقررات، بخشنامه، دستورالعمل یا اطلاعات رسمی سازمان
+ANALYSIS = تحلیل، بررسی روند، مقایسه یا تحلیل داده
+SUGGESTION = پیشنهاد، ایده یا راهکار برای بهبود
 
 فقط نام دسته را برگردان.
 `,
-      },
-      {
-        role: "user",
-        content: question,
-      },
-    ];
+          },
+          {
+            role: "user",
+            content: question,
+          },
+        ],
+        200
+      );
 
-    const managerRaw = await runModel(
-      MODELS.manager,
-      managerPrompt,
-      300
-    );
+      route = cleanRoute(managerRaw);
+    } catch (error: any) {
+      managerError =
+        error?.message || "مدیر پاسخگو هوشمند در دسترس نبود.";
 
-    const route = cleanRoute(managerRaw);
+      // اگر مدیر خطا کرد، سامانه متوقف نمی‌شود.
+      route = "GENERAL";
+    }
 
-    // ---------------------------------------------------------
-    // مرحله ۲: عضو متخصص تیم
-    // ---------------------------------------------------------
+    // =========================================================
+    // 2. عضو متخصص تیم
+    // =========================================================
 
     let specialistResult = "";
+    let specialistError = "";
 
-    if (route === "OFFICIAL") {
-      specialistResult = await runModel(
-        MODELS.researcher,
-        [
-          {
-            role: "system",
-            content: `
+    try {
+      if (route === "OFFICIAL") {
+        specialistResult = await runModel(
+          MODELS.researcher,
+          [
+            {
+              role: "system",
+              content: `
 تو پژوهشگر هوشمند گروه «صدای کارکنان ثبت احوال» هستی.
 
-اگر منبع رسمی یا اطلاعات معتبر در اختیار تو نیست،
-نباید چیزی را به عنوان مقررات یا دستورالعمل رسمی جعل کنی.
+بدون منبع معتبر، مقررات یا دستورالعمل رسمی جعل نکن.
 
-در صورت نبود منبع معتبر، صریحاً اعلام کن:
+اگر منبع معتبر در اختیار نیست، صریحاً بگو:
 
 «برای ارائه پاسخ رسمی، اطلاعات معتبر کافی در اختیار نیست.»
 
-پاسخ را فارسی، دقیق و کوتاه ارائه کن.
+پاسخ فارسی و دقیق باشد.
 `,
-          },
-          {
-            role: "user",
-            content: question,
-          },
-        ],
-        1000
-      );
-    }
+            },
+            {
+              role: "user",
+              content: question,
+            },
+          ],
+          800
+        );
+      }
 
-    if (route === "ANALYSIS") {
-      specialistResult = await runModel(
-        MODELS.analyst,
-        [
-          {
-            role: "system",
-            content: `
+      if (route === "ANALYSIS") {
+        specialistResult = await runModel(
+          MODELS.analyst,
+          [
+            {
+              role: "system",
+              content: `
 تو تحلیل‌گر هوشمند گروه «صدای کارکنان ثبت احوال» هستی.
 
-موضوع را دقیق تحلیل کن.
+موضوع را دقیق و ساختاریافته تحلیل کن.
 
-اگر داده کافی وجود ندارد، این موضوع را صریحاً اعلام کن.
+اگر داده کافی وجود ندارد، آن را صریحاً اعلام کن.
 
-از ساختن آمار و اطلاعات غیرواقعی خودداری کن.
-
-پاسخ فارسی و ساختاریافته باشد.
+هیچ آمار یا اطلاعات ساختگی تولید نکن.
 `,
-          },
-          {
-            role: "user",
-            content: question,
-          },
-        ],
-        1200
-      );
-    }
+            },
+            {
+              role: "user",
+              content: question,
+            },
+          ],
+          900
+        );
+      }
 
-    if (route === "SUGGESTION") {
-      specialistResult = await runModel(
-        MODELS.researcher,
-        [
-          {
-            role: "system",
-            content: `
+      if (route === "SUGGESTION") {
+        specialistResult = await runModel(
+          MODELS.researcher,
+          [
+            {
+              role: "system",
+              content: `
 تو عضو تیم ایده‌پردازی و پژوهش گروه
 «صدای کارکنان ثبت احوال» هستی.
 
-برای موضوع مطرح‌شده راهکارهای عملی و قابل بررسی ارائه کن.
-
-مهم:
+برای موضوع مطرح‌شده پیشنهادهای عملی و قابل بررسی ارائه کن.
 
 پیشنهاد عمومی را به عنوان سیاست یا دستورالعمل رسمی سازمان معرفی نکن.
 
-اگر اطلاعات رسمی در اختیار نداری، واضح بگو که پیشنهاد ارائه‌شده
-صرفاً یک پیشنهاد عمومی برای بررسی کارشناسی است.
-
-پاسخ فارسی و کاربردی باشد.
+پاسخ فارسی، کاربردی و روشن باشد.
 `,
-          },
-          {
-            role: "user",
-            content: question,
-          },
-        ],
-        1200
-      );
+            },
+            {
+              role: "user",
+              content: question,
+            },
+          ],
+          900
+        );
+      }
+    } catch (error: any) {
+      specialistError =
+        error?.message || "عضو متخصص تیم در دسترس نبود.";
+
+      specialistResult =
+        "اطلاعات تخصصی جداگانه در دسترس نبود؛ پاسخ نهایی بر اساس اطلاعات موجود تولید شود.";
     }
 
-    // ---------------------------------------------------------
-    // مرحله ۳: تولید پاسخ نهایی
-    // ---------------------------------------------------------
+    // =========================================================
+    // 3. پاسخ نهایی
+    // =========================================================
 
     const finalPrompt: AIMessage[] = [
       {
@@ -293,33 +270,26 @@ SUGGESTION:
         content: `
 تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
 
-وظیفه تو ارائه پاسخ نهایی به کاربر است.
+پاسخ نهایی را برای کاربر تولید کن.
 
-اصول الزامی:
+قوانین:
 
-۱. پاسخ را فارسی و روان بنویس.
-
-۲. اگر موضوع رسمی است، بدون منبع معتبر ادعای مقررات یا دستورالعمل رسمی نکن.
-
-۳. اگر اطلاعات کافی وجود ندارد، شفاف اعلام کن.
-
-۴. بین اطلاعات رسمی و پیشنهاد عمومی تفاوت بگذار.
-
-۵. موضوعات حساس، پیچیده یا نیازمند تصمیم سازمانی را برای بررسی انسانی ارجاع بده.
-
-۶. از ساختن آمار، بخشنامه، قانون، شماره نامه یا منبع جعلی خودداری کن.
-
-۷. پاسخ را کامل کن و وسط جمله رها نکن.
-
-۸. اگر پاسخ چند بخش دارد، از تیتر و شماره‌گذاری استفاده کن.
-
-۹. پاسخ بیش از حد طولانی نشود، اما اطلاعات لازم را حذف نکن.
+- فارسی و روان بنویس.
+- پاسخ را کامل کن.
+- وسط جمله یا بخش رها نکن.
+- اطلاعات رسمی را بدون منبع معتبر به عنوان واقعیت قطعی معرفی نکن.
+- پیشنهاد عمومی را از سیاست رسمی سازمان جدا کن.
+- آمار، قانون، بخشنامه، شماره نامه یا منبع جعلی نساز.
+- اگر اطلاعات کافی نیست، شفاف بگو.
+- در موضوعات حساس یا تصمیم‌های سازمانی، بررسی انسانی را پیشنهاد کن.
+- پاسخ بیش از حد طولانی نباشد.
+- در صورت نیاز از تیتر و شماره‌گذاری استفاده کن.
 
 نام نقش:
-«مدیر پاسخگو هوشمند»
+مدیر پاسخگو هوشمند
 
-نام جامعه:
-«گروه صدای کارکنان ثبت احوال»
+جامعه:
+گروه صدای کارکنان ثبت احوال
 `,
       },
       {
@@ -328,17 +298,15 @@ SUGGESTION:
 پرسش کاربر:
 ${question}
 
-دسته تشخیص داده‌شده:
+دسته درخواست:
 ${route}
 
-${
-  specialistResult
-    ? `نتیجه عضو متخصص تیم:
-${specialistResult}`
-    : ""
-}
+${specialistResult ? `
+نتیجه عضو متخصص:
+${specialistResult}
+` : ""}
 
-اکنون پاسخ نهایی و کامل را برای کاربر بنویس.
+پاسخ نهایی را اکنون تولید کن.
 `,
       },
     ];
@@ -350,17 +318,26 @@ ${specialistResult}`
     );
 
     return NextResponse.json({
+      ok: true,
       answer,
+
       manager: {
         name: "مدیر پاسخگو هوشمند",
         model: MODELS.manager,
         route,
+        available: !managerError,
       },
+
       team: {
         manager: MODELS.manager,
         assistant: MODELS.assistant,
         researcher: MODELS.researcher,
         analyst: MODELS.analyst,
+      },
+
+      diagnostics: {
+        managerError: managerError || null,
+        specialistError: specialistError || null,
       },
     });
   } catch (error: any) {
@@ -368,6 +345,7 @@ ${specialistResult}`
 
     return NextResponse.json(
       {
+        ok: false,
         error:
           error?.message ||
           "خطای ناشناخته در تیم هوش مصنوعی رخ داد.",
