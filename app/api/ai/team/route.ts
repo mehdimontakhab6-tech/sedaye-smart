@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { env } from "cloudflare:workers";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 type AIMessage = {
   role: "system" | "user" | "assistant";
@@ -80,9 +80,11 @@ async function runModel(
   messages: AIMessage[],
   maxTokens = 1500
 ): Promise<string> {
+  const { env } = getCloudflareContext();
+
   if (!env?.AI) {
     throw new Error(
-      "اتصال به Workers AI در محیط Cloudflare در دسترس نیست."
+      "اتصال به موتور هوش مصنوعی Cloudflare برقرار نیست."
     );
   }
 
@@ -129,6 +131,7 @@ function cleanRoute(route: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
     const question = String(body?.question || "").trim();
 
     if (!question) {
@@ -207,6 +210,7 @@ SUGGESTION:
 نباید چیزی را به عنوان مقررات یا دستورالعمل رسمی جعل کنی.
 
 در صورت نبود منبع معتبر، صریحاً اعلام کن:
+
 «برای ارائه پاسخ رسمی، اطلاعات معتبر کافی در اختیار نیست.»
 
 پاسخ را فارسی، دقیق و کوتاه ارائه کن.
