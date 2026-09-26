@@ -51,15 +51,8 @@ function findBestKnowledge(
   let bestScore = 0;
 
   for (const item of items) {
-    const titleScore = similarity(
-      question,
-      item.title
-    );
-
-    const contentScore = similarity(
-      question,
-      item.content
-    );
+    const titleScore = similarity(question, item.title);
+    const contentScore = similarity(question, item.content);
 
     const score =
       titleScore * 0.7 +
@@ -84,6 +77,28 @@ function extractAIText(result: any) {
     return result.trim();
   }
 
+  const choiceContent =
+    result?.choices?.[0]?.message?.content;
+
+  if (typeof choiceContent === "string") {
+    return choiceContent.trim();
+  }
+
+  if (Array.isArray(choiceContent)) {
+    return choiceContent
+      .map((item: any) => {
+        if (typeof item === "string") return item;
+        return item?.text || "";
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+
+  if (typeof result.output_text === "string") {
+    return result.output_text.trim();
+  }
+
   if (typeof result.response === "string") {
     return result.response.trim();
   }
@@ -94,7 +109,10 @@ function extractAIText(result: any) {
 
   if (Array.isArray(result.content)) {
     return result.content
-      .map((item: any) => item?.text)
+      .map((item: any) => {
+        if (typeof item === "string") return item;
+        return item?.text || "";
+      })
       .filter(Boolean)
       .join("\n")
       .trim();
@@ -159,7 +177,10 @@ ${knowledgeText}
           role: "user",
           content: question
         }
-      ]
+      ],
+      chat_template_kwargs: {
+        enable_thinking: false
+      }
     },
     {
       rejectIfBusy: true
@@ -169,8 +190,14 @@ ${knowledgeText}
   const answer = extractAIText(result);
 
   if (!answer) {
+    const shape =
+      result && typeof result === "object"
+        ? Object.keys(result).join(", ")
+        : typeof result;
+
     throw new Error(
-      "Workers AI اجرا شد اما متن پاسخ قابل استخراج نبود."
+      "Workers AI اجرا شد اما متن پاسخ قابل استخراج نبود. ساختار پاسخ: " +
+      shape
     );
   }
 
@@ -205,10 +232,7 @@ export async function POST(req: Request) {
     let knowledge: KnowledgeItem[] = [];
 
     if (url && key) {
-      const supabase = createClient(
-        url,
-        key
-      );
+      const supabase = createClient(url, key);
 
       const { data, error } = await supabase
         .from("knowledge")
@@ -272,4 +296,4 @@ export async function POST(req: Request) {
       }
     );
   }
-      }
+}
