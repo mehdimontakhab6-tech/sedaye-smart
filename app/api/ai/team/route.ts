@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { env } from "cloudflare:workers";
 
 type AIMessage = {
   role: "system" | "user" | "assistant";
@@ -19,7 +20,6 @@ const MODELS = {
 function extractText(result: ModelResult): string {
   if (!result) return "";
 
-  // OpenAI-compatible response
   const choice = result?.choices?.[0];
 
   if (typeof choice?.message?.content === "string") {
@@ -64,7 +64,6 @@ function extractText(result: ModelResult): string {
     if (text.trim()) return text.trim();
   }
 
-  // Fallback for reasoning-style responses
   if (typeof choice?.message?.reasoning_content === "string") {
     return choice.message.reasoning_content.trim();
   }
@@ -77,18 +76,22 @@ function extractText(result: ModelResult): string {
 }
 
 async function runModel(
-  env: any,
   model: string,
   messages: AIMessage[],
   maxTokens = 1500
 ): Promise<string> {
+  if (!env?.AI) {
+    throw new Error(
+      "اتصال به Workers AI در محیط Cloudflare در دسترس نیست."
+    );
+  }
+
   const options: any = {
     messages,
     max_tokens: maxTokens,
     temperature: 0.2,
   };
 
-  // Gemma
   if (model === MODELS.assistant) {
     options.chat_template_kwargs = {
       enable_thinking: false,
@@ -111,7 +114,7 @@ async function runModel(
 }
 
 function cleanRoute(route: string): string {
-  const value = route
+  const value = String(route || "")
     .toUpperCase()
     .replace(/```/g, "")
     .trim();
@@ -137,20 +140,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const env = (process as any).env?.AI
-      ? (process as any).env
-      : (globalThis as any).env;
-
-    if (!env?.AI) {
-      return NextResponse.json(
-        {
-          error:
-            "اتصال به موتور هوش مصنوعی Cloudflare Workers AI برقرار نیست.",
-        },
-        { status: 500 }
-      );
-    }
-
     // ---------------------------------------------------------
     // مرحله ۱: مدیر پاسخگو هوشمند
     // ---------------------------------------------------------
@@ -161,22 +150,20 @@ export async function POST(req: NextRequest) {
         content: `
 تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
 
-وظیفه تو مدیریت تیم هوش مصنوعی و تشخیص نوع درخواست است.
+وظیفه تو تشخیص نوع درخواست کاربر است.
 
-درخواست کاربر را فقط در یکی از چهار دسته زیر قرار بده:
+درخواست را فقط در یکی از چهار دسته زیر قرار بده:
 
 GENERAL
 OFFICIAL
 ANALYSIS
 SUGGESTION
 
-قواعد:
-
 GENERAL:
 پرسش عمومی، گفت‌وگوی معمولی یا درخواست ساده.
 
 OFFICIAL:
-موضوعی که به مقررات، بخشنامه، دستورالعمل، رویه رسمی یا اطلاعات رسمی سازمان مربوط است.
+موضوع مربوط به مقررات، بخشنامه، دستورالعمل، رویه رسمی یا اطلاعات رسمی سازمان.
 
 ANALYSIS:
 تحلیل مسائل، بررسی روندها، مقایسه، دسته‌بندی یا تحلیل داده و دیدگاه‌ها.
@@ -194,7 +181,6 @@ SUGGESTION:
     ];
 
     const managerRaw = await runModel(
-      env,
       MODELS.manager,
       managerPrompt,
       300
@@ -203,14 +189,13 @@ SUGGESTION:
     const route = cleanRoute(managerRaw);
 
     // ---------------------------------------------------------
-    // مرحله ۲: انتخاب عضو متخصص تیم
+    // مرحله ۲: عضو متخصص تیم
     // ---------------------------------------------------------
 
     let specialistResult = "";
 
     if (route === "OFFICIAL") {
       specialistResult = await runModel(
-        env,
         MODELS.researcher,
         [
           {
@@ -238,7 +223,6 @@ SUGGESTION:
 
     if (route === "ANALYSIS") {
       specialistResult = await runModel(
-        env,
         MODELS.analyst,
         [
           {
@@ -247,7 +231,9 @@ SUGGESTION:
 تو تحلیل‌گر هوشمند گروه «صدای کارکنان ثبت احوال» هستی.
 
 موضوع را دقیق تحلیل کن.
+
 اگر داده کافی وجود ندارد، این موضوع را صریحاً اعلام کن.
+
 از ساختن آمار و اطلاعات غیرواقعی خودداری کن.
 
 پاسخ فارسی و ساختاریافته باشد.
@@ -264,7 +250,6 @@ SUGGESTION:
 
     if (route === "SUGGESTION") {
       specialistResult = await runModel(
-        env,
         MODELS.researcher,
         [
           {
@@ -276,6 +261,7 @@ SUGGESTION:
 برای موضوع مطرح‌شده راهکارهای عملی و قابل بررسی ارائه کن.
 
 مهم:
+
 پیشنهاد عمومی را به عنوان سیاست یا دستورالعمل رسمی سازمان معرفی نکن.
 
 اگر اطلاعات رسمی در اختیار نداری، واضح بگو که پیشنهاد ارائه‌شده
@@ -294,7 +280,7 @@ SUGGESTION:
     }
 
     // ---------------------------------------------------------
-    // مرحله ۳: مدیر پاسخ نهایی را تولید می‌کند
+    // مرحله ۳: تولید پاسخ نهایی
     // ---------------------------------------------------------
 
     const finalPrompt: AIMessage[] = [
@@ -341,18 +327,19 @@ ${question}
 دسته تشخیص داده‌شده:
 ${route}
 
-${specialistResult
-  ? `نتیجه عضو متخصص تیم:
+${
+  specialistResult
+    ? `نتیجه عضو متخصص تیم:
 ${specialistResult}`
-  : ""}
-        
+    : ""
+}
+
 اکنون پاسخ نهایی و کامل را برای کاربر بنویس.
 `,
       },
     ];
 
     const answer = await runModel(
-      env,
       MODELS.assistant,
       finalPrompt,
       1500
@@ -384,4 +371,4 @@ ${specialistResult}`
       { status: 500 }
     );
   }
-            }
+}
