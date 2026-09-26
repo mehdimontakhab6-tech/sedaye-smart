@@ -1,419 +1,295 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-const menu = [
-  ["🤖", "مدیر هوشمند", "تحلیل و مدیریت هوشمند"],
-  ["💬", "صدایار", "پاسخگویی هوشمند کارکنان"],
-  ["❓", "سؤالات بی‌پاسخ", "موضوعات نیازمند پاسخ"],
-  ["🔴", "مسائل نیازمند توجه", "موضوعات مهم"],
-  ["⚠️", "مسائل و دغدغه‌ها", "ثبت و پیگیری مسائل"],
-  ["🔁", "مسائل پرتکرار", "موضوعات مشابه و تکراری"],
-  ["💡", "پیشنهادهای کارکنان", "ایده‌ها و پیشنهادها"],
-  ["🆔", "پرونده‌های مسائل", "پیگیری با شناسه اختصاصی"],
-  ["🗳️", "نظرسنجی‌ها", "نظرسنجی از کارکنان"],
-  ["📊", "گزارش هوشمند", "گزارش‌های تحلیلی"],
-  ["📚", "بانک دانش", "اطلاعات تأییدشده"],
-  ["💬", "فرماندهی هوشمند", "فرمان‌های مدیریتی"],
-  ["⚙️", "تنظیمات", "تنظیمات سامانه"]
-];
+import { useState } from "react";
 
 export default function Home() {
-  const [active, setActive] = useState("داشبورد");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [stats, setStats] = useState({
-    messages: 0,
-    issues: 0,
-    ideas: 0,
-    polls: 0,
-    unanswered: 0
-  });
+  async function askAI() {
+    const text = question.trim();
 
-  useEffect(() => {
-    async function loadStats() {
-      try {
-        const response = await fetch("/api/dashboard");
-        const data = await response.json();
-
-        if (data.stats) {
-          setStats({
-            messages: data.stats.messages ?? 0,
-            issues: data.stats.issues ?? 0,
-            ideas: data.stats.ideas ?? 0,
-            polls: data.stats.polls ?? 0,
-            unanswered: data.stats.unanswered ?? 0
-          });
-        }
-      } catch {
-        // در صورت نبود اتصال، آمار صفر باقی می‌ماند.
-      }
-    }
-
-    loadStats();
-  }, []);
-
-  async function askAssistant() {
-    if (!question.trim()) return;
+    if (!text || loading) return;
 
     setLoading(true);
     setAnswer("");
 
     try {
-      const response = await fetch("/api/assistant", {
+      const response = await fetch("/api/ai/team", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          question
-        })
+          question: text,
+        }),
       });
 
       const data = await response.json();
 
       setAnswer(
-        data.answer ||
-          "پاسخ تأییدشده‌ای برای این سؤال پیدا نشد."
+        data?.answer ||
+          "پاسخی از سامانه دریافت نشد."
       );
     } catch {
       setAnswer(
-        "ارتباط با صدایار برقرار نشد."
+        "ارتباط با هوش مصنوعی برقرار نشد. لطفاً دوباره تلاش کنید."
       );
     } finally {
       setLoading(false);
     }
   }
 
-  function openSection(title: string) {
-    if (title === "مدیر هوشمند") {
-      window.location.href = "/manager";
-      return;
-    }
-
-    if (title === "سؤالات بی‌پاسخ") {
-      window.location.href = "/unanswered";
-      return;
-    }
-
-    if (title === "پیشنهادهای کارکنان") {
-      window.location.href = "/ideas";
-      return;
-    }
-
-    if (title === "مسائل و دغدغه‌ها") {
-      window.location.href = "/issues";
-      return;
-    }
-
-    setActive(title);
-  }
-
   return (
-    <main className="page">
-
-      <header className="top">
-
-        <div>
-          <div className="brand">
-            🤖 صدای هوشمند
+    <main
+      dir="rtl"
+      style={{
+        minHeight: "100vh",
+        background:
+          "linear-gradient(135deg,#f8fbff 0%,#eef6ff 50%,#f7f3ff 100%)",
+        padding: "32px 16px",
+        fontFamily:
+          "Tahoma, Arial, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1100,
+          margin: "0 auto",
+        }}
+      >
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: 28,
+            padding: 32,
+            boxShadow:
+              "0 15px 45px rgba(30,60,100,.10)",
+            border:
+              "1px solid rgba(100,130,180,.12)",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-block",
+              padding: "8px 14px",
+              borderRadius: 999,
+              background: "#eef4ff",
+              color: "#315ea8",
+              fontSize: 14,
+              fontWeight: 700,
+              marginBottom: 18,
+            }}
+          >
+            🤖 مرکز نظارت
           </div>
 
-          <p>
-            سامانه هوشمند گروه «صدای کارکنان ثبت احوال»
-          </p>
-        </div>
-
-        <div className="status">
-          <span>●</span>
-          سامانه آماده است
-        </div>
-
-      </header>
-
-      <section className="hero">
-
-        <div className="heroText">
-
-          <span className="eyebrow">
-            مرکز فرماندهی هوشمند
-          </span>
-
-          <h1>
-            هم‌صدایی برای تحول و بهبود
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "clamp(28px,5vw,48px)",
+              lineHeight: 1.35,
+              color: "#172033",
+            }}
+          >
+            صدای هوشمند
           </h1>
 
-          <p>
-            مدیریت هوشمند مسائل، پیشنهادها، پرسش‌ها
-            و دانش کارکنان در یک محیط یکپارچه.
+          <h2
+            style={{
+              marginTop: 12,
+              marginBottom: 12,
+              fontSize: "clamp(20px,3vw,30px)",
+              color: "#315ea8",
+            }}
+          >
+            هم‌صدایی برای تحول و بهبود
+          </h2>
+
+          <p
+            style={{
+              color: "#5d687b",
+              lineHeight: 2,
+              fontSize: 16,
+              maxWidth: 850,
+            }}
+          >
+            سامانه هوشمند گروه «صدای کارکنان ثبت احوال»
+            برای پاسخ‌گویی، بررسی مسائل، دریافت پیشنهادها،
+            تحلیل درخواست‌ها و استفاده از دانش سازمانی.
           </p>
 
-        </div>
-
-        <div className="assistantBox">
-
-          <div className="assistantTitle">
-
-            <span>💬</span>
-
-            <div>
-              <strong>صدایار</strong>
-
-              <small>
-                پاسخگوی هوشمند کارکنان
-              </small>
+          <div
+            style={{
+              marginTop: 28,
+              padding: 20,
+              borderRadius: 22,
+              background: "#f7faff",
+              border: "1px solid #dce8fa",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 800,
+                color: "#1f2d45",
+                marginBottom: 12,
+                fontSize: 18,
+              }}
+            >
+              💬 گفت‌وگو با تیم هوش مصنوعی
             </div>
 
-          </div>
-
-          <div className="ask">
-
-            <input
+            <textarea
               value={question}
               onChange={(e) =>
                 setQuestion(e.target.value)
               }
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  askAssistant();
+                if (
+                  e.key === "Enter" &&
+                  !e.shiftKey
+                ) {
+                  e.preventDefault();
+                  askAI();
                 }
               }}
-              placeholder="سؤال خود را از صدایار بپرسید..."
+              placeholder="سؤال یا درخواست خود را بنویسید..."
+              style={{
+                width: "100%",
+                minHeight: 120,
+                resize: "vertical",
+                borderRadius: 16,
+                border: "1px solid #cdd9ea",
+                padding: 16,
+                fontSize: 16,
+                lineHeight: 1.9,
+                outline: "none",
+                boxSizing: "border-box",
+                fontFamily:
+                  "Tahoma, Arial, sans-serif",
+              }}
             />
 
             <button
-              onClick={askAssistant}
-              disabled={loading}
+              onClick={askAI}
+              disabled={loading || !question.trim()}
+              style={{
+                marginTop: 14,
+                width: "100%",
+                border: 0,
+                borderRadius: 15,
+                padding: "15px 20px",
+                background:
+                  loading || !question.trim()
+                    ? "#aebbd0"
+                    : "#315ea8",
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: 800,
+                cursor:
+                  loading || !question.trim()
+                    ? "default"
+                    : "pointer",
+              }}
             >
               {loading
-                ? "در حال بررسی..."
-                : "پرسش"}
+                ? "در حال دریافت پاسخ هوشمند..."
+                : "ارسال به تیم هوش مصنوعی"}
             </button>
 
-          </div>
+            {answer && (
+              <div
+                style={{
+                  marginTop: 18,
+                  padding: 20,
+                  borderRadius: 18,
+                  background: "#ffffff",
+                  border:
+                    "1px solid #d9e3f2",
+                  lineHeight: 2,
+                  color: "#26344d",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 800,
+                    marginBottom: 8,
+                    color: "#315ea8",
+                  }}
+                >
+                  🤖 پاسخ صدایار
+                </div>
 
-          {answer && (
-            <div className="answer">
-              {answer}
-            </div>
-          )}
-
-        </div>
-
-      </section>
-
-      <section className="stats">
-
-        <div className="statCard">
-          <span>📩</span>
-
-          <div>
-            <small>پیام‌های دریافتی</small>
-            <strong>{stats.messages}</strong>
-          </div>
-        </div>
-
-        <div className="statCard">
-          <span>⚠️</span>
-
-          <div>
-            <small>مسائل ثبت‌شده</small>
-            <strong>{stats.issues}</strong>
-          </div>
-        </div>
-
-        <div className="statCard">
-          <span>💡</span>
-
-          <div>
-            <small>پیشنهادهای کارکنان</small>
-            <strong>{stats.ideas}</strong>
-          </div>
-        </div>
-
-        <div className="statCard">
-          <span>🗳️</span>
-
-          <div>
-            <small>نظرسنجی‌های فعال</small>
-            <strong>{stats.polls}</strong>
-          </div>
-        </div>
-
-        <div className="statCard">
-          <span>❓</span>
-
-          <div>
-            <small>سؤالات بی‌پاسخ</small>
-            <strong>{stats.unanswered}</strong>
-          </div>
-        </div>
-
-      </section>
-
-      <section className="managerPanel">
-
-        <div className="managerHeader">
-
-          <div>
-            <span className="eyebrow">
-              🤖 مدیر هوشمند
-            </span>
-
-            <h2>
-              وضعیت سامانه
-            </h2>
-          </div>
-
-          <span className="managerStatus">
-            آماده تحلیل
-          </span>
-
-        </div>
-
-        <div className="managerGrid">
-
-          <div>
-            <strong>
-              {stats.issues}
-            </strong>
-
-            <span>
-              پرونده مسئله
-            </span>
-          </div>
-
-          <div>
-            <strong>
-              {stats.ideas}
-            </strong>
-
-            <span>
-              پیشنهاد ثبت‌شده
-            </span>
-          </div>
-
-          <div>
-            <strong>
-              {stats.messages}
-            </strong>
-
-            <span>
-              پیام دریافتی
-            </span>
-          </div>
-
-          <div>
-            <strong>
-              {stats.unanswered}
-            </strong>
-
-            <span>
-              سؤال نیازمند بررسی
-            </span>
-          </div>
-
-        </div>
-
-      </section>
-
-      <div className="sectionTitle">
-
-        <div>
-          <span>
-            مرکز مدیریت
-          </span>
-
-          <h2>
-            ابزارهای هوشمند سامانه
-          </h2>
-        </div>
-
-      </div>
-
-      <section className="grid">
-
-        {menu.map(
-          ([icon, title, description]) => (
-
-            <button
-              className="card"
-              key={title}
-              onClick={() =>
-                openSection(title)
-              }
-            >
-
-              <div className="icon">
-                {icon}
+                {answer}
               </div>
+            )}
+          </div>
 
-              <div className="cardText">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit,minmax(190px,1fr))",
+              gap: 14,
+              marginTop: 24,
+            }}
+          >
+            {[
+              ["🧠", "مدیر هوشمند"],
+              ["💬", "صدایار"],
+              ["❓", "سؤالات بی‌پاسخ"],
+              ["⚠️", "مسائل نیازمند توجه"],
+              ["💡", "پیشنهادهای کارکنان"],
+              ["📊", "گزارش هوشمند"],
+              ["📚", "بانک دانش"],
+              ["👁️", "مرکز نظارت"],
+            ].map(([icon, title]) => (
+              <div
+                key={title}
+                style={{
+                  padding: 18,
+                  borderRadius: 18,
+                  background: "#fff",
+                  border:
+                    "1px solid #e3eaf4",
+                  boxShadow:
+                    "0 5px 18px rgba(30,60,100,.05)",
+                }}
+              >
+                <div style={{ fontSize: 25 }}>
+                  {icon}
+                </div>
 
-                <h3>
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontWeight: 800,
+                    color: "#26344d",
+                  }}
+                >
                   {title}
-                </h3>
-
-                <p>
-                  {description}
-                </p>
-
+                </div>
               </div>
-
-              <span className="arrow">
-                ←
-              </span>
-
-            </button>
-
-          )
-        )}
-
-      </section>
-
-      {active !== "داشبورد" && (
-
-        <section className="selected">
-
-          <div className="selectedIcon">
-            🔹
+            ))}
           </div>
 
-          <div>
-
-            <span>
-              بخش انتخاب‌شده
-            </span>
-
-            <h2>
-              {active}
-            </h2>
-
-            <p>
-              این بخش آماده اتصال به داده‌ها و
-              امکانات اختصاصی سامانه است.
-            </p>
-
+          <div
+            style={{
+              marginTop: 24,
+              padding: 16,
+              borderRadius: 15,
+              background: "#eefaf3",
+              color: "#26734d",
+              textAlign: "center",
+              fontWeight: 700,
+            }}
+          >
+            ● سامانه آماده است
           </div>
-
-        </section>
-
-      )}
-
-      <footer>
-
-        <strong>
-          صدای هوشمند
-        </strong>
-
-        <span>
-          هم‌صدایی برای تحول و بهبود
-        </span>
-
-      </footer>
-
+        </div>
+      </div>
     </main>
   );
-            }
+}
