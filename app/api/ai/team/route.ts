@@ -14,7 +14,7 @@ type AIResult = {
 };
 
 const MODELS = {
-  manager: "@cf/openai/gpt-oss-20b",
+  manager: "@cf/qwen/qwen3-30b-a3b-fp8",
   assistant: "@cf/google/gemma-4-26b-a4b-it",
   researcher: "@cf/qwen/qwen3-30b-a3b-fp8",
   analyst: "@cf/zai-org/glm-4.7-flash"
@@ -112,22 +112,42 @@ function extractAIText(result: any): string {
           return item;
         }
 
-        return item?.text || "";
+        return (
+          item?.text ||
+          item?.content ||
+          ""
+        );
       })
       .filter(Boolean)
       .join("\n")
       .trim();
   }
 
-  if (typeof result.output_text === "string") {
+  const choiceText =
+    result?.choices?.[0]?.text;
+
+  if (
+    typeof choiceText === "string" &&
+    choiceText.trim()
+  ) {
+    return choiceText.trim();
+  }
+
+  if (
+    typeof result.output_text === "string"
+  ) {
     return result.output_text.trim();
   }
 
-  if (typeof result.response === "string") {
+  if (
+    typeof result.response === "string"
+  ) {
     return result.response.trim();
   }
 
-  if (typeof result.text === "string") {
+  if (
+    typeof result.text === "string"
+  ) {
     return result.text.trim();
   }
 
@@ -138,11 +158,28 @@ function extractAIText(result: any): string {
           return item;
         }
 
-        return item?.text || "";
+        return (
+          item?.text ||
+          item?.content ||
+          ""
+        );
       })
       .filter(Boolean)
       .join("\n")
       .trim();
+  }
+
+  const reasoning =
+    result?.choices?.[0]?.message?.reasoning ||
+    result?.choices?.[0]?.message
+      ?.reasoning_content ||
+    result?.reasoning;
+
+  if (
+    typeof reasoning === "string" &&
+    reasoning.trim()
+  ) {
+    return reasoning.trim();
   }
 
   return "";
@@ -154,23 +191,34 @@ async function runModel(
   systemPrompt: string,
   question: string
 ): Promise<AIResult> {
+  const input: any = {
+    messages: [
+      {
+        role: "system",
+        content: systemPrompt
+      },
+      {
+        role: "user",
+        content: question
+      }
+    ],
+    max_tokens: 512,
+    temperature: 0.2
+  };
+
+  /*
+   * فقط برای Gemma 4
+   * حالت thinking را خاموش می‌کنیم.
+   */
+  if (model === MODELS.assistant) {
+    input.chat_template_kwargs = {
+      enable_thinking: false
+    };
+  }
+
   const result = await ai.run(
     model,
-    {
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: question
-        }
-      ],
-      chat_template_kwargs: {
-        enable_thinking: false
-      }
-    },
+    input,
     {
       rejectIfBusy: true
     }
@@ -281,12 +329,12 @@ ${knowledge.content}
 `;
 
   const prompt = `
-تو «مدیر هوشمند» سامانه
+تو «مدیر پاسخگو هوشمند» گروه
 «صدای کارکنان ثبت احوال» هستی.
 
 وظیفه تو هماهنگ‌کردن تیم هوش مصنوعی است.
 
-نوع سؤال:
+نوع اولیه سؤال:
 ${classifyQuestion(question)}
 
 ${knowledgeInfo}
@@ -297,23 +345,29 @@ GENERAL
 برای پاسخ معمولی و گفت‌وگوی فارسی.
 
 OFFICIAL
-برای سؤال‌های مربوط به قانون، مقررات، بخشنامه، دستورالعمل یا رویه رسمی.
+برای سؤال‌های مربوط به قانون، مقررات،
+بخشنامه، دستورالعمل یا رویه رسمی.
 
 ANALYSIS
-برای تحلیل، مقایسه، بررسی، علت‌یابی یا تحلیل داده.
+برای تحلیل، مقایسه، بررسی،
+علت‌یابی یا تحلیل داده.
 
 SUGGESTION
-برای پیشنهاد، ایده، بهبود فرآیند یا راهکار.
+برای پیشنهاد، ایده،
+بهبود فرآیند یا راهکار.
 
-فقط یکی از این چهار کلمه را در خط اول بنویس:
+فقط یکی از این چهار کلمه را
+در خط اول بنویس:
+
 GENERAL
 OFFICIAL
 ANALYSIS
 SUGGESTION
 
-در خط دوم یک توضیح بسیار کوتاه درباره دلیل انتخاب بنویس.
+در خط دوم یک دلیل بسیار کوتاه بنویس.
 
-اگر منبع رسمی وجود ندارد، هرگز آن را جعل نکن.
+اگر منبع رسمی وجود ندارد،
+هرگز آن را جعل نکن.
 `;
 
   const result = await runModel(
@@ -333,9 +387,13 @@ SUGGESTION
 
   if (firstLine.includes("OFFICIAL")) {
     route = "OFFICIAL";
-  } else if (firstLine.includes("ANALYSIS")) {
+  } else if (
+    firstLine.includes("ANALYSIS")
+  ) {
     route = "ANALYSIS";
-  } else if (firstLine.includes("SUGGESTION")) {
+  } else if (
+    firstLine.includes("SUGGESTION")
+  ) {
     route = "SUGGESTION";
   }
 
@@ -363,7 +421,8 @@ ${knowledge.title}
 ${knowledge.content}
 `
     : `
-منبع تأییدشده سازمانی برای این سؤال پیدا نشد.
+منبع تأییدشده سازمانی
+برای این سؤال پیدا نشد.
 `;
 
   const specialistText = specialist
@@ -375,8 +434,11 @@ ${specialist}
     : "";
 
   const systemPrompt = `
-تو «صدایار»، عضو نهایی تیم هوش مصنوعی سامانه
+تو «مدیر پاسخگو هوشمند» گروه
 «صدای کارکنان ثبت احوال» هستی.
+
+وظیفه تو ارائه پاسخ نهایی
+به اعضای گروه است.
 
 نوع مأموریت:
 ${route}
@@ -385,16 +447,41 @@ ${knowledgeText}
 
 ${specialistText}
 
-قواعد بسیار مهم:
+قواعد مهم:
 
 1. پاسخ را فارسی و روشن بنویس.
+
 2. اطلاعات ساختگی تولید نکن.
-3. اگر منبع رسمی نداریم، آن را به عنوان مقررات رسمی معرفی نکن.
-4. بین «اطلاعات رسمی» و «پیشنهاد عمومی» تفاوت بگذار.
-5. اگر سؤال رسمی است و منبع معتبر نداریم، صریحاً بگو اطلاعات کافی برای پاسخ قطعی وجود ندارد.
-6. پاسخ غیرضروری و طولانی نباشد.
-7. اگر مناسب بود، پاسخ را با شماره‌گذاری ارائه کن.
-8. هیچ‌گاه ادعا نکن که یک پیشنهاد عمومی سیاست رسمی سازمان است.
+
+3. اگر منبع رسمی نداریم،
+آن را به عنوان مقررات رسمی
+معرفی نکن.
+
+4. بین اطلاعات رسمی،
+اطلاعات موجود در بانک دانش
+و پیشنهاد عمومی تفاوت بگذار.
+
+5. اگر سؤال رسمی است و
+منبع معتبر نداریم،
+صریحاً بگو اطلاعات کافی
+برای پاسخ قطعی وجود ندارد.
+
+6. پاسخ غیرضروری و
+بیش از حد طولانی نباشد.
+
+7. اگر مناسب بود،
+پاسخ را شماره‌گذاری کن.
+
+8. پیشنهاد عمومی را
+به عنوان سیاست یا دستورالعمل
+رسمی سازمان معرفی نکن.
+
+9. لحن پاسخ محترمانه،
+کاربردی و مناسب کارکنان باشد.
+
+10. اگر سؤال نیازمند بررسی
+انسانی است، این موضوع را
+شفاف اعلام کن.
 `;
 
   const result = await runModel(
@@ -409,7 +496,8 @@ ${specialistText}
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
+    const body =
+      await req.json().catch(() => ({}));
 
     const question =
       typeof body?.question === "string"
@@ -481,8 +569,7 @@ export async function POST(req: Request) {
 
     /*
      * مرحله اول:
-     * مدیر هوشمند تصمیم می‌گیرد
-     * کدام متخصص لازم است.
+     * مدیر پاسخگو هوشمند
      */
     const decision =
       await managerDecision(
@@ -491,35 +578,31 @@ export async function POST(req: Request) {
         selectedKnowledge
       );
 
-    let specialistResult =
-      "";
-
-    let specialistModel =
-      "";
+    let specialistResult = "";
+    let specialistModel = "";
 
     /*
-     * مرحله دوم:
-     * اجرای متخصص مناسب
+     * متخصص سؤال رسمی
      */
-    if (decision.route === "OFFICIAL") {
+    if (
+      decision.route === "OFFICIAL"
+    ) {
       const result =
         await runModel(
           ai,
           MODELS.researcher,
           `
-تو «پژوهشگر هوشمند» هستی.
+تو «پژوهشگر هوشمند» تیم
+گروه صدای کارکنان ثبت احوال هستی.
 
-روی سؤال زیر تمرکز کن.
-
-فقط بر اساس اطلاعاتی که
-در پیام و منبع ارائه‌شده وجود دارد
+فقط بر اساس اطلاعات ارائه‌شده
 تحلیل کن.
 
 اگر منبع رسمی کافی نیست،
 صریحاً بگو اطلاعات کافی وجود ندارد.
 
-هیچ قانون یا بخشنامه‌ای را
-از خودت تولید نکن.
+هیچ قانون، بخشنامه یا
+دستورالعملی را از خودت تولید نکن.
           `,
           question +
             "\n\n" +
@@ -537,15 +620,21 @@ export async function POST(req: Request) {
         result.model;
     }
 
-    if (decision.route === "ANALYSIS") {
+    /*
+     * متخصص تحلیل
+     */
+    if (
+      decision.route === "ANALYSIS"
+    ) {
       const result =
         await runModel(
           ai,
           MODELS.analyst,
           `
-تو «تحلیل‌گر هوشمند» هستی.
+تو «تحلیل‌گر هوشمند» تیم هستی.
 
 وظیفه:
+
 - تحلیل دقیق
 - پیدا کردن نکات مهم
 - تفکیک واقعیت از پیشنهاد
@@ -570,7 +659,12 @@ export async function POST(req: Request) {
         result.model;
     }
 
-    if (decision.route === "SUGGESTION") {
+    /*
+     * متخصص پیشنهاد و نوآوری
+     */
+    if (
+      decision.route === "SUGGESTION"
+    ) {
       const result =
         await runModel(
           ai,
@@ -578,18 +672,21 @@ export async function POST(req: Request) {
           `
 تو «متخصص بهبود و نوآوری» هستی.
 
-برای سؤال کاربر ایده‌ها و
-راهکارهای عمومی ارائه کن.
+برای سؤال کاربر ایده‌ها
+و راهکارهای عمومی ارائه کن.
 
 هرگز پیشنهاد عمومی را
 به عنوان سیاست یا دستورالعمل
 رسمی سازمان معرفی نکن.
 
 پیشنهادها باید:
+
 - عملی
 - روشن
 - قابل بررسی
+- قابل اجرا
 - اولویت‌بندی‌پذیر
+
 باشند.
           `,
           question
@@ -603,8 +700,9 @@ export async function POST(req: Request) {
     }
 
     /*
-     * مرحله سوم:
-     * صدایار پاسخ نهایی را می‌سازد.
+     * مرحله نهایی:
+     * مدیر پاسخگو هوشمند
+     * پاسخ نهایی را می‌سازد.
      */
     const final =
       await createFinalAnswer(
@@ -624,6 +722,8 @@ export async function POST(req: Request) {
         "multi-model-ai-team",
 
       manager: {
+        name:
+          "مدیر پاسخگو هوشمند",
         model:
           MODELS.manager,
         route:
@@ -632,8 +732,7 @@ export async function POST(req: Request) {
 
       specialist: {
         model:
-          specialistModel ||
-          null
+          specialistModel || null
       },
 
       final_model:
@@ -687,4 +786,4 @@ export async function POST(req: Request) {
       }
     );
   }
-    }
+}
