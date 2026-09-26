@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { createClient } from "@supabase/supabase-js";
 
 type KnowledgeItem = {
   id: string | number;
@@ -77,7 +77,105 @@ function findBestKnowledge(
   };
 }
 
-export const dynamic = "force-dynamic";
+function extractAIText(result: any) {
+  if (!result) return "";
+
+  if (typeof result === "string") {
+    return result.trim();
+  }
+
+  if (typeof result.response === "string") {
+    return result.response.trim();
+  }
+
+  if (typeof result.text === "string") {
+    return result.text.trim();
+  }
+
+  if (Array.isArray(result.content)) {
+    return result.content
+      .map((item: any) => item?.text)
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+
+  return "";
+}
+
+async function askWorkersAI(
+  question: string,
+  knowledge: KnowledgeItem | null
+) {
+  const { env } = getCloudflareContext();
+
+  const ai = (env as any).AI;
+
+  if (!ai) {
+    throw new Error(
+      "Workers AI binding env.AI پیدا نشد."
+    );
+  }
+
+  const knowledgeText = knowledge
+    ? `
+عنوان منبع:
+${knowledge.title}
+
+محتوای منبع:
+${knowledge.content}
+`
+    : `
+هیچ منبع تأییدشده‌ای از بانک دانش برای این سؤال پیدا نشد.
+`;
+
+  const systemPrompt = `
+تو «صدایار»، عضو تیم هوش مصنوعی سامانه
+«صدای کارکنان ثبت احوال» هستی.
+
+هدف تو پاسخ‌گویی دقیق، روشن و قابل اتکا به کارکنان است.
+
+قوانین:
+
+- هرگز اطلاعات را حدس نزن.
+- اطلاعات ساختگی تولید نکن.
+- اگر منبع سازمانی ارائه شده، پاسخ را بر اساس آن تنظیم کن.
+- اگر درباره قانون، مقررات، بخشنامه یا رویه رسمی منبع معتبر نداری، پاسخ قطعی نده.
+- اگر اطلاعات کافی نداری، صریحاً اعلام کن.
+- پاسخ را فارسی و قابل فهم ارائه کن.
+
+${knowledgeText}
+`;
+
+  const result = await ai.run(
+    "@cf/google/gemma-4-26b-a4b-it",
+    {
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: question
+        }
+      ]
+    },
+    {
+      rejectIfBusy: true
+    }
+  );
+
+  const answer = extractAIText(result);
+
+  if (!answer) {
+    throw new Error(
+      "Workers AI اجرا شد اما متن پاسخ قابل استخراج نبود."
+    );
+  }
+
+  return answer;
+}
 
 export async function POST(req: Request) {
   try {
@@ -94,32 +192,15 @@ export async function POST(req: Request) {
       });
     }
 
-    /*
-     * اتصال به Cloudflare Workers AI
-     */
     const { env } = getCloudflareContext();
 
-    const ai = (env as any).AI;
-
-    if (!ai) {
-      return NextResponse.json(
-        {
-          ok: false,
-          step: "binding",
-          error: "AI binding پیدا نشد."
-        },
-        { status: 500 }
-      );
-    }
-
-    /*
-     * اتصال به Supabase
-     */
     const url =
-      (env as any).NEXT_PUBLIC_SUPABASE_URL;
+      (env as any).NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL;
 
     const key =
-      (env as any).SUPABASE_SERVICE_ROLE_KEY;
+      (env as any).SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     let knowledge: KnowledgeItem[] = [];
 
@@ -129,211 +210,66 @@ export async function POST(req: Request) {
         key
       );
 
-      const { data, error } =
-        await supabase
-          .from("knowledge")
-          .select(
-            "id,title,content"
-          )
-          .eq("approved", true)
-          .limit(200);
+      const { data, error } = await supabase
+        .from("knowledge")
+        .select("id,title,content")
+        .eq("approved", true)
+        .limit(200);
 
       if (!error && data) {
         knowledge = data;
       }
     }
 
-    /*
-     * پیدا کردن مرتبط‌ترین منبع
-     * از بانک دانش
-     */
-    const best =
-      findBestKnowledge(
-        question,
-        knowledge
-      );
+    const best = findBestKnowledge(
+      question,
+      knowledge
+    );
 
     const selectedKnowledge =
-      best.item &&
-      best.score >= 0.2
+      best.item && best.score >= 0.2
         ? best.item
         : null;
 
-    const knowledgeText =
+    const answer = await askWorkersAI(
+      question,
       selectedKnowledge
-        ? `
-منبع سازمانی تأییدشده:
-
-عنوان:
-${selectedKnowledge.title}
-
-محتوا:
-${selectedKnowledge.content}
-`
-        : `
-در بانک دانش، منبع سازمانی مرتبط و تأییدشده‌ای برای این سؤال پیدا نشد.
-`;
-
-    /*
-     * درخواست به هوش مصنوعی Cloudflare
-     */
-    const result = await ai.run(
-      "@cf/google/gemma-4-26b-a4b-it",
-      {
-        messages: [
-          {
-            role: "system",
-            content: `
-تو «صدایار» هستی؛
-عضو تیم هوش مصنوعی سامانه
-«صدای کارکنان ثبت احوال».
-
-وظیفه تو کمک به کارکنان،
-پاسخ‌گویی دقیق،
-راهنمایی مرحله‌به‌مرحله،
-تحلیل مسائل،
-و استفاده از منابع تأییدشده است.
-
-قوانین:
-
-1. هرگز اطلاعات را حدس نزن.
-
-2. اطلاعات ساختگی تولید نکن.
-
-3. اگر منبع سازمانی در اختیار توست،
-پاسخ را بر اساس همان منبع تنظیم کن.
-
-4. معنای منبع سازمانی را تغییر نده.
-
-5. اگر سؤال درباره قانون،
-مقررات،
-بخشنامه،
-دستورالعمل،
-رویه رسمی
-یا تصمیم سازمانی است،
-بدون منبع معتبر پاسخ قطعی نده.
-
-6. اگر اطلاعات کافی نیست،
-صریحاً بگو اطلاعات تأییدشده کافی نیست.
-
-7. پاسخ‌ها را فارسی،
-روشن،
-محترمانه
-و کاربردی ارائه کن.
-
-8. اگر لازم بود،
-سؤال تکمیلی مشخص مطرح کن.
-
-9. در موارد حساس،
-پاسخ را برای بررسی انسانی علامت‌گذاری کن.
-
-10. هدف سامانه:
-«هم‌صدایی برای تحول و بهبود»
-
-${knowledgeText}
-`
-          },
-          {
-            role: "user",
-            content: question
-          }
-        ],
-
-        /*
-         * غیرفعال کردن حالت تفکر طولانی
-         * برای پاسخ سریع‌تر
-         */
-        chat_template_kwargs: {
-          enable_thinking: false
-        }
-      },
-
-      /*
-       * اگر ظرفیت AI موقتاً پر باشد،
-       * درخواست منتظر نمی‌ماند.
-       */
-      {
-        rejectIfBusy: true
-      }
     );
 
-    /*
-     * استخراج پاسخ مدل
-     */
-    const answer =
-      typeof result === "string"
-        ? result
-        : (result as any)?.response ||
-          (result as any)?.text ||
-          (result as any)?.result ||
-          (result as any)?.choices?.[0]
-            ?.message?.content ||
-          "";
-
-    if (!answer) {
-      return NextResponse.json(
-        {
-          ok: false,
-          step: "ai_response",
-          error:
-            "مدل هوش مصنوعی پاسخ متنی برنگرداند.",
-          raw: result
-        },
-        { status: 502 }
-      );
-    }
-
-    /*
-     * پاسخ موفق
-     */
     return NextResponse.json({
       ok: true,
-
       answer,
-
-      source:
-        selectedKnowledge?.title ||
-        null,
-
-      confidence:
-        selectedKnowledge
-          ? Number(
-              best.score.toFixed(2)
-            )
-          : null,
-
-      ai:
-        "cloudflare-workers-ai",
-
+      ai: "cloudflare-workers-ai",
       model:
         "@cf/google/gemma-4-26b-a4b-it",
-
-      needs_review:
-        !selectedKnowledge,
-
+      source:
+        selectedKnowledge?.title || null,
+      confidence: selectedKnowledge
+        ? Number(best.score.toFixed(2))
+        : null,
       verified_source:
-        Boolean(selectedKnowledge)
+        Boolean(selectedKnowledge),
+      needs_review:
+        !selectedKnowledge
     });
+  } catch (error: any) {
+    const message =
+      error?.message ||
+      String(error) ||
+      "خطای ناشناخته";
 
-  } catch (error) {
-
-    /*
-     * خطای واقعی را نمایش می‌دهیم
-     * تا در صورت وجود مشکل دقیقاً
-     * مشخص شود مشکل کجاست.
-     */
     return NextResponse.json(
       {
         ok: false,
-
-        step: "runtime",
-
-        error:
-          error instanceof Error
-            ? error.message
-            : String(error)
+        ai: "cloudflare-workers-ai",
+        error: message,
+        answer:
+          "خطای واقعی هوش مصنوعی: " +
+          message
       },
-      { status: 500 }
+      {
+        status: 500
+      }
     );
   }
       }
