@@ -8,6 +8,11 @@ type KnowledgeRow = {
   approved: boolean | null;
 };
 
+type RuntimeEnv = {
+  NEXT_PUBLIC_SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+};
+
 function normalizeText(text: string): string {
   return text
     .toLowerCase()
@@ -196,9 +201,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const runtimeProcessEnv =
+    const runtimeProcessEnv: RuntimeEnv =
       typeof process !== "undefined" && process.env
-        ? process.env
+        ? (process.env as RuntimeEnv)
         : {};
 
     const supabaseUrl =
