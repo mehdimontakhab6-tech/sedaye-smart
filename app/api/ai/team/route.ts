@@ -1,789 +1,387 @@
-import { NextResponse } from "next/server";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
 
-type KnowledgeItem = {
-  id: string | number;
-  title: string;
+type AIMessage = {
+  role: "system" | "user" | "assistant";
   content: string;
 };
 
-type AIResult = {
-  text: string;
-  model: string;
+type ModelResult = {
+  [key: string]: any;
 };
 
 const MODELS = {
   manager: "@cf/qwen/qwen3-30b-a3b-fp8",
   assistant: "@cf/google/gemma-4-26b-a4b-it",
   researcher: "@cf/qwen/qwen3-30b-a3b-fp8",
-  analyst: "@cf/zai-org/glm-4.7-flash"
+  analyst: "@cf/zai-org/glm-4.7-flash",
 };
 
-function normalize(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/ي/g, "ی")
-    .replace(/ك/g, "ک")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+function extractText(result: ModelResult): string {
+  if (!result) return "";
 
-function words(text: string) {
-  return normalize(text)
-    .split(" ")
-    .filter((word) => word.length > 2);
-}
+  // OpenAI-compatible response
+  const choice = result?.choices?.[0];
 
-function similarity(a: string, b: string) {
-  const first = new Set(words(a));
-  const second = new Set(words(b));
-
-  if (!first.size || !second.size) {
-    return 0;
+  if (typeof choice?.message?.content === "string") {
+    return choice.message.content.trim();
   }
 
-  let common = 0;
-
-  for (const word of first) {
-    if (second.has(word)) {
-      common++;
-    }
-  }
-
-  return common / Math.max(first.size, second.size);
-}
-
-function findBestKnowledge(
-  question: string,
-  items: KnowledgeItem[]
-) {
-  let bestItem: KnowledgeItem | null = null;
-  let bestScore = 0;
-
-  for (const item of items) {
-    const titleScore = similarity(
-      question,
-      item.title
-    );
-
-    const contentScore = similarity(
-      question,
-      item.content
-    );
-
-    const score =
-      titleScore * 0.7 +
-      contentScore * 0.3;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestItem = item;
-    }
-  }
-
-  return {
-    item: bestItem,
-    score: bestScore
-  };
-}
-
-function extractAIText(result: any): string {
-  if (!result) {
-    return "";
-  }
-
-  if (typeof result === "string") {
-    return result.trim();
-  }
-
-  const messageContent =
-    result?.choices?.[0]?.message?.content;
-
-  if (typeof messageContent === "string") {
-    return messageContent.trim();
-  }
-
-  if (Array.isArray(messageContent)) {
-    return messageContent
+  if (Array.isArray(choice?.message?.content)) {
+    const text = choice.message.content
       .map((item: any) => {
-        if (typeof item === "string") {
-          return item;
-        }
-
-        return (
-          item?.text ||
-          item?.content ||
-          ""
-        );
+        if (typeof item === "string") return item;
+        return item?.text || item?.content || "";
       })
-      .filter(Boolean)
-      .join("\n")
-      .trim();
+      .join("");
+
+    if (text.trim()) return text.trim();
   }
 
-  const choiceText =
-    result?.choices?.[0]?.text;
-
-  if (
-    typeof choiceText === "string" &&
-    choiceText.trim()
-  ) {
-    return choiceText.trim();
+  if (typeof choice?.text === "string") {
+    return choice.text.trim();
   }
 
-  if (
-    typeof result.output_text === "string"
-  ) {
+  if (typeof result?.output_text === "string") {
     return result.output_text.trim();
   }
 
-  if (
-    typeof result.response === "string"
-  ) {
+  if (typeof result?.response === "string") {
     return result.response.trim();
   }
 
-  if (
-    typeof result.text === "string"
-  ) {
+  if (typeof result?.text === "string") {
     return result.text.trim();
   }
 
-  if (Array.isArray(result.content)) {
-    return result.content
+  if (Array.isArray(result?.content)) {
+    const text = result.content
       .map((item: any) => {
-        if (typeof item === "string") {
-          return item;
-        }
-
-        return (
-          item?.text ||
-          item?.content ||
-          ""
-        );
+        if (typeof item === "string") return item;
+        return item?.text || item?.content || "";
       })
-      .filter(Boolean)
-      .join("\n")
-      .trim();
+      .join("");
+
+    if (text.trim()) return text.trim();
   }
 
-  const reasoning =
-    result?.choices?.[0]?.message?.reasoning ||
-    result?.choices?.[0]?.message
-      ?.reasoning_content ||
-    result?.reasoning;
+  // Fallback for reasoning-style responses
+  if (typeof choice?.message?.reasoning_content === "string") {
+    return choice.message.reasoning_content.trim();
+  }
 
-  if (
-    typeof reasoning === "string" &&
-    reasoning.trim()
-  ) {
-    return reasoning.trim();
+  if (typeof result?.reasoning_content === "string") {
+    return result.reasoning_content.trim();
   }
 
   return "";
 }
 
 async function runModel(
-  ai: any,
+  env: any,
   model: string,
-  systemPrompt: string,
-  question: string
-): Promise<AIResult> {
-  const input: any = {
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt
-      },
-      {
-        role: "user",
-        content: question
-      }
-    ],
-    max_tokens: 512,
-    temperature: 0.2
+  messages: AIMessage[],
+  maxTokens = 1500
+): Promise<string> {
+  const options: any = {
+    messages,
+    max_tokens: maxTokens,
+    temperature: 0.2,
   };
 
-  /*
-   * فقط برای Gemma 4
-   * حالت thinking را خاموش می‌کنیم.
-   */
+  // Gemma
   if (model === MODELS.assistant) {
-    input.chat_template_kwargs = {
-      enable_thinking: false
+    options.chat_template_kwargs = {
+      enable_thinking: false,
     };
   }
 
-  const result = await ai.run(
-    model,
-    input,
-    {
-      rejectIfBusy: true
-    }
-  );
+  const result = await env.AI.run(model, options);
 
-  const text = extractAIText(result);
+  const text = extractText(result);
 
   if (!text) {
-    const shape =
-      result &&
-      typeof result === "object"
-        ? Object.keys(result).join(", ")
-        : typeof result;
-
     throw new Error(
-      `مدل ${model} اجرا شد اما پاسخ قابل استخراج نبود. ساختار: ${shape}`
+      `مدل ${model} اجرا شد اما پاسخ قابل استخراج نبود. ساختار: ${Object.keys(
+        result || {}
+      ).join(", ")}`
     );
   }
 
-  return {
-    text,
-    model
-  };
+  return text;
 }
 
-function classifyQuestion(question: string) {
-  const text = normalize(question);
+function cleanRoute(route: string): string {
+  const value = route
+    .toUpperCase()
+    .replace(/```/g, "")
+    .trim();
 
-  const officialWords = [
-    "قانون",
-    "بخشنامه",
-    "دستورالعمل",
-    "آیین نامه",
-    "آیین‌نامه",
-    "مقررات",
-    "ابلاغ",
-    "رویه",
-    "ضابطه",
-    "نامه رسمی"
-  ];
+  if (value.includes("OFFICIAL")) return "OFFICIAL";
+  if (value.includes("ANALYSIS")) return "ANALYSIS";
+  if (value.includes("SUGGESTION")) return "SUGGESTION";
 
-  const analysisWords = [
-    "تحلیل",
-    "تحلیل کنید",
-    "مقایسه",
-    "بررسی",
-    "چرا",
-    "علت",
-    "روند",
-    "آمار",
-    "داده"
-  ];
-
-  const suggestionWords = [
-    "پیشنهاد",
-    "ایده",
-    "بهبود",
-    "راهکار",
-    "راه حل",
-    "راه‌حل",
-    "چه کار کنیم"
-  ];
-
-  if (
-    officialWords.some((word) =>
-      text.includes(normalize(word))
-    )
-  ) {
-    return "official";
-  }
-
-  if (
-    analysisWords.some((word) =>
-      text.includes(normalize(word))
-    )
-  ) {
-    return "analysis";
-  }
-
-  if (
-    suggestionWords.some((word) =>
-      text.includes(normalize(word))
-    )
-  ) {
-    return "suggestion";
-  }
-
-  return "general";
+  return "GENERAL";
 }
 
-async function managerDecision(
-  ai: any,
-  question: string,
-  knowledge: KnowledgeItem | null
-) {
-  const knowledgeInfo = knowledge
-    ? `
-منبع تأییدشده بانک دانش:
-
-عنوان:
-${knowledge.title}
-
-محتوا:
-${knowledge.content}
-`
-    : `
-هیچ منبع تأییدشده‌ای از بانک دانش پیدا نشده است.
-`;
-
-  const prompt = `
-تو «مدیر پاسخگو هوشمند» گروه
-«صدای کارکنان ثبت احوال» هستی.
-
-وظیفه تو هماهنگ‌کردن تیم هوش مصنوعی است.
-
-نوع اولیه سؤال:
-${classifyQuestion(question)}
-
-${knowledgeInfo}
-
-برای سؤال کاربر یکی از این مأموریت‌ها را انتخاب کن:
-
-GENERAL
-برای پاسخ معمولی و گفت‌وگوی فارسی.
-
-OFFICIAL
-برای سؤال‌های مربوط به قانون، مقررات،
-بخشنامه، دستورالعمل یا رویه رسمی.
-
-ANALYSIS
-برای تحلیل، مقایسه، بررسی،
-علت‌یابی یا تحلیل داده.
-
-SUGGESTION
-برای پیشنهاد، ایده،
-بهبود فرآیند یا راهکار.
-
-فقط یکی از این چهار کلمه را
-در خط اول بنویس:
-
-GENERAL
-OFFICIAL
-ANALYSIS
-SUGGESTION
-
-در خط دوم یک دلیل بسیار کوتاه بنویس.
-
-اگر منبع رسمی وجود ندارد،
-هرگز آن را جعل نکن.
-`;
-
-  const result = await runModel(
-    ai,
-    MODELS.manager,
-    prompt,
-    question
-  );
-
-  const firstLine =
-    result.text
-      .split("\n")[0]
-      .trim()
-      .toUpperCase();
-
-  let route = "GENERAL";
-
-  if (firstLine.includes("OFFICIAL")) {
-    route = "OFFICIAL";
-  } else if (
-    firstLine.includes("ANALYSIS")
-  ) {
-    route = "ANALYSIS";
-  } else if (
-    firstLine.includes("SUGGESTION")
-  ) {
-    route = "SUGGESTION";
-  }
-
-  return {
-    route,
-    managerText: result.text
-  };
-}
-
-async function createFinalAnswer(
-  ai: any,
-  route: string,
-  question: string,
-  knowledge: KnowledgeItem | null,
-  specialist?: string
-) {
-  const knowledgeText = knowledge
-    ? `
-منبع تأییدشده سازمانی:
-
-عنوان:
-${knowledge.title}
-
-محتوا:
-${knowledge.content}
-`
-    : `
-منبع تأییدشده سازمانی
-برای این سؤال پیدا نشد.
-`;
-
-  const specialistText = specialist
-    ? `
-نتیجه عضو متخصص تیم:
-
-${specialist}
-`
-    : "";
-
-  const systemPrompt = `
-تو «مدیر پاسخگو هوشمند» گروه
-«صدای کارکنان ثبت احوال» هستی.
-
-وظیفه تو ارائه پاسخ نهایی
-به اعضای گروه است.
-
-نوع مأموریت:
-${route}
-
-${knowledgeText}
-
-${specialistText}
-
-قواعد مهم:
-
-1. پاسخ را فارسی و روشن بنویس.
-
-2. اطلاعات ساختگی تولید نکن.
-
-3. اگر منبع رسمی نداریم،
-آن را به عنوان مقررات رسمی
-معرفی نکن.
-
-4. بین اطلاعات رسمی،
-اطلاعات موجود در بانک دانش
-و پیشنهاد عمومی تفاوت بگذار.
-
-5. اگر سؤال رسمی است و
-منبع معتبر نداریم،
-صریحاً بگو اطلاعات کافی
-برای پاسخ قطعی وجود ندارد.
-
-6. پاسخ غیرضروری و
-بیش از حد طولانی نباشد.
-
-7. اگر مناسب بود،
-پاسخ را شماره‌گذاری کن.
-
-8. پیشنهاد عمومی را
-به عنوان سیاست یا دستورالعمل
-رسمی سازمان معرفی نکن.
-
-9. لحن پاسخ محترمانه،
-کاربردی و مناسب کارکنان باشد.
-
-10. اگر سؤال نیازمند بررسی
-انسانی است، این موضوع را
-شفاف اعلام کن.
-`;
-
-  const result = await runModel(
-    ai,
-    MODELS.assistant,
-    systemPrompt,
-    question
-  );
-
-  return result;
-}
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const body =
-      await req.json().catch(() => ({}));
-
-    const question =
-      typeof body?.question === "string"
-        ? body.question.trim()
-        : "";
+    const body = await req.json();
+    const question = String(body?.question || "").trim();
 
     if (!question) {
-      return NextResponse.json({
-        ok: false,
-        answer:
-          "لطفاً سؤال خود را وارد کنید."
-      });
-    }
-
-    const { env } =
-      getCloudflareContext();
-
-    const ai = (env as any).AI;
-
-    if (!ai) {
-      throw new Error(
-        "Workers AI binding env.AI پیدا نشد."
+      return NextResponse.json(
+        {
+          error: "لطفاً پرسش خود را وارد کنید.",
+        },
+        { status: 400 }
       );
     }
 
-    const url =
-      (env as any)
-        .NEXT_PUBLIC_SUPABASE_URL ||
-      process.env
-        .NEXT_PUBLIC_SUPABASE_URL;
+    const env = (process as any).env?.AI
+      ? (process as any).env
+      : (globalThis as any).env;
 
-    const key =
-      (env as any)
-        .SUPABASE_SERVICE_ROLE_KEY ||
-      process.env
-        .SUPABASE_SERVICE_ROLE_KEY;
-
-    let knowledge: KnowledgeItem[] = [];
-
-    if (url && key) {
-      const supabase =
-        createClient(url, key);
-
-      const { data, error } =
-        await supabase
-          .from("knowledge")
-          .select(
-            "id,title,content"
-          )
-          .eq("approved", true)
-          .limit(200);
-
-      if (!error && data) {
-        knowledge = data;
-      }
+    if (!env?.AI) {
+      return NextResponse.json(
+        {
+          error:
+            "اتصال به موتور هوش مصنوعی Cloudflare Workers AI برقرار نیست.",
+        },
+        { status: 500 }
+      );
     }
 
-    const best =
-      findBestKnowledge(
-        question,
-        knowledge
-      );
+    // ---------------------------------------------------------
+    // مرحله ۱: مدیر پاسخگو هوشمند
+    // ---------------------------------------------------------
 
-    const selectedKnowledge =
-      best.item &&
-      best.score >= 0.2
-        ? best.item
-        : null;
+    const managerPrompt: AIMessage[] = [
+      {
+        role: "system",
+        content: `
+تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
 
-    /*
-     * مرحله اول:
-     * مدیر پاسخگو هوشمند
-     */
-    const decision =
-      await managerDecision(
-        ai,
-        question,
-        selectedKnowledge
-      );
+وظیفه تو مدیریت تیم هوش مصنوعی و تشخیص نوع درخواست است.
+
+درخواست کاربر را فقط در یکی از چهار دسته زیر قرار بده:
+
+GENERAL
+OFFICIAL
+ANALYSIS
+SUGGESTION
+
+قواعد:
+
+GENERAL:
+پرسش عمومی، گفت‌وگوی معمولی یا درخواست ساده.
+
+OFFICIAL:
+موضوعی که به مقررات، بخشنامه، دستورالعمل، رویه رسمی یا اطلاعات رسمی سازمان مربوط است.
+
+ANALYSIS:
+تحلیل مسائل، بررسی روندها، مقایسه، دسته‌بندی یا تحلیل داده و دیدگاه‌ها.
+
+SUGGESTION:
+درخواست پیشنهاد، ایده، راهکار یا بهبود فرآیند.
+
+فقط نام دسته را برگردان.
+`,
+      },
+      {
+        role: "user",
+        content: question,
+      },
+    ];
+
+    const managerRaw = await runModel(
+      env,
+      MODELS.manager,
+      managerPrompt,
+      300
+    );
+
+    const route = cleanRoute(managerRaw);
+
+    // ---------------------------------------------------------
+    // مرحله ۲: انتخاب عضو متخصص تیم
+    // ---------------------------------------------------------
 
     let specialistResult = "";
-    let specialistModel = "";
 
-    /*
-     * متخصص سؤال رسمی
-     */
-    if (
-      decision.route === "OFFICIAL"
-    ) {
-      const result =
-        await runModel(
-          ai,
-          MODELS.researcher,
-          `
-تو «پژوهشگر هوشمند» تیم
-گروه صدای کارکنان ثبت احوال هستی.
+    if (route === "OFFICIAL") {
+      specialistResult = await runModel(
+        env,
+        MODELS.researcher,
+        [
+          {
+            role: "system",
+            content: `
+تو پژوهشگر هوشمند گروه «صدای کارکنان ثبت احوال» هستی.
 
-فقط بر اساس اطلاعات ارائه‌شده
-تحلیل کن.
+اگر منبع رسمی یا اطلاعات معتبر در اختیار تو نیست،
+نباید چیزی را به عنوان مقررات یا دستورالعمل رسمی جعل کنی.
 
-اگر منبع رسمی کافی نیست،
-صریحاً بگو اطلاعات کافی وجود ندارد.
+در صورت نبود منبع معتبر، صریحاً اعلام کن:
+«برای ارائه پاسخ رسمی، اطلاعات معتبر کافی در اختیار نیست.»
 
-هیچ قانون، بخشنامه یا
-دستورالعملی را از خودت تولید نکن.
-          `,
-          question +
-            "\n\n" +
-            (
-              selectedKnowledge
-                ? selectedKnowledge.content
-                : "منبعی موجود نیست."
-            )
-        );
-
-      specialistResult =
-        result.text;
-
-      specialistModel =
-        result.model;
-    }
-
-    /*
-     * متخصص تحلیل
-     */
-    if (
-      decision.route === "ANALYSIS"
-    ) {
-      const result =
-        await runModel(
-          ai,
-          MODELS.analyst,
-          `
-تو «تحلیل‌گر هوشمند» تیم هستی.
-
-وظیفه:
-
-- تحلیل دقیق
-- پیدا کردن نکات مهم
-- تفکیک واقعیت از پیشنهاد
-- ارائه جمع‌بندی روشن
-
-اگر داده کافی نیست،
-این موضوع را صریحاً اعلام کن.
-          `,
-          question +
-            "\n\n" +
-            (
-              selectedKnowledge
-                ? selectedKnowledge.content
-                : ""
-            )
-        );
-
-      specialistResult =
-        result.text;
-
-      specialistModel =
-        result.model;
-    }
-
-    /*
-     * متخصص پیشنهاد و نوآوری
-     */
-    if (
-      decision.route === "SUGGESTION"
-    ) {
-      const result =
-        await runModel(
-          ai,
-          MODELS.analyst,
-          `
-تو «متخصص بهبود و نوآوری» هستی.
-
-برای سؤال کاربر ایده‌ها
-و راهکارهای عمومی ارائه کن.
-
-هرگز پیشنهاد عمومی را
-به عنوان سیاست یا دستورالعمل
-رسمی سازمان معرفی نکن.
-
-پیشنهادها باید:
-
-- عملی
-- روشن
-- قابل بررسی
-- قابل اجرا
-- اولویت‌بندی‌پذیر
-
-باشند.
-          `,
-          question
-        );
-
-      specialistResult =
-        result.text;
-
-      specialistModel =
-        result.model;
-    }
-
-    /*
-     * مرحله نهایی:
-     * مدیر پاسخگو هوشمند
-     * پاسخ نهایی را می‌سازد.
-     */
-    const final =
-      await createFinalAnswer(
-        ai,
-        decision.route,
-        question,
-        selectedKnowledge,
-        specialistResult
+پاسخ را فارسی، دقیق و کوتاه ارائه کن.
+`,
+          },
+          {
+            role: "user",
+            content: question,
+          },
+        ],
+        1000
       );
+    }
+
+    if (route === "ANALYSIS") {
+      specialistResult = await runModel(
+        env,
+        MODELS.analyst,
+        [
+          {
+            role: "system",
+            content: `
+تو تحلیل‌گر هوشمند گروه «صدای کارکنان ثبت احوال» هستی.
+
+موضوع را دقیق تحلیل کن.
+اگر داده کافی وجود ندارد، این موضوع را صریحاً اعلام کن.
+از ساختن آمار و اطلاعات غیرواقعی خودداری کن.
+
+پاسخ فارسی و ساختاریافته باشد.
+`,
+          },
+          {
+            role: "user",
+            content: question,
+          },
+        ],
+        1200
+      );
+    }
+
+    if (route === "SUGGESTION") {
+      specialistResult = await runModel(
+        env,
+        MODELS.researcher,
+        [
+          {
+            role: "system",
+            content: `
+تو عضو تیم ایده‌پردازی و پژوهش گروه
+«صدای کارکنان ثبت احوال» هستی.
+
+برای موضوع مطرح‌شده راهکارهای عملی و قابل بررسی ارائه کن.
+
+مهم:
+پیشنهاد عمومی را به عنوان سیاست یا دستورالعمل رسمی سازمان معرفی نکن.
+
+اگر اطلاعات رسمی در اختیار نداری، واضح بگو که پیشنهاد ارائه‌شده
+صرفاً یک پیشنهاد عمومی برای بررسی کارشناسی است.
+
+پاسخ فارسی و کاربردی باشد.
+`,
+          },
+          {
+            role: "user",
+            content: question,
+          },
+        ],
+        1200
+      );
+    }
+
+    // ---------------------------------------------------------
+    // مرحله ۳: مدیر پاسخ نهایی را تولید می‌کند
+    // ---------------------------------------------------------
+
+    const finalPrompt: AIMessage[] = [
+      {
+        role: "system",
+        content: `
+تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
+
+وظیفه تو ارائه پاسخ نهایی به کاربر است.
+
+اصول الزامی:
+
+۱. پاسخ را فارسی و روان بنویس.
+
+۲. اگر موضوع رسمی است، بدون منبع معتبر ادعای مقررات یا دستورالعمل رسمی نکن.
+
+۳. اگر اطلاعات کافی وجود ندارد، شفاف اعلام کن.
+
+۴. بین اطلاعات رسمی و پیشنهاد عمومی تفاوت بگذار.
+
+۵. موضوعات حساس، پیچیده یا نیازمند تصمیم سازمانی را برای بررسی انسانی ارجاع بده.
+
+۶. از ساختن آمار، بخشنامه، قانون، شماره نامه یا منبع جعلی خودداری کن.
+
+۷. پاسخ را کامل کن و وسط جمله رها نکن.
+
+۸. اگر پاسخ چند بخش دارد، از تیتر و شماره‌گذاری استفاده کن.
+
+۹. پاسخ بیش از حد طولانی نشود، اما اطلاعات لازم را حذف نکن.
+
+نام نقش:
+«مدیر پاسخگو هوشمند»
+
+نام جامعه:
+«گروه صدای کارکنان ثبت احوال»
+`,
+      },
+      {
+        role: "user",
+        content: `
+پرسش کاربر:
+${question}
+
+دسته تشخیص داده‌شده:
+${route}
+
+${specialistResult
+  ? `نتیجه عضو متخصص تیم:
+${specialistResult}`
+  : ""}
+        
+اکنون پاسخ نهایی و کامل را برای کاربر بنویس.
+`,
+      },
+    ];
+
+    const answer = await runModel(
+      env,
+      MODELS.assistant,
+      finalPrompt,
+      1500
+    );
 
     return NextResponse.json({
-      ok: true,
-
-      answer: final.text,
-
-      ai:
-        "multi-model-ai-team",
-
+      answer,
       manager: {
-        name:
-          "مدیر پاسخگو هوشمند",
-        model:
-          MODELS.manager,
-        route:
-          decision.route
+        name: "مدیر پاسخگو هوشمند",
+        model: MODELS.manager,
+        route,
       },
-
-      specialist: {
-        model:
-          specialistModel || null
+      team: {
+        manager: MODELS.manager,
+        assistant: MODELS.assistant,
+        researcher: MODELS.researcher,
+        analyst: MODELS.analyst,
       },
-
-      final_model:
-        final.model,
-
-      knowledge: {
-        source:
-          selectedKnowledge?.title ||
-          null,
-
-        confidence:
-          selectedKnowledge
-            ? Number(
-                best.score.toFixed(2)
-              )
-            : null,
-
-        verified_source:
-          Boolean(
-            selectedKnowledge
-          )
-      },
-
-      needs_review:
-        !selectedKnowledge &&
-        decision.route ===
-          "OFFICIAL"
     });
   } catch (error: any) {
-    const message =
-      error?.message ||
-      String(error) ||
-      "خطای ناشناخته";
+    console.error("AI TEAM ERROR:", error);
 
     return NextResponse.json(
       {
-        ok: false,
-
-        ai:
-          "multi-model-ai-team",
-
         error:
-          message,
-
-        answer:
-          "خطای واقعی تیم هوش مصنوعی: " +
-          message
+          error?.message ||
+          "خطای ناشناخته در تیم هوش مصنوعی رخ داد.",
       },
-      {
-        status: 500
-      }
+      { status: 500 }
     );
   }
-}
+            }
