@@ -26,15 +26,44 @@ export default function Home() {
         }),
       });
 
-      const data = await response.json();
+      const rawText = await response.text();
+
+      let data: any = {};
+
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = {
+          raw: rawText,
+        };
+      }
+
+      if (!response.ok) {
+        setAnswer(
+          `خطای سامانه\n\nکد خطا: ${response.status}\n\n${
+            data?.error ||
+            data?.message ||
+            data?.raw ||
+            "پاسخ نامعتبر از سرور دریافت شد."
+          }`
+        );
+        return;
+      }
+
+      if (data?.answer) {
+        setAnswer(data.answer);
+        return;
+      }
 
       setAnswer(
-        data?.answer ||
-          "پاسخی از سامانه دریافت نشد."
+        `سامانه پاسخ متنی برنگرداند.\n\nپاسخ دریافتی:\n${rawText}`
       );
-    } catch {
+    } catch (error: any) {
       setAnswer(
-        "ارتباط با هوش مصنوعی برقرار نشد. لطفاً دوباره تلاش کنید."
+        `خطا در ارتباط با سامانه:\n\n${
+          error?.message ||
+          "ارتباط با API برقرار نشد."
+        }`
       );
     } finally {
       setLoading(false);
@@ -49,8 +78,7 @@ export default function Home() {
         background:
           "linear-gradient(135deg,#f8fbff 0%,#eef6ff 50%,#f7f3ff 100%)",
         padding: "32px 16px",
-        fontFamily:
-          "Tahoma, Arial, sans-serif",
+        fontFamily: "Tahoma, Arial, sans-serif",
       }}
     >
       <div
@@ -64,10 +92,8 @@ export default function Home() {
             background: "#ffffff",
             borderRadius: 28,
             padding: 32,
-            boxShadow:
-              "0 15px 45px rgba(30,60,100,.10)",
-            border:
-              "1px solid rgba(100,130,180,.12)",
+            boxShadow: "0 15px 45px rgba(30,60,100,.10)",
+            border: "1px solid rgba(100,130,180,.12)",
           }}
         >
           <div
@@ -142,14 +168,9 @@ export default function Home() {
 
             <textarea
               value={question}
-              onChange={(e) =>
-                setQuestion(e.target.value)
-              }
+              onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  !e.shiftKey
-                ) {
+                if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   askAI();
                 }
@@ -166,8 +187,7 @@ export default function Home() {
                 lineHeight: 1.9,
                 outline: "none",
                 boxSizing: "border-box",
-                fontFamily:
-                  "Tahoma, Arial, sans-serif",
+                fontFamily: "Tahoma, Arial, sans-serif",
               }}
             />
 
@@ -205,8 +225,7 @@ export default function Home() {
                   padding: 20,
                   borderRadius: 18,
                   background: "#ffffff",
-                  border:
-                    "1px solid #d9e3f2",
+                  border: "1px solid #d9e3f2",
                   lineHeight: 2,
                   color: "#26344d",
                   whiteSpace: "pre-wrap",
@@ -219,7 +238,7 @@ export default function Home() {
                     color: "#315ea8",
                   }}
                 >
-                  🤖 پاسخ صدایار
+                  🤖 پاسخ مدیر پاسخگو هوشمند
                 </div>
 
                 {answer}
@@ -238,7 +257,7 @@ export default function Home() {
           >
             {[
               ["🧠", "مدیر هوشمند"],
-              ["💬", "صدایار"],
+              ["💬", "مدیر پاسخگو هوشمند"],
               ["❓", "سؤالات بی‌پاسخ"],
               ["⚠️", "مسائل نیازمند توجه"],
               ["💡", "پیشنهادهای کارکنان"],
@@ -252,15 +271,12 @@ export default function Home() {
                   padding: 18,
                   borderRadius: 18,
                   background: "#fff",
-                  border:
-                    "1px solid #e3eaf4",
+                  border: "1px solid #e3eaf4",
                   boxShadow:
                     "0 5px 18px rgba(30,60,100,.05)",
                 }}
               >
-                <div style={{ fontSize: 25 }}>
-                  {icon}
-                </div>
+                <div style={{ fontSize: 25 }}>{icon}</div>
 
                 <div
                   style={{
