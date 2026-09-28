@@ -250,4 +250,46 @@ ${context || "هیچ منبع تأییدشده‌ای وجود ندارد."}
       { status: 500 }
     );
   }
+export async function GET() {
+  try {
+    const { env } = await getCloudflareContext({
+      async: true,
+    });
+
+    const runtimeEnv = env as any;
+
+    const supabaseUrl =
+      runtimeEnv.NEXT_PUBLIC_SUPABASE_URL || "";
+
+    const serviceRoleKey =
+      runtimeEnv.SUPABASE_SERVICE_ROLE_KEY || "";
+
+    const ai =
+      runtimeEnv.AI;
+
+    let knowledgeCount = 0;
+
+    if (supabaseUrl && serviceRoleKey) {
+      const knowledge = await loadKnowledge(
+        supabaseUrl,
+        serviceRoleKey
+      );
+
+      knowledgeCount = knowledge.length;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      supabase_url: Boolean(supabaseUrl),
+      service_role_key: Boolean(serviceRoleKey),
+      ai: Boolean(ai),
+      knowledge_count: knowledgeCount,
+    });
+  } catch (error: any) {
+    return NextResponse.json({
+      ok: false,
+      error:
+        error?.message || String(error),
+    });
+  }
 }
