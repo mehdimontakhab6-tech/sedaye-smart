@@ -20,6 +20,7 @@ const cards = [
 export default function Home() {
   const [q, setQ] = useState("");
   const [a, setA] = useState("");
+  const [knowledgeCount, setKnowledgeCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function ask() {
@@ -27,6 +28,7 @@ export default function Home() {
 
     setLoading(true);
     setA("");
+    setKnowledgeCount(null);
 
     try {
       const response = await fetch("/api/assistant", {
@@ -45,6 +47,10 @@ export default function Home() {
         data.answer ||
           "این موضوع نیازمند بررسی مدیر سامانه است."
       );
+
+      if (typeof data.knowledge_count === "number") {
+        setKnowledgeCount(data.knowledge_count);
+      }
     } catch {
       setA(
         "ارتباط با مدیر پاسخگو هوشمند برقرار نشد."
@@ -98,9 +104,11 @@ export default function Home() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" && ask()
-              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  ask();
+                }
+              }}
               placeholder="سؤال خود را برای مدیر پاسخگو هوشمند بنویسید..."
             />
 
@@ -114,6 +122,29 @@ export default function Home() {
           {a && (
             <div className="answer">
               {a}
+            </div>
+          )}
+
+          {knowledgeCount !== null && (
+            <div
+              style={{
+                marginTop: "12px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                background:
+                  knowledgeCount > 0
+                    ? "#e9f8ef"
+                    : "#fff1f1",
+                color:
+                  knowledgeCount > 0
+                    ? "#167a45"
+                    : "#b42318",
+                fontWeight: 700,
+                fontSize: "14px",
+              }}
+            >
+              📚 تعداد منابع بانک دانش دریافت‌شده:{" "}
+              {knowledgeCount}
             </div>
           )}
         </div>
@@ -167,4 +198,4 @@ export default function Home() {
       </footer>
     </main>
   );
-}
+      }
