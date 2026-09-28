@@ -8,34 +8,37 @@ type KnowledgeRow = {
   approved: boolean | null;
 };
 
-type RuntimeEnv = {
-  AI?: any;
-  NEXT_PUBLIC_SUPABASE_URL?: string;
-  SUPABASE_SERVICE_ROLE_KEY?: string;
-};
+function extractAnswer(result: any): string {
+  if (!result) return "";
 
-function fallbackAnswer(): string {
-  return (
-    "برای ارائه پاسخ دقیق، اطلاعات تأییدشده کافی در اختیار سامانه نیست. " +
-    "این سؤال برای بررسی بیشتر ثبت شد و سامانه از ارائه پاسخ حدسی خودداری می‌کند."
-  );
+  const content = result?.choices?.[0]?.message?.content;
+
+  if (typeof content === "string" && content.trim()) {
+    return content.trim();
+  }
+
+  if (typeof result?.response === "string" && result.response.trim()) {
+    return result.response.trim();
+  }
+
+  if (typeof result?.text === "string" && result.text.trim()) {
+    return result.text.trim();
+  }
+
+  return "";
 }
 
-async function getKnowledge(
-  supabaseUrl: string,
-  serviceRoleKey: string
+async function loadKnowledge(
+  url: string,
+  key: string
 ): Promise<KnowledgeRow[]> {
   try {
-    const supabase = createClient(
-      supabaseUrl,
-      serviceRoleKey,
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      }
-    );
+    const supabase = createClient(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
 
     const { data, error } = await supabase
       .from("knowledge")
@@ -44,137 +47,144 @@ async function getKnowledge(
       .limit(200);
 
     if (error) {
-      console.error("Knowledge query error:", error);
+      console.error("SUPABASE KNOWLEDGE ERROR:", error);
       return [];
     }
 
-    return (data ?? []) as KnowledgeRow[];
+    return (data || []) as KnowledgeRow[];
   } catch (error) {
-    console.error("Knowledge exception:", error);
+    console.error("SUPABASE CONNECTION ERROR:", error);
     return [];
   }
 }
 
-async function saveUnansweredQuestion(
-  supabaseUrl: string,
-  serviceRoleKey: string,
-  question: string
-): Promise<void> {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient(
-      supabaseUrl,
-      serviceRoleKey,
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
+    const body = await request.json();
+
+    const question =
+      typeof body?.question === "string"
+        ? body.question.trim()
+        : "";
+
+    if (!question) {
+      return NextResponse.json(
+        {
+          ok: false,
+          answer: "لطفاً پرسش خود را وارد کنید.",
         },
-      }
-    );
-
-    const { error } = await supabase
-      .from("unanswered_questions")
-      .insert({
-        question,
-        status: "pending",
-      });
-
-    if (error) {
-      console.error(
-        "Unanswered question save error:",
-        error
+        { status: 400 }
       );
     }
-  } catch (error) {
-    console.error(
-      "Unanswered question exception:",
-      error
-    );
-  }
-}
 
-function extractAnswer(result: any): string {
-  if (!result) {
-    return "";
-  }
+    const { env } = await getCloudflareContext({
+      async: true,
+    });
 
-  if (
-    typeof result.response === "string" &&
-    result.response.trim()
-  ) {
-    return result.response.trim();
-  }
+    const runtimeEnv = env as any;
 
-  const content =
-    result?.choices?.[0]?.message?.content;
+    const supabaseUrl =
+      runtimeEnv.NEXT_PUBLIC_SUPABASE_URL || "";
 
-  if (
-    typeof content === "string" &&
-    content.trim()
-  ) {
-    return content.trim();
-  }
+    const serviceRoleKey =
+      runtimeEnv.SUPABASE_SERVICE_ROLE_KEY || "";
 
-  if (
-    typeof result.text === "string" &&
-    result.text.trim()
-  ) {
-    return result.text.trim();
-  }
+    const hasSupabaseUrl = Boolean(supabaseUrl);
+    const hasServiceRoleKey = Boolean(serviceRoleKey);
 
-  return "";
-}
+    let knowledge: KnowledgeRow[] = [];
 
-async function tryWorkersAI(
-  ai: any,
-  question: string,
-  knowledge: KnowledgeRow[]
-): Promise<string | null> {
-  const context = knowledge
-    .slice(0, 30)
-    .map(
-      (item, index) =>
-        `[منبع ${index + 1}] ${
-          item.title ?? ""
-        }\n${item.content ?? ""}`
-    )
-    .join("\n\n");
+    if (hasSupabaseUrl && hasServiceRoleKey) {
+      knowledge = await loadKnowledge(
+        supabaseUrl,
+        serviceRoleKey
+      );
+    }
 
-  if (!ai || typeof ai.run !== "function") {
-    console.error(
-      "Workers AI binding is unavailable."
-    );
+    /*
+     * اگر سؤال مستقیماً با یکی از منابع بانک دانش
+     * مطابقت داشته باشد، ابتدا همان منبع را استفاده می‌کنیم.
+     */
+    const normalizedQuestion = question
+      .replace(/[؟?!.,،]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
 
-    return null;
-  }
+    const directMatch = knowledge.find((item) => {
+      const title = (item.title || "")
+        .replace(/[؟?!.,،]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
 
-  try {
-    const system = `
+      return (
+        title &&
+        (normalizedQuestion.includes(title) ||
+          title.includes(normalizedQuestion))
+      );
+    });
+
+    if (directMatch?.content) {
+      return NextResponse.json({
+        ok: true,
+        answer:
+          `بر اساس اطلاعات تأییدشده بانک دانش:\n\n${directMatch.content}`,
+        source: "knowledge",
+        knowledge_count: knowledge.length,
+        supabase_connected:
+          hasSupabaseUrl && hasServiceRoleKey,
+        knowledge_match: true,
+        knowledge_title: directMatch.title,
+      });
+    }
+
+    /*
+     * اگر تطبیق مستقیم پیدا نشد، از Workers AI استفاده می‌کنیم.
+     */
+    const ai = runtimeEnv.AI;
+
+    if (!ai || typeof ai.run !== "function") {
+      return NextResponse.json({
+        ok: true,
+        answer:
+          "اطلاعات کافی برای پاسخ دقیق در دسترس نیست و سؤال نیازمند بررسی بیشتر است.",
+        source: "fallback",
+        knowledge_count: knowledge.length,
+        supabase_connected:
+          hasSupabaseUrl && hasServiceRoleKey,
+        knowledge_match: false,
+        ai_connected: false,
+      });
+    }
+
+    const context = knowledge
+      .slice(0, 30)
+      .map(
+        (item, index) =>
+          `منبع ${index + 1}:\nعنوان: ${
+            item.title || ""
+          }\nمحتوا: ${item.content || ""}`
+      )
+      .join("\n\n");
+
+    const systemPrompt = `
 تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
 
-وظیفه تو پاسخ‌گویی دقیق، محترمانه و کاربردی به فارسی است.
+به زبان فارسی، دقیق، محترمانه و کاربردی پاسخ بده.
 
-قوانین مهم:
+بانک دانش تأییدشده سامانه:
 
-- اگر پاسخ سؤال در «بانک دانش تأییدشده» وجود دارد، حتماً از همان اطلاعات استفاده کن.
-- اگر اطلاعات بانک دانش برای سؤال کافی است، پاسخ را مستقیماً بر اساس همان اطلاعات بده.
-- هرگز نگو به بانک دانش دسترسی نداری؛ اطلاعات بانک دانش در همین پیام در اختیار تو قرار گرفته است.
-- اطلاعات بانک دانش را تحریف یا تغییر نده.
-- اگر سؤال مستقیماً درباره یکی از منابع بانک دانش است، ابتدا همان منبع را مبنای پاسخ قرار بده.
-- اطلاعات، قانون، بخشنامه یا آمار جعلی تولید نکن.
-- اگر پاسخ در بانک دانش وجود ندارد و سؤال نیازمند اطلاعات رسمی است، صادقانه بگو که نیاز به بررسی انسانی دارد.
-- پاسخ‌ها را کوتاه، واضح و کاربردی بنویس.
-- در صورت نیاز مراحل را شماره‌گذاری کن.
-- از ارائه پاسخ حدسی خودداری کن.
-- نام سامانه «مدیر پاسخگو هوشمند» است.
-- از نام «صدایار» استفاده نکن.
+${context || "هیچ منبع تأییدشده‌ای وجود ندارد."}
 
-بانک دانش تأییدشده:
+قواعد:
 
-${
-  context ||
-  "در حال حاضر منبع تأییدشده‌ای در بانک دانش وجود ندارد."
-}
+- اگر پاسخ در بانک دانش وجود دارد، از همان اطلاعات استفاده کن.
+- اطلاعات بانک دانش را تغییر یا تحریف نکن.
+- نگو به بانک دانش دسترسی نداری.
+- اطلاعات جعلی، قانون یا بخشنامه ساختگی تولید نکن.
+- اگر اطلاعات کافی نیست، صادقانه اعلام کن که نیازمند بررسی بیشتر است.
+- پاسخ کوتاه و روشن باشد.
 `;
 
     const result = await ai.run(
@@ -183,7 +193,7 @@ ${
         messages: [
           {
             role: "system",
-            content: system,
+            content: systemPrompt,
           },
           {
             role: "user",
@@ -197,139 +207,35 @@ ${
 
     const answer = extractAnswer(result);
 
-    return answer || null;
-  } catch (error) {
-    console.error(
-      "Workers AI error:",
-      error
-    );
-
-    return null;
-  }
-}
-
-export async function POST(
-  request: NextRequest
-) {
-  try {
-    const body =
-      await request.json().catch(
-        () => null
-      );
-
-    const question =
-      typeof body?.question === "string"
-        ? body.question.trim()
-        : typeof body?.text === "string"
-          ? body.text.trim()
-          : "";
-
-    if (!question) {
-      return NextResponse.json(
-        {
-          ok: false,
-          answer:
-            "لطفاً سؤال یا درخواست خود را وارد کنید.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    /*
-     * دریافت متغیرهای Runtime مستقیماً از Cloudflare
-     */
-    const { env } =
-      await getCloudflareContext({
-        async: true,
-      });
-
-    const runtimeEnv =
-      env as unknown as RuntimeEnv;
-
-    const ai = runtimeEnv.AI;
-
-    const supabaseUrl =
-      runtimeEnv.NEXT_PUBLIC_SUPABASE_URL;
-
-    const serviceRoleKey =
-      runtimeEnv.SUPABASE_SERVICE_ROLE_KEY;
-
-    /*
-     * بررسی اتصال Supabase
-     */
-    let knowledge: KnowledgeRow[] = [];
-
-    if (
-      supabaseUrl &&
-      serviceRoleKey
-    ) {
-      knowledge =
-        await getKnowledge(
-          supabaseUrl,
-          serviceRoleKey
-        );
-
-      console.log(
-        "Knowledge rows loaded:",
-        knowledge.length
-      );
-    } else {
-      console.error(
-        "Supabase Runtime Variables are missing."
-      );
-    }
-
-    /*
-     * اجرای هوش مصنوعی با بانک دانش
-     */
-    const answer =
-      await tryWorkersAI(
-        ai,
-        question,
-        knowledge
-      );
-
-    if (answer) {
+    if (!answer) {
       return NextResponse.json({
         ok: true,
-        answer,
-        source: "workers-ai",
-        model:
-          "@cf/google/gemma-4-26b-a4b-it",
-        knowledge_count:
-          knowledge.length,
-        needs_review: false,
+        answer:
+          "هوش مصنوعی پاسخ متنی تولید نکرد. سؤال نیازمند بررسی بیشتر است.",
+        source: "fallback",
+        knowledge_count: knowledge.length,
+        supabase_connected:
+          hasSupabaseUrl && hasServiceRoleKey,
+        knowledge_match: false,
+        ai_connected: true,
       });
-    }
-
-    /*
-     * اگر پاسخ تولید نشد،
-     * سؤال برای بررسی انسانی ذخیره شود.
-     */
-    if (
-      supabaseUrl &&
-      serviceRoleKey
-    ) {
-      await saveUnansweredQuestion(
-        supabaseUrl,
-        serviceRoleKey,
-        question
-      );
     }
 
     return NextResponse.json({
       ok: true,
-      answer: fallbackAnswer(),
-      source: "fallback",
-      knowledge_count:
-        knowledge.length,
-      needs_review: true,
+      answer,
+      source: "workers-ai",
+      knowledge_count: knowledge.length,
+      supabase_connected:
+        hasSupabaseUrl && hasServiceRoleKey,
+      knowledge_match: false,
+      ai_connected: true,
+      model:
+        "@cf/google/gemma-4-26b-a4b-it",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error(
-      "Assistant API error:",
+      "ASSISTANT API ERROR:",
       error
     );
 
@@ -337,12 +243,11 @@ export async function POST(
       {
         ok: false,
         answer:
-          "ارتباط با مدیر پاسخگو هوشمند با خطا مواجه شد. لطفاً دوباره تلاش کنید.",
-        needs_review: true,
+          "خطا در ارتباط با مدیر پاسخگو هوشمند.",
+        error:
+          error?.message || String(error),
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
-    }
+}
