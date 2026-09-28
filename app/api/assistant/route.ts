@@ -13,34 +13,6 @@ type RuntimeEnv = {
   SUPABASE_SERVICE_ROLE_KEY?: string;
 };
 
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[ًٌٍَُِّْـ]/g, "")
-    .replace(/[^\u0600-\u06ff\u0750-\u077f\w\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function similarity(a: string, b: string): number {
-  const aa = new Set(normalizeText(a).split(" ").filter(Boolean));
-  const bb = new Set(normalizeText(b).split(" ").filter(Boolean));
-
-  if (aa.size === 0 || bb.size === 0) {
-    return 0;
-  }
-
-  let common = 0;
-
-  for (const word of aa) {
-    if (bb.has(word)) {
-      common++;
-    }
-  }
-
-  return common / Math.max(aa.size, bb.size);
-}
-
 function fallbackAnswer(): string {
   return (
     "برای ارائه پاسخ دقیق، اطلاعات تأییدشده کافی در اختیار سامانه نیست. " +
@@ -52,29 +24,42 @@ async function getKnowledge(
   supabaseUrl: string,
   serviceRoleKey: string
 ): Promise<KnowledgeRow[]> {
-  const supabase = createClient(
-    supabaseUrl,
-    serviceRoleKey,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
+  try {
+    const supabase = createClient(
+      supabaseUrl,
+      serviceRoleKey,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      }
+    );
+
+    const { data, error } = await supabase
+      .from("knowledge")
+      .select("title, content, approved")
+      .eq("approved", true)
+      .limit(200);
+
+    if (error) {
+      console.error(
+        "Knowledge query error:",
+        error
+      );
+
+      return [];
     }
-  );
 
-  const { data, error } = await supabase
-    .from("knowledge")
-    .select("title, content, approved")
-    .eq("approved", true)
-    .limit(200);
+    return (data ?? []) as KnowledgeRow[];
+  } catch (error) {
+    console.error(
+      "Knowledge exception:",
+      error
+    );
 
-  if (error) {
-    console.error("Knowledge query error:", error);
     return [];
   }
-
-  return (data ?? []) as KnowledgeRow[];
 }
 
 async function saveUnansweredQuestion(
@@ -102,11 +87,47 @@ async function saveUnansweredQuestion(
       });
 
     if (error) {
-      console.error("Unanswered question save error:", error);
+      console.error(
+        "Unanswered question save error:",
+        error
+      );
     }
   } catch (error) {
-    console.error("Unanswered question exception:", error);
+    console.error(
+      "Unanswered question exception:",
+      error
+    );
   }
+}
+
+function extractAnswer(result: any): string {
+  if (!result) return "";
+
+  if (
+    typeof result.response === "string" &&
+    result.response.trim()
+  ) {
+    return result.response.trim();
+  }
+
+  const content =
+    result?.choices?.[0]?.message?.content;
+
+  if (
+    typeof content === "string" &&
+    content.trim()
+  ) {
+    return content.trim();
+  }
+
+  if (
+    typeof result.text === "string" &&
+    result.text.trim()
+  ) {
+    return result.text.trim();
+  }
+
+  return "";
 }
 
 async function tryWorkersAI(
@@ -117,39 +138,59 @@ async function tryWorkersAI(
     .slice(0, 30)
     .map(
       (item, index) =>
-        `[منبع ${index + 1}] ${item.title ?? ""}\n${item.content ?? ""}`
+        `[منبع ${index + 1}] ${
+          item.title ?? ""
+        }\n${item.content ?? ""}`
     )
     .join("\n\n");
 
   try {
-    const { env } = getCloudflareContext();
+    const { env } =
+      await getCloudflareContext({
+        async: true,
+      });
 
     const ai = (env as any).AI;
 
-    if (!ai || typeof ai.run !== "function") {
-      console.error("Workers AI binding AI is not available.");
+    if (
+      !ai ||
+      typeof ai.run !== "function"
+    ) {
+      console.error(
+        "Workers AI binding is unavailable."
+      );
+
       return null;
     }
 
-    const system = `تو «صدایار»، عضو تیم هوش مصنوعی گروه «صدای کارکنان ثبت احوال» هستی.
+    const system = `
+تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
 
 وظیفه تو پاسخ‌گویی دقیق، محترمانه و کاربردی به فارسی است.
 
 قوانین:
+
 - اگر اطلاعات بانک دانش برای پاسخ کافی است، از آن استفاده کن.
-- اطلاعات موجود در بانک دانش را تحریف نکن.
-- اگر سؤال عمومی است و پاسخ آن را می‌دانی، پاسخ روشن و مفید بده.
-- اگر موضوع رسمی، حساس یا نیازمند تأیید سازمانی است، صریحاً بگو که نیاز به بررسی انسانی دارد.
-- هیچ اطلاعاتی را جعل نکن.
-- پاسخ را کوتاه، واضح و مرحله‌ای بنویس.
-- هدف سامانه کمک به کارکنان، ثبت مسائل، پیشنهادها، تجربه‌ها و پرسش‌ها و هدایت درست آنهاست.
+- اطلاعات بانک دانش را تحریف نکن.
+- اطلاعات، قانون، بخشنامه یا آمار جعلی تولید نکن.
+- اگر سؤال عمومی است و پاسخ را می‌دانی، پاسخ روشن و مفید بده.
+- اگر موضوع رسمی، حساس یا سازمانی است، در صورت نبود منبع معتبر بگو که نیاز به بررسی انسانی دارد.
+- پاسخ‌ها را کوتاه، واضح و کاربردی بنویس.
+- در صورت نیاز مراحل را شماره‌گذاری کن.
+- از ارائه پاسخ حدسی خودداری کن.
+- نام سامانه «مدیر پاسخگو هوشمند» است.
+- از نام «صدایار» استفاده نکن.
 
-بانک دانش تأییدشده سامانه:
+بانک دانش تأییدشده:
 
-${context || "در حال حاضر منبع تأییدشده‌ای در بانک دانش وجود ندارد."}`;
+${
+  context ||
+  "در حال حاضر منبع تأییدشده‌ای در بانک دانش وجود ندارد."
+}
+`;
 
     const result = await ai.run(
-      "@cf/meta/llama-3.1-8b-instruct-fast",
+      "@cf/google/gemma-4-26b-a4b-it",
       {
         messages: [
           {
@@ -161,28 +202,33 @@ ${context || "در حال حاضر منبع تأییدشده‌ای در بان�
             content: question,
           },
         ],
+        max_tokens: 1200,
+        temperature: 0.2,
       }
     );
 
     const answer =
-      typeof result === "string"
-        ? result
-        : result &&
-            typeof result === "object" &&
-            "response" in result
-          ? String((result as any).response ?? "")
-          : "";
+      extractAnswer(result);
 
-    return answer.trim() || null;
+    return answer || null;
   } catch (error) {
-    console.error("Workers AI error:", error);
+    console.error(
+      "Workers AI error:",
+      error
+    );
+
     return null;
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest
+) {
   try {
-    const body = await request.json().catch(() => null);
+    const body =
+      await request.json().catch(
+        () => null
+      );
 
     const question =
       typeof body?.question === "string"
@@ -195,47 +241,63 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          answer: "لطفاً سؤال یا درخواست خود را وارد کنید.",
+          answer:
+            "لطفاً سؤال یا درخواست خود را وارد کنید.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     const runtimeProcessEnv: RuntimeEnv =
-      typeof process !== "undefined" && process.env
+      typeof process !== "undefined" &&
+      process.env
         ? (process.env as RuntimeEnv)
         : {};
 
     const supabaseUrl =
-      runtimeProcessEnv.NEXT_PUBLIC_SUPABASE_URL;
+      runtimeProcessEnv
+        .NEXT_PUBLIC_SUPABASE_URL;
 
     const serviceRoleKey =
-      runtimeProcessEnv.SUPABASE_SERVICE_ROLE_KEY;
+      runtimeProcessEnv
+        .SUPABASE_SERVICE_ROLE_KEY;
 
     let knowledge: KnowledgeRow[] = [];
 
-    if (supabaseUrl && serviceRoleKey) {
-      knowledge = await getKnowledge(
-        supabaseUrl,
-        serviceRoleKey
-      );
+    if (
+      supabaseUrl &&
+      serviceRoleKey
+    ) {
+      knowledge =
+        await getKnowledge(
+          supabaseUrl,
+          serviceRoleKey
+        );
     }
 
-    const answer = await tryWorkersAI(
-      question,
-      knowledge
-    );
+    const answer =
+      await tryWorkersAI(
+        question,
+        knowledge
+      );
 
     if (answer) {
       return NextResponse.json({
         ok: true,
         answer,
         source: "workers-ai",
+        model:
+          "@cf/google/gemma-4-26b-a4b-it",
         needs_review: false,
       });
     }
 
-    if (supabaseUrl && serviceRoleKey) {
+    if (
+      supabaseUrl &&
+      serviceRoleKey
+    ) {
       await saveUnansweredQuestion(
         supabaseUrl,
         serviceRoleKey,
@@ -250,16 +312,21 @@ export async function POST(request: NextRequest) {
       needs_review: true,
     });
   } catch (error) {
-    console.error("Assistant API error:", error);
+    console.error(
+      "Assistant API error:",
+      error
+    );
 
     return NextResponse.json(
       {
         ok: false,
         answer:
-          "ارتباط با صدایار با خطا مواجه شد. لطفاً دوباره تلاش کنید.",
+          "ارتباط با مدیر پاسخگو هوشمند با خطا مواجه شد. لطفاً دوباره تلاش کنید.",
         needs_review: true,
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
-      }
+}
