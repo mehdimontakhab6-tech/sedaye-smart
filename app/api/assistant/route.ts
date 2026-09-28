@@ -8,20 +8,41 @@ type KnowledgeRow = {
   approved: boolean | null;
 };
 
+function normalizeText(text: string): string {
+  return text
+    .replace(/ي/g, "ی")
+    .replace(/ى/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/[؟?!.,،:؛]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function extractAnswer(result: any): string {
   if (!result) return "";
 
-  const content = result?.choices?.[0]?.message?.content;
+  const content =
+    result?.choices?.[0]?.message?.content;
 
-  if (typeof content === "string" && content.trim()) {
+  if (
+    typeof content === "string" &&
+    content.trim()
+  ) {
     return content.trim();
   }
 
-  if (typeof result?.response === "string" && result.response.trim()) {
+  if (
+    typeof result?.response === "string" &&
+    result.response.trim()
+  ) {
     return result.response.trim();
   }
 
-  if (typeof result?.text === "string" && result.text.trim()) {
+  if (
+    typeof result?.text === "string" &&
+    result.text.trim()
+  ) {
     return result.text.trim();
   }
 
@@ -33,34 +54,154 @@ async function loadKnowledge(
   key: string
 ): Promise<KnowledgeRow[]> {
   try {
-    const supabase = createClient(url, key, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const supabase = createClient(
+      url,
+      key,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      }
+    );
 
-    const { data, error } = await supabase
-      .from("knowledge")
-      .select("title, content, approved")
-      .eq("approved", true)
-      .limit(200);
+    const { data, error } =
+      await supabase
+        .from("knowledge")
+        .select(
+          "title, content, approved"
+        )
+        .eq("approved", true)
+        .limit(200);
 
     if (error) {
-      console.error("SUPABASE KNOWLEDGE ERROR:", error);
+      console.error(
+        "SUPABASE KNOWLEDGE ERROR:",
+        error
+      );
       return [];
     }
 
     return (data || []) as KnowledgeRow[];
   } catch (error) {
-    console.error("SUPABASE CONNECTION ERROR:", error);
+    console.error(
+      "SUPABASE CONNECTION ERROR:",
+      error
+    );
     return [];
   }
 }
 
-export async function POST(request: NextRequest) {
+function findKnowledgeMatch(
+  question: string,
+  knowledge: KnowledgeRow[]
+): KnowledgeRow | null {
+  const q = normalizeText(question);
+
+  if (!q) return null;
+
+  /*
+   * ابتدا تطبیق عنوان کامل
+   */
+  const exactTitle =
+    knowledge.find((item) => {
+      const title = normalizeText(
+        item.title || ""
+      );
+
+      return (
+        title.length > 0 &&
+        (q.includes(title) ||
+          title.includes(q))
+      );
+    });
+
+  if (exactTitle) {
+    return exactTitle;
+  }
+
+  /*
+   * تطبیق بر اساس واژه‌های مهم سؤال
+   */
+  const stopWords = new Set([
+    "چیست",
+    "چگونه",
+    "چطور",
+    "لطفا",
+    "لطفاً",
+    "میباشد",
+    "است",
+    "طبق",
+    "اطلاعات",
+    "بانک",
+    "دانش",
+    "ثبت",
+    "برای",
+    "را",
+    "در",
+    "به",
+    "از",
+    "چه",
+    "منظور",
+    "درباره",
+  ]);
+
+  const questionWords = q
+    .split(" ")
+    .filter(
+      (word) =>
+        word.length >= 3 &&
+        !stopWords.has(word)
+    );
+
+  let bestMatch:
+    | KnowledgeRow
+    | null = null;
+
+  let bestScore = 0;
+
+  for (const item of knowledge) {
+    const title = normalizeText(
+      item.title || ""
+    );
+
+    const content = normalizeText(
+      item.content || ""
+    );
+
+    const source =
+      `${title} ${content}`;
+
+    let score = 0;
+
+    for (const word of questionWords) {
+      if (source.includes(word)) {
+        score++;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = item;
+    }
+  }
+
+  /*
+   * حداقل یک واژه مهم باید پیدا شده باشد.
+   */
+  if (bestScore >= 1) {
+    return bestMatch;
+  }
+
+  return null;
+}
+
+export async function POST(
+  request: NextRequest
+) {
   try {
-    const body = await request.json();
+    const body =
+      await request.json();
 
     const question =
       typeof body?.question === "string"
@@ -71,102 +212,138 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          answer: "لطفاً پرسش خود را وارد کنید.",
+          answer:
+            "لطفاً پرسش خود را وارد کنید.",
         },
         { status: 400 }
       );
     }
 
-    const { env } = await getCloudflareContext({
-      async: true,
-    });
+    /*
+     * دریافت متغیرهای Runtime از Cloudflare
+     */
+    const { env } =
+      await getCloudflareContext({
+        async: true,
+      });
 
-    const runtimeEnv = env as any;
+    const runtimeEnv =
+      env as any;
 
     const supabaseUrl =
-      runtimeEnv.NEXT_PUBLIC_SUPABASE_URL || "";
+      runtimeEnv
+        ?.NEXT_PUBLIC_SUPABASE_URL ||
+      "";
 
     const serviceRoleKey =
-      runtimeEnv.SUPABASE_SERVICE_ROLE_KEY || "";
+      runtimeEnv
+        ?.SUPABASE_SERVICE_ROLE_KEY ||
+      "";
 
-    const hasSupabaseUrl = Boolean(supabaseUrl);
-    const hasServiceRoleKey = Boolean(serviceRoleKey);
-
-    let knowledge: KnowledgeRow[] = [];
-
-    if (hasSupabaseUrl && hasServiceRoleKey) {
-      knowledge = await loadKnowledge(
-        supabaseUrl,
-        serviceRoleKey
+    const hasSupabase =
+      Boolean(
+        supabaseUrl &&
+          serviceRoleKey
       );
-    }
+
+    let knowledge: KnowledgeRow[] =
+      [];
 
     /*
-     * اگر سؤال مستقیماً با یکی از منابع بانک دانش
-     * مطابقت داشته باشد، ابتدا همان منبع را استفاده می‌کنیم.
+     * دریافت بانک دانش
      */
-    const normalizedQuestion = question
-      .replace(/[؟?!.,،]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
+    if (hasSupabase) {
+      knowledge =
+        await loadKnowledge(
+          supabaseUrl,
+          serviceRoleKey
+        );
+    }
 
-    const directMatch = knowledge.find((item) => {
-      const title = (item.title || "")
-        .replace(/[؟?!.,،]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
+    console.log(
+      "Knowledge count:",
+      knowledge.length
+    );
 
-      return (
-        title &&
-        (normalizedQuestion.includes(title) ||
-          title.includes(normalizedQuestion))
+    /*
+     * مهم:
+     * ابتدا بانک دانش را بررسی می‌کنیم.
+     * اگر پاسخ پیدا شد، اصلاً AI اجرا نمی‌شود.
+     */
+    const matchedKnowledge =
+      findKnowledgeMatch(
+        question,
+        knowledge
       );
-    });
 
-    if (directMatch?.content) {
+    if (
+      matchedKnowledge?.content
+    ) {
       return NextResponse.json({
         ok: true,
+
         answer:
-          `بر اساس اطلاعات تأییدشده بانک دانش:\n\n${directMatch.content}`,
+          "بر اساس اطلاعات تأییدشده بانک دانش:\n\n" +
+          matchedKnowledge.content,
+
         source: "knowledge",
-        knowledge_count: knowledge.length,
-        supabase_connected:
-          hasSupabaseUrl && hasServiceRoleKey,
+
+        knowledge_count:
+          knowledge.length,
+
         knowledge_match: true,
-        knowledge_title: directMatch.title,
+
+        knowledge_title:
+          matchedKnowledge.title,
+
+        supabase_connected:
+          hasSupabase,
+
+        ai_used: false,
       });
     }
 
     /*
-     * اگر تطبیق مستقیم پیدا نشد، از Workers AI استفاده می‌کنیم.
+     * اگر پاسخ در بانک دانش نبود،
+     * از Workers AI استفاده می‌کنیم.
      */
-    const ai = runtimeEnv.AI;
+    const ai =
+      runtimeEnv?.AI;
 
-    if (!ai || typeof ai.run !== "function") {
+    if (
+      !ai ||
+      typeof ai.run !== "function"
+    ) {
       return NextResponse.json({
         ok: true,
+
         answer:
-          "اطلاعات کافی برای پاسخ دقیق در دسترس نیست و سؤال نیازمند بررسی بیشتر است.",
+          "اطلاعات کافی برای پاسخ دقیق در بانک دانش موجود نیست و این سؤال نیازمند بررسی بیشتر است.",
+
         source: "fallback",
-        knowledge_count: knowledge.length,
-        supabase_connected:
-          hasSupabaseUrl && hasServiceRoleKey,
+
+        knowledge_count:
+          knowledge.length,
+
         knowledge_match: false,
-        ai_connected: false,
+
+        supabase_connected:
+          hasSupabase,
+
+        ai_used: false,
       });
     }
 
-    const context = knowledge
-      .slice(0, 30)
-      .map(
-        (item, index) =>
-          `منبع ${index + 1}:\nعنوان: ${
-            item.title || ""
-          }\nمحتوا: ${item.content || ""}`
-      )
-      .join("\n\n");
+    const context =
+      knowledge
+        .slice(0, 30)
+        .map(
+          (item, index) =>
+            `منبع ${index + 1}
+عنوان: ${item.title || ""}
+محتوا: ${item.content || ""}`
+        )
+        .join("\n\n");
 
     const systemPrompt = `
 تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
@@ -175,61 +352,122 @@ export async function POST(request: NextRequest) {
 
 بانک دانش تأییدشده سامانه:
 
-${context || "هیچ منبع تأییدشده‌ای وجود ندارد."}
+${
+  context ||
+  "هیچ منبع تأییدشده‌ای در بانک دانش وجود ندارد."
+}
 
 قواعد:
 
-- اگر پاسخ در بانک دانش وجود دارد، از همان اطلاعات استفاده کن.
-- اطلاعات بانک دانش را تغییر یا تحریف نکن.
-- نگو به بانک دانش دسترسی نداری.
-- اطلاعات جعلی، قانون یا بخشنامه ساختگی تولید نکن.
-- اگر اطلاعات کافی نیست، صادقانه اعلام کن که نیازمند بررسی بیشتر است.
-- پاسخ کوتاه و روشن باشد.
+1. اگر پاسخ سؤال در بانک دانش وجود دارد، فقط بر اساس همان اطلاعات پاسخ بده.
+
+2. هرگز نگو به بانک دانش دسترسی نداری.
+
+3. اطلاعات بانک دانش را تغییر یا تحریف نکن.
+
+4. قانون، بخشنامه، آمار یا اطلاعات رسمی جعلی تولید نکن.
+
+5. اگر اطلاعات کافی در بانک دانش وجود ندارد، صادقانه بگو که سؤال نیازمند بررسی بیشتر است.
+
+6. پاسخ کوتاه، روشن و کاربردی باشد.
+
+7. نام سامانه «مدیر پاسخگو هوشمند» است.
+
+8. از نام «صدایار» استفاده نکن.
 `;
 
-    const result = await ai.run(
-      "@cf/google/gemma-4-26b-a4b-it",
-      {
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: question,
-          },
-        ],
-        max_tokens: 1200,
-        temperature: 0.2,
-      }
-    );
+    let result: any;
 
-    const answer = extractAnswer(result);
+    try {
+      result =
+        await ai.run(
+          "@cf/google/gemma-4-26b-a4b-it",
+          {
+            messages: [
+              {
+                role: "system",
+                content:
+                  systemPrompt,
+              },
+              {
+                role: "user",
+                content:
+                  question,
+              },
+            ],
+
+            max_tokens: 1200,
+
+            temperature: 0.2,
+          }
+        );
+    } catch (aiError: any) {
+      console.error(
+        "WORKERS AI ERROR:",
+        aiError
+      );
+
+      return NextResponse.json({
+        ok: true,
+
+        answer:
+          "هوش مصنوعی در حال حاضر پاسخ تولید نکرد. این سؤال نیازمند بررسی بیشتر است.",
+
+        source: "ai-error",
+
+        knowledge_count:
+          knowledge.length,
+
+        knowledge_match: false,
+
+        supabase_connected:
+          hasSupabase,
+
+        ai_used: true,
+      });
+    }
+
+    const answer =
+      extractAnswer(result);
 
     if (!answer) {
       return NextResponse.json({
         ok: true,
+
         answer:
-          "هوش مصنوعی پاسخ متنی تولید نکرد. سؤال نیازمند بررسی بیشتر است.",
+          "برای این سؤال پاسخ قطعی در دسترس نیست و نیازمند بررسی بیشتر است.",
+
         source: "fallback",
-        knowledge_count: knowledge.length,
-        supabase_connected:
-          hasSupabaseUrl && hasServiceRoleKey,
+
+        knowledge_count:
+          knowledge.length,
+
         knowledge_match: false,
-        ai_connected: true,
+
+        supabase_connected:
+          hasSupabase,
+
+        ai_used: true,
       });
     }
 
     return NextResponse.json({
       ok: true,
+
       answer,
+
       source: "workers-ai",
-      knowledge_count: knowledge.length,
-      supabase_connected:
-        hasSupabaseUrl && hasServiceRoleKey,
+
+      knowledge_count:
+        knowledge.length,
+
       knowledge_match: false,
-      ai_connected: true,
+
+      supabase_connected:
+        hasSupabase,
+
+      ai_used: true,
+
       model:
         "@cf/google/gemma-4-26b-a4b-it",
     });
@@ -242,54 +480,15 @@ ${context || "هیچ منبع تأییدشده‌ای وجود ندارد."}
     return NextResponse.json(
       {
         ok: false,
+
         answer:
           "خطا در ارتباط با مدیر پاسخگو هوشمند.",
+
         error:
-          error?.message || String(error),
+          error?.message ||
+          String(error),
       },
       { status: 500 }
     );
-  }
-export async function GET() {
-  try {
-    const { env } = await getCloudflareContext({
-      async: true,
-    });
-
-    const runtimeEnv = env as any;
-
-    const supabaseUrl =
-      runtimeEnv.NEXT_PUBLIC_SUPABASE_URL || "";
-
-    const serviceRoleKey =
-      runtimeEnv.SUPABASE_SERVICE_ROLE_KEY || "";
-
-    const ai =
-      runtimeEnv.AI;
-
-    let knowledgeCount = 0;
-
-    if (supabaseUrl && serviceRoleKey) {
-      const knowledge = await loadKnowledge(
-        supabaseUrl,
-        serviceRoleKey
-      );
-
-      knowledgeCount = knowledge.length;
-    }
-
-    return NextResponse.json({
-      ok: true,
-      supabase_url: Boolean(supabaseUrl),
-      service_role_key: Boolean(serviceRoleKey),
-      ai: Boolean(ai),
-      knowledge_count: knowledgeCount,
-    });
-  } catch (error: any) {
-    return NextResponse.json({
-      ok: false,
-      error:
-        error?.message || String(error),
-    });
   }
 }
