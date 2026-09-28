@@ -4,7 +4,7 @@ import { useState } from "react";
 
 const cards = [
   ["🤖", "مدیر هوشمند", "تحلیل، دسته‌بندی و پیگیری هوشمند پیام‌ها"],
-  ["💬", "صدایار", "پاسخگویی بر پایه اطلاعات تأییدشده"],
+  ["🧠", "مدیر پاسخگو هوشمند", "پاسخگویی هوشمند و کاربردی به پرسش‌های کارکنان"],
   ["🔴", "مسائل نیازمند توجه", "موضوعاتی که نیازمند بررسی هستند"],
   ["⚠️", "مسائل و دغدغه‌ها", "ثبت و تحلیل دغدغه‌های کارکنان"],
   ["🔁", "مسائل پرتکرار", "شناسایی موضوعات مشابه و تکرارشونده"],
@@ -46,7 +46,9 @@ export default function Home() {
           "این موضوع نیازمند بررسی مدیر سامانه است."
       );
     } catch {
-      setA("ارتباط با دستیار برقرار نشد.");
+      setA(
+        "ارتباط با مدیر پاسخگو هوشمند برقرار نشد."
+      );
     } finally {
       setLoading(false);
     }
@@ -79,7 +81,7 @@ export default function Home() {
       <section className="hero">
         <div className="heroContent">
           <span className="badge">
-            ✨ دستیار هوشمند کارکنان
+            ✨ مدیر پاسخگو هوشمند
           </span>
 
           <h2>
@@ -99,20 +101,26 @@ export default function Home() {
               onKeyDown={(e) =>
                 e.key === "Enter" && ask()
               }
-              placeholder="مثلاً: مراحل پیگیری یک موضوع چگونه است؟"
+              placeholder="سؤال خود را برای مدیر پاسخگو هوشمند بنویسید..."
             />
 
             <button onClick={ask} disabled={loading}>
               {loading
                 ? "در حال بررسی..."
-                : "پرسش از صدایار"}
+                : "پرسش"}
             </button>
           </div>
 
-          {a && <div className="answer">{a}</div>}
+          {a && (
+            <div className="answer">
+              {a}
+            </div>
+          )}
         </div>
 
-        <div className="heroRobot">🤖</div>
+        <div className="heroRobot">
+          🤖
+        </div>
       </section>
 
       <section className="sectionHead">
@@ -130,19 +138,28 @@ export default function Home() {
       </section>
 
       <section className="grid">
-        {cards.map(([icon, title, description]) => (
-          <div className="card" key={title}>
-            <div className="icon">{icon}</div>
+        {cards.map(
+          ([icon, title, description]) => (
+            <div
+              className="card"
+              key={title}
+            >
+              <div className="icon">
+                {icon}
+              </div>
 
-            <h3>{title}</h3>
+              <h3>{title}</h3>
 
-            <p>{description}</p>
-          </div>
-        ))}
+              <p>{description}</p>
+            </div>
+          )
+        )}
       </section>
 
       <footer>
-        <strong>صدای کارکنان ثبت احوال</strong>
+        <strong>
+          صدای کارکنان ثبت احوال
+        </strong>
 
         <span>
           هم‌صدایی برای تحول و بهبود
