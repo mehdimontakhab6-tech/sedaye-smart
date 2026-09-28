@@ -9,6 +9,7 @@ type KnowledgeRow = {
 };
 
 type RuntimeEnv = {
+  AI?: any;
   NEXT_PUBLIC_SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
 };
@@ -43,21 +44,13 @@ async function getKnowledge(
       .limit(200);
 
     if (error) {
-      console.error(
-        "Knowledge query error:",
-        error
-      );
-
+      console.error("Knowledge query error:", error);
       return [];
     }
 
     return (data ?? []) as KnowledgeRow[];
   } catch (error) {
-    console.error(
-      "Knowledge exception:",
-      error
-    );
-
+    console.error("Knowledge exception:", error);
     return [];
   }
 }
@@ -101,7 +94,9 @@ async function saveUnansweredQuestion(
 }
 
 function extractAnswer(result: any): string {
-  if (!result) return "";
+  if (!result) {
+    return "";
+  }
 
   if (
     typeof result.response === "string" &&
@@ -131,6 +126,7 @@ function extractAnswer(result: any): string {
 }
 
 async function tryWorkersAI(
+  ai: any,
   question: string,
   knowledge: KnowledgeRow[]
 ): Promise<string | null> {
@@ -144,37 +140,29 @@ async function tryWorkersAI(
     )
     .join("\n\n");
 
+  if (!ai || typeof ai.run !== "function") {
+    console.error(
+      "Workers AI binding is unavailable."
+    );
+
+    return null;
+  }
+
   try {
-    const { env } =
-      await getCloudflareContext({
-        async: true,
-      });
-
-    const ai = (env as any).AI;
-
-    if (
-      !ai ||
-      typeof ai.run !== "function"
-    ) {
-      console.error(
-        "Workers AI binding is unavailable."
-      );
-
-      return null;
-    }
-
     const system = `
 تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
 
 وظیفه تو پاسخ‌گویی دقیق، محترمانه و کاربردی به فارسی است.
 
-قوانین:
+قوانین مهم:
 
-- اگر اطلاعات بانک دانش برای پاسخ کافی است، از آن استفاده کن.
-- اطلاعات بانک دانش را تحریف نکن.
+- اگر پاسخ سؤال در «بانک دانش تأییدشده» وجود دارد، حتماً از همان اطلاعات استفاده کن.
+- اگر اطلاعات بانک دانش برای سؤال کافی است، پاسخ را مستقیماً بر اساس همان اطلاعات بده.
+- هرگز نگو به بانک دانش دسترسی نداری؛ اطلاعات بانک دانش در همین پیام در اختیار تو قرار گرفته است.
+- اطلاعات بانک دانش را تحریف یا تغییر نده.
+- اگر سؤال مستقیماً درباره یکی از منابع بانک دانش است، ابتدا همان منبع را مبنای پاسخ قرار بده.
 - اطلاعات، قانون، بخشنامه یا آمار جعلی تولید نکن.
-- اگر سؤال عمومی است و پاسخ را می‌دانی، پاسخ روشن و مفید بده.
-- اگر موضوع رسمی، حساس یا سازمانی است، در صورت نبود منبع معتبر بگو که نیاز به بررسی انسانی دارد.
+- اگر پاسخ در بانک دانش وجود ندارد و سؤال نیازمند اطلاعات رسمی است، صادقانه بگو که نیاز به بررسی انسانی دارد.
 - پاسخ‌ها را کوتاه، واضح و کاربردی بنویس.
 - در صورت نیاز مراحل را شماره‌گذاری کن.
 - از ارائه پاسخ حدسی خودداری کن.
@@ -207,8 +195,7 @@ ${
       }
     );
 
-    const answer =
-      extractAnswer(result);
+    const answer = extractAnswer(result);
 
     return answer || null;
   } catch (error) {
@@ -250,20 +237,28 @@ export async function POST(
       );
     }
 
-    const runtimeProcessEnv: RuntimeEnv =
-      typeof process !== "undefined" &&
-      process.env
-        ? (process.env as RuntimeEnv)
-        : {};
+    /*
+     * دریافت متغیرهای Runtime مستقیماً از Cloudflare
+     */
+    const { env } =
+      await getCloudflareContext({
+        async: true,
+      });
+
+    const runtimeEnv =
+      env as unknown as RuntimeEnv;
+
+    const ai = runtimeEnv.AI;
 
     const supabaseUrl =
-      runtimeProcessEnv
-        .NEXT_PUBLIC_SUPABASE_URL;
+      runtimeEnv.NEXT_PUBLIC_SUPABASE_URL;
 
     const serviceRoleKey =
-      runtimeProcessEnv
-        .SUPABASE_SERVICE_ROLE_KEY;
+      runtimeEnv.SUPABASE_SERVICE_ROLE_KEY;
 
+    /*
+     * بررسی اتصال Supabase
+     */
     let knowledge: KnowledgeRow[] = [];
 
     if (
@@ -275,10 +270,23 @@ export async function POST(
           supabaseUrl,
           serviceRoleKey
         );
+
+      console.log(
+        "Knowledge rows loaded:",
+        knowledge.length
+      );
+    } else {
+      console.error(
+        "Supabase Runtime Variables are missing."
+      );
     }
 
+    /*
+     * اجرای هوش مصنوعی با بانک دانش
+     */
     const answer =
       await tryWorkersAI(
+        ai,
         question,
         knowledge
       );
@@ -290,10 +298,16 @@ export async function POST(
         source: "workers-ai",
         model:
           "@cf/google/gemma-4-26b-a4b-it",
+        knowledge_count:
+          knowledge.length,
         needs_review: false,
       });
     }
 
+    /*
+     * اگر پاسخ تولید نشد،
+     * سؤال برای بررسی انسانی ذخیره شود.
+     */
     if (
       supabaseUrl &&
       serviceRoleKey
@@ -309,6 +323,8 @@ export async function POST(
       ok: true,
       answer: fallbackAnswer(),
       source: "fallback",
+      knowledge_count:
+        knowledge.length,
       needs_review: true,
     });
   } catch (error) {
@@ -329,4 +345,4 @@ export async function POST(
       }
     );
   }
-}
+    }
