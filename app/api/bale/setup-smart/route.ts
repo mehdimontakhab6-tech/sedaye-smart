@@ -22,9 +22,9 @@ export async function GET() {
 
     const controller = new AbortController();
 
-    const timer = setTimeout(() => {
+    const timeout = setTimeout(() => {
       controller.abort();
-    }, 8000);
+    }, 5000);
 
     try {
       const response = await fetch(
@@ -41,27 +41,29 @@ export async function GET() {
         }
       );
 
-      const result = await response.json().catch(() => ({}));
+      const text = await response.text();
 
       return NextResponse.json({
         ok: response.ok,
         bot: "mmm532bot",
         webhook_url: webhookUrl,
-        bale: result
+        bale_status: response.status,
+        bale_response: text
       });
     } finally {
-      clearTimeout(timer);
+      clearTimeout(timeout);
     }
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
+        bot: "mmm532bot",
         error:
           error instanceof Error
             ? error.name === "AbortError"
-              ? "اتصال به سرور بله بیش از ۸ ثانیه طول کشید."
+              ? "Bale API timeout after 5 seconds"
               : error.message
-            : "خطای ناشناخته"
+            : "Unknown error"
       },
       { status: 504 }
     );
