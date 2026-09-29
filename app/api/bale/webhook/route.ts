@@ -101,7 +101,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // ارسال سؤال به مدیر هوشمند
     const assistantUrl = new URL(
       "/api/assistant",
       req.url
@@ -127,14 +126,14 @@ export async function POST(req: Request) {
       aiData?.response ??
       "در حال حاضر امکان تهیه پاسخ وجود ندارد.";
 
-    // ارسال پاسخ به بله
-    const token = env?.BALE_TOKEN;
+    // ارسال پاسخ با ربات جدید «مدیر هوشمند گروه»
+    const token = env?.BALE_SMART_TOKEN;
 
     if (!token) {
       return NextResponse.json(
         {
           ok: false,
-          error: "BALE_TOKEN تنظیم نشده است.",
+          error: "BALE_SMART_TOKEN تنظیم نشده است.",
           message_id: message.id,
           ai_answer: answer
         },
