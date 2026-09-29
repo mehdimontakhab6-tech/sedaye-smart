@@ -20,37 +20,50 @@ export async function GET() {
     const webhookUrl =
       "https://sedaye-smart.mehdimontakhab6.workers.dev/api/bale/webhook";
 
-    const response = await fetch(
-      `https://tapi.bale.ai/bot${token}/setWebhook`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          url: webhookUrl
-        })
-      }
-    );
+    const controller = new AbortController();
 
-    const result = await response.json().catch(() => ({}));
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, 8000);
 
-    return NextResponse.json({
-      ok: response.ok,
-      bot: "mmm532bot",
-      webhook_url: webhookUrl,
-      bale: result
-    });
+    try {
+      const response = await fetch(
+        `https://tapi.bale.ai/bot${token}/setWebhook`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            url: webhookUrl
+          }),
+          signal: controller.signal
+        }
+      );
+
+      const result = await response.json().catch(() => ({}));
+
+      return NextResponse.json({
+        ok: response.ok,
+        bot: "mmm532bot",
+        webhook_url: webhookUrl,
+        bale: result
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
         error:
           error instanceof Error
-            ? error.message
+            ? error.name === "AbortError"
+              ? "اتصال به سرور بله بیش از ۸ ثانیه طول کشید."
+              : error.message
             : "خطای ناشناخته"
       },
-      { status: 500 }
+      { status: 504 }
     );
   }
 }
