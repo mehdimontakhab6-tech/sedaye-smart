@@ -17,15 +17,22 @@ export async function GET() {
       );
     }
 
-    const response = await fetch(
-      `https://tapi.bale.ai/bot${token}/getMe`
-    );
+    const baseUrl = `https://tapi.bale.ai/bot${token}`;
 
-    const data = await response.json().catch(() => ({}));
+    const meResponse = await fetch(`${baseUrl}/getMe`);
+    const meData = await meResponse.json().catch(() => ({}));
+
+    const webhookResponse = await fetch(
+      `${baseUrl}/getWebhookInfo`
+    );
+    const webhookData = await webhookResponse
+      .json()
+      .catch(() => ({}));
 
     return NextResponse.json({
-      ok: response.ok,
-      bot: data
+      ok: true,
+      bot: meData,
+      webhook: webhookData
     });
   } catch (error) {
     return NextResponse.json(
