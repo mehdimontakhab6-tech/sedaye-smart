@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "sedaye-smart",
-  "main": ".open-next/worker.js",
+  "main": "worker.ts",
   "compatibility_date": "2026-09-25",
   "compatibility_flags": [
     "nodejs_compat"
@@ -15,5 +15,10 @@
   },
   "observability": {
     "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "30 2 * * *"
+    ]
   }
 }
