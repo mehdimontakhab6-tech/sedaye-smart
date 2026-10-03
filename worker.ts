@@ -1,17 +1,12 @@
-import openNextWorker from "./.open-next/worker.js";
-
-export * from "./.open-next/worker.js";
+// @ts-ignore .open-next/worker.js is generated at build time
+import { default as handler } from "./.open-next/worker.js";
 
 export default {
-  fetch: openNextWorker.fetch,
+  fetch: handler.fetch,
 
-  async scheduled(
-    controller: ScheduledController,
-    env: CloudflareEnv,
-    ctx: ExecutionContext
-  ) {
-    if (controller.cron !== "30 2 * * *") {
-      console.log("[cron] ignored:", controller.cron);
+  async scheduled(event: ScheduledController, env: CloudflareEnv, ctx: ExecutionContext) {
+    if (event.cron !== "30 2 * * *") {
+      console.log("[cron] ignored:", event.cron);
       return;
     }
 
@@ -22,15 +17,7 @@ export default {
       }
     );
 
-    const promise = openNextWorker.fetch(
-      request,
-      env,
-      ctx
-    );
-
-    ctx.waitUntil(promise);
-
-    const response = await promise;
+    const response = await handler.fetch(request, env, ctx);
 
     if (!response.ok) {
       throw new Error(
@@ -38,8 +25,6 @@ export default {
       );
     }
 
-    console.log(
-      "[cron] daily calendar sent successfully"
-    );
+    console.log("[cron] daily calendar sent successfully");
   }
 } satisfies ExportedHandler<CloudflareEnv>;
