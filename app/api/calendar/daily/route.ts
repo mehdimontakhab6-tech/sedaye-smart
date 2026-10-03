@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 const TIME_ZONE = "Asia/Tehran";
+const digits = "۰۱۲۳۴۵۶۷۸۹";
+
+const normalize = (value: string) =>
+  value.replace(/[۰-۹]/g, (d) => String(digits.indexOf(d)));
 
 function getTehranParts() {
   const now = new Date();
@@ -42,14 +46,14 @@ function getPersianDate(date: Date) {
     parts.find((p) => p.type === type)?.value || "";
 
   return {
-    year: Number(get("year").replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))),
-    month: Number(get("month").replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))),
-    day: Number(get("day").replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    year: Number(normalize(get("year"))),
+    month: Number(normalize(get("month"))),
+    day: Number(normalize(get("day")))
   };
 }
 
 function toPersianNumber(value: number | string) {
-  return String(value).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+  return String(value).replace(/\d/g, (d) => digits[Number(d)]);
 }
 
 function getWeekday(date: Date) {
@@ -57,25 +61,6 @@ function getWeekday(date: Date) {
     timeZone: TIME_ZONE,
     weekday: "long"
   }).format(date);
-}
-
-function getPersianMonthName(month: number) {
-  const names = [
-    "فروردین",
-    "اردیبهشت",
-    "خرداد",
-    "تیر",
-    "مرداد",
-    "شهریور",
-    "مهر",
-    "آبان",
-    "آذر",
-    "دی",
-    "بهمن",
-    "اسفند"
-  ];
-
-  return names[month - 1] || "";
 }
 
 function getPersianDayOfYear(month: number, day: number) {
@@ -126,7 +111,9 @@ function getMoonPhase(date: Date) {
     ((date.getTime() - knownNewMoon) / 86400000) %
     synodicMonth;
 
-  const normalized = age < 0 ? age + synodicMonth : age;
+  const normalized = age < 0
+    ? age + synodicMonth
+    : age;
 
   if (normalized < 1.85) return "ماه نو 🌑";
   if (normalized < 7.38) return "هلال افزاینده 🌒";
@@ -153,7 +140,6 @@ async function getHijriDate(gregorian: string) {
     if (!response.ok) return null;
 
     const json = await response.json();
-
     const hijri = json?.data?.hijri;
 
     if (!hijri) return null;
@@ -185,7 +171,9 @@ async function getEvents(persianYear: number) {
 
     if (Array.isArray(data)) return data;
 
-    if (Array.isArray(data?.events)) return data.events;
+    if (Array.isArray(data?.events)) {
+      return data.events;
+    }
 
     return [];
   } catch {
@@ -199,16 +187,27 @@ function getEventsForDay(
   persianDay: number
 ) {
   return events.filter((event) => {
-    const jDate = String(event?.jDate || event?.date || "");
+    const jDate = String(
+      event?.jDate ||
+      event?.date ||
+      ""
+    );
 
-    const match = jDate.match(/(\d{1,2})[\/\-](\d{1,2})/);
+    const normalizedDate = normalize(jDate);
+
+    const match = normalizedDate.match(
+      /(\d{1,2})[\/\-](\d{1,2})/
+    );
 
     if (!match) return false;
 
     const month = Number(match[1]);
     const day = Number(match[2]);
 
-    return month === persianMonth && day === persianDay;
+    return (
+      month === persianMonth &&
+      day === persianDay
+    );
   });
 }
 
@@ -223,25 +222,39 @@ function getHoliday(events: any[]) {
 
 function getEventText(events: any[]) {
   return events
-    .map((event) => String(event?.text || event?.title || "").trim())
+    .map((event) =>
+      String(
+        event?.text ||
+        event?.title ||
+        ""
+      ).trim()
+    )
     .filter(Boolean)
     .slice(0, 8);
 }
 
 export async function GET() {
   try {
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } =
+      await getCloudflareContext({
+        async: true
+      });
 
     const token = env?.BALE_SMART_TOKEN;
-    const chatId = String(env?.BALE_GROUP_ID || "");
+    const chatId = String(
+      env?.BALE_GROUP_ID || ""
+    );
 
     if (!token || !chatId) {
       return NextResponse.json(
         {
           ok: false,
-          error: "BALE_SMART_TOKEN یا BALE_GROUP_ID تنظیم نشده است."
+          error:
+            "BALE_SMART_TOKEN یا BALE_GROUP_ID تنظیم نشده است."
         },
-        { status: 500 }
+        {
+          status: 500
+        }
       );
     }
 
@@ -252,86 +265,113 @@ export async function GET() {
     const persian = getPersianDate(now);
 
     const gregorian =
-      `${tehran.year}-${String(tehran.month).padStart(2, "0")}-${String(
-        tehran.day
-      ).padStart(2, "0")}`;
+      `${tehran.year}-` +
+      `${String(tehran.month).padStart(2, "0")}-` +
+      `${String(tehran.day).padStart(2, "0")}`;
 
     const weekday = getWeekday(now);
 
     const hijri = await getHijriDate(
-      `${String(tehran.day).padStart(2, "0")}-${String(
-        tehran.month
-      ).padStart(2, "0")}-${tehran.year}`
+      `${String(tehran.day).padStart(2, "0")}-` +
+      `${String(tehran.month).padStart(2, "0")}-` +
+      `${tehran.year}`
     );
 
-    const allEvents = await getEvents(persian.year);
+    const allEvents =
+      await getEvents(persian.year);
 
-    const todayEvents = getEventsForDay(
-      allEvents,
-      persian.month,
-      persian.day
-    );
+    const todayEvents =
+      getEventsForDay(
+        allEvents,
+        persian.month,
+        persian.day
+      );
 
-    const holiday = getHoliday(todayEvents);
+    const holiday =
+      getHoliday(todayEvents);
 
-    const progress = getYearProgress(
-      persian.month,
-      persian.day
-    );
+    const progress =
+      getYearProgress(
+        persian.month,
+        persian.day
+      );
 
-    const moonPhase = getMoonPhase(now);
+    const moonPhase =
+      getMoonPhase(now);
 
-    const zodiac = getPersianZodiac(persian.month);
+    const zodiac =
+      getPersianZodiac(
+        persian.month
+      );
 
-    const eventsText = getEventText(todayEvents);
+    const eventsText =
+      getEventText(todayEvents);
 
     const hijriText = hijri
       ? `${hijri.day} ${hijri.month} ${hijri.year}`
       : "نامشخص";
 
-    const status = holiday ? "تعطیل رسمی" : "روز کاری";
+    const status =
+      holiday
+        ? "تعطیل رسمی"
+        : "روز کاری";
 
     const message =
       `☀️ روزت پر از اتفاقات خوب\n\n` +
       `📅 تقویم روزانه\n\n` +
-      `🇮🇷 تاریخ شمسی: ${toPersianNumber(
-        persian.year
-      )}/${toPersianNumber(
-        String(persian.month).padStart(2, "0")
-      )}/${toPersianNumber(
-        String(persian.day).padStart(2, "0")
-      )}\n` +
+
+      `🇮🇷 تاریخ شمسی: ` +
+      `${toPersianNumber(persian.year)}/` +
+      `${toPersianNumber(String(persian.month).padStart(2, "0"))}/` +
+      `${toPersianNumber(String(persian.day).padStart(2, "0"))}\n` +
+
       `🌍 تاریخ میلادی: ${gregorian}\n` +
+
       `🌙 تاریخ قمری: ${hijriText}\n` +
-      `⏰ ساعت: ${tehran.hour}:${tehran.minute}\n` +
+
+      `⏰ ساعت: ` +
+      `${tehran.hour}:${tehran.minute}\n` +
+
       `🗓️ روز هفته: ${weekday}\n` +
+
       `🏢 وضعیت: ${status}\n\n` +
-      `📊 پیشرفت سال ${toPersianNumber(
-        persian.year
-      )}: روز ${toPersianNumber(
-        progress.dayOfYear
-      )} از ${toPersianNumber(
-        progress.totalDays
-      )} — ${toPersianNumber(progress.percent)}٪\n` +
+
+      `📊 پیشرفت سال ` +
+      `${toPersianNumber(persian.year)}: ` +
+      `روز ${toPersianNumber(progress.dayOfYear)} ` +
+      `از ${toPersianNumber(progress.totalDays)} ` +
+      `— ${toPersianNumber(progress.percent)}٪\n` +
+
       `🌙 وضعیت ماه: ${moonPhase}\n` +
+
       `♈ برج: ${zodiac}\n\n` +
+
       `📌 مناسبت‌ها:\n` +
+
       `${
         eventsText.length
-          ? eventsText.map((e) => `• ${e}`).join("\n")
+          ? eventsText
+              .map((e) => `• ${e}`)
+              .join("\n")
           : "• مناسبت ثبت‌شده‌ای برای امروز پیدا نشد."
       }\n\n` +
+
       `💭 جرعه‌ای تفکر:\n` +
-      `«هر روز فرصتی تازه برای بهتر دیدن، بهتر اندیشیدن و بهتر ساختن است.»\n\n` +
+
+      `«هر روز فرصتی تازه برای بهتر دیدن، ` +
+      `بهتر اندیشیدن و بهتر ساختن است.»\n\n` +
+
       `🤝 با هم برای حل مسائل و ساختن فردایی بهتر`;
 
     const response = await fetch(
       `https://tapi.bale.ai/bot${token}/sendMessage`,
       {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json"
         },
+
         body: JSON.stringify({
           chat_id: chatId,
           text: message
@@ -339,23 +379,36 @@ export async function GET() {
       }
     );
 
-    const result = await response.json().catch(() => ({}));
+    const result =
+      await response
+        .json()
+        .catch(() => ({}));
 
     return NextResponse.json({
-      ok: response.ok && result?.ok === true,
-      bale_status: response.status,
+      ok:
+        response.ok &&
+        result?.ok === true,
+
+      bale_status:
+        response.status,
+
       bale: result
     });
+
   } catch (error) {
+
     return NextResponse.json(
       {
         ok: false,
+
         error:
           error instanceof Error
             ? error.message
             : "خطای ناشناخته"
       },
-      { status: 500 }
+      {
+        status: 500
+      }
     );
   }
-        }
+}
