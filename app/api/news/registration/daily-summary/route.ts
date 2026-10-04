@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 
 const MAX_NEWS = 20;
 const MIN_MEDIA = 1;
-const REQUEST_TIMEOUT_MS = 5000;
+const REQUEST_TIMEOUT_MS = 7000;
+
+/*
+ * حداکثر تعداد نتیجه از هر منبع اختصاصی
+ */
+const MAX_SPECIAL_SOURCE_ITEMS = 30;
 
 type NewsItem = {
   title: string;
@@ -33,9 +38,6 @@ type SourceResult = {
   error: string | null;
 };
 
-/*
- * رسانه‌های معتبر ایرانی
- */
 const TRUSTED_MEDIA: Record<string, string> = {
   "irna.ir": "ایرنا",
   "irna.news": "ایرنا",
@@ -69,10 +71,7 @@ const TRUSTED_MEDIA: Record<string, string> = {
 };
 
 /*
- * منابع RSS
- *
- * تسنیم دو مسیر دارد تا در صورت مشکل یکی،
- * مسیر دوم قابل استفاده باشد.
+ * RSS عمومی رسانه‌های معتبر
  */
 const RSS_SOURCES = [
   {
@@ -119,6 +118,21 @@ const RSS_SOURCES = [
 ];
 
 /*
+ * منابع اختصاصی ثبت احوال
+ *
+ * این منابع RSS نیستند و صفحه HTML هستند.
+ * فیلتر نهایی همچنان روی آن‌ها اعمال می‌شود.
+ */
+const SPECIAL_SOURCES = [
+  {
+    url:
+      "https://tasnimnews.ir/fa/keyword/4067/%D8%B3%D8%A7%D8%B2%D9%85%D8%A7%D9%86-%D8%AB%D8%A8%D8%AA-%D8%A7%D8%AD%D9%88%D8%A7%D9%84-%DA%A9%D8%B4%D9%88%D8%B1",
+    domain: "tasnimnews.ir",
+    source: "تسنیم",
+  },
+];
+
+/*
  * عبارات قطعی ثبت احوال
  */
 const STRONG_REGISTRATION_TERMS = [
@@ -132,6 +146,7 @@ const STRONG_REGISTRATION_TERMS = [
   "گواهی فوت",
   "گواهی ولادت",
   "گواهی حصر وراثت",
+  "حصر وراثت",
   "تغییر نام خانوادگی",
 ];
 
@@ -152,6 +167,7 @@ const SECONDARY_REGISTRATION_TERMS = [
   "آمار ثبت احوال",
   "مرکز رصد جمعیت",
   "رصد جمعیت کشور",
+  "رصد جمعیت",
   "تغییر نام",
 ];
 
@@ -268,8 +284,7 @@ function isTrustedIranianMedia(domain: string): boolean {
   }
 
   return Object.keys(TRUSTED_MEDIA).some(
-    (trusted) =>
-      normalized.endsWith("." + trusted)
+    (trusted) => normalized.endsWith("." + trusted)
   );
 }
 
@@ -284,8 +299,7 @@ function getMediaName(
   }
 
   const trusted = Object.keys(TRUSTED_MEDIA).find(
-    (item) =>
-      normalized.endsWith("." + item)
+    (item) => normalized.endsWith("." + item)
   );
 
   if (trusted) {
@@ -297,14 +311,8 @@ function getMediaName(
 
 function cleanText(value: string): string {
   return value
-    .replace(
-      /<script[\s\S]*?<\/script>/gi,
-      " "
-    )
-    .replace(
-      /<style[\s\S]*?<\/style>/gi,
-      " "
-    )
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -322,17 +330,11 @@ function decodeXml(value: string): string {
     .replace(/&gt;/gi, ">")
     .replace(
       /&#(\d+);/g,
-      (_, code) =>
-        String.fromCharCode(
-          Number(code)
-        )
+      (_, code) => String.fromCharCode(Number(code))
     )
     .replace(
       /&#x([0-9a-f]+);/gi,
-      (_, code) =>
-        String.fromCharCode(
-          parseInt(code, 16)
-        )
+      (_, code) => String.fromCharCode(parseInt(code, 16))
     );
 }
 
@@ -340,35 +342,28 @@ function extractTag(
   xml: string,
   tag: string
 ): string {
-  const escapedTag =
-    tag.replace(/:/g, "\\:");
+  const escapedTag = tag.replace(/:/g, "\\:");
 
   const regex = new RegExp(
     `<${escapedTag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapedTag}>`,
     "i"
   );
 
-  const match =
-    xml.match(regex);
+  const match = xml.match(regex);
 
   if (!match) {
     return "";
   }
 
-  return decodeXml(
-    cleanText(match[1])
-  );
+  return decodeXml(cleanText(match[1]));
 }
 
 function extractLink(xml: string): string {
-  const normalLink =
-    extractTag(xml, "link");
+  const normalLink = extractTag(xml, "link");
 
   if (
     normalLink &&
-    /^https?:\/\//i.test(
-      normalLink
-    )
+    /^https?:\/\//i.test(normalLink)
   ) {
     return normalLink.trim();
   }
@@ -376,18 +371,249 @@ function extractLink(xml: string): string {
   const hrefRegex =
     /<link[^>]+href=["']([^"']+)["'][^>]*>/i;
 
-  const hrefMatch =
-    xml.match(hrefRegex);
+  const hrefMatch = xml.match(hrefRegex);
 
   if (hrefMatch) {
-    return decodeXml(
-      hrefMatch[1].trim()
-    );
+    return decodeXml(hrefMatch[1].trim());
   }
 
   return "";
 }
 
+/*
+ * تبدیل اعداد فارسی/عربی به انگلیسی
+ */
+function normalizeDigits(value: string): string {
+  return value
+    .replace(
+      /[۰-۹]/g,
+      (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))
+    )
+    .replace(
+      /[٠-٩]/g,
+      (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))
+    );
+}
+
+/*
+ * تاریخ مقاوم
+ */
+function parseDate(value?: string): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const direct = new Date(normalized);
+
+  if (!Number.isNaN(direct.getTime())) {
+    return direct;
+  }
+
+  const western = normalizeDigits(normalized);
+
+  const second = new Date(western);
+
+  if (!Number.isNaN(second.getTime())) {
+    return second;
+  }
+
+  /*
+   * تاریخ فارسی مانند:
+   * ۷ مهر ۱۴۰۵ - ۱۶:۰۸
+   */
+  const persianMonths: Record<string, number> = {
+    فروردین: 1,
+    اردیبهشت: 2,
+    خرداد: 3,
+    تیر: 4,
+    مرداد: 5,
+    شهریور: 6,
+    مهر: 7,
+    آبان: 8,
+    آذر: 9,
+    دی: 10,
+    بهمن: 11,
+    اسفند: 12,
+  };
+
+  const persianMatch =
+    western.match(
+      /(\d{1,2})\s+([^\s،,-]+)\s+(\d{4})(?:\s*[-–]\s*(\d{1,2}):(\d{2}))?/
+    );
+
+  if (persianMatch) {
+    const day = Number(persianMatch[1]);
+    const monthName = persianMatch[2];
+    const year = Number(persianMatch[3]);
+    const hour = Number(persianMatch[4] || 0);
+    const minute = Number(persianMatch[5] || 0);
+
+    const month = persianMonths[monthName];
+
+    if (month && year >= 1300 && year <= 1500) {
+      /*
+       * تبدیل تقریبی تقویم شمسی به میلادی با Intl.
+       * برای تعیین بازه روزانه از تاریخ ISO صفحه نیز
+       * در صورت وجود استفاده می‌شود.
+       */
+      try {
+        const candidate = new Date(
+          Date.UTC(year + 621, month - 1, day, hour, minute)
+        );
+
+        if (!Number.isNaN(candidate.getTime())) {
+          return candidate;
+        }
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  return null;
+}
+
+/*
+ * تشخیص تاریخ میلادی داخل URL تسنیم:
+ * /fa/news/1405/07/07/
+ *
+ * این روش دقیق‌تر از تبدیل تقریبی تاریخ فارسی صفحه است.
+ */
+function parseTasnimDateFromUrl(url: string): Date | null {
+  const match = url.match(
+    /\/news\/(\d{4})\/(\d{2})\/(\d{2})\//
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (
+    year < 1400 ||
+    year > 1500 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return null;
+  }
+
+  /*
+   * برای تاریخ‌های تسنیم، تبدیل دقیق جلالی به میلادی
+   * با الگوریتم استاندارد انجام می‌شود.
+   */
+  const jy = year - 979;
+
+  const jMonth = month;
+  const jDay = day;
+
+  let days =
+    365 * jy +
+    Math.floor(jy / 33) * 8 +
+    Math.floor(((jy % 33) + 3) / 4);
+
+  if (jMonth < 7) {
+    days += (jMonth - 1) * 31;
+  } else {
+    days += (jMonth - 7) * 30 + 186;
+  }
+
+  days += jDay - 1;
+
+  const gy = 1600 + 400 * Math.floor(days / 146097);
+
+  days %= 146097;
+
+  let gy2 = gy;
+
+  if (days >= 36525) {
+    days--;
+
+    gy2 +=
+      100 *
+      Math.floor(days / 36524);
+
+    days %= 36524;
+
+    if (days >= 365) {
+      days++;
+    }
+  }
+
+  gy2 +=
+    4 *
+    Math.floor(days / 1461);
+
+  days %= 1461;
+
+  if (days >= 366) {
+    gy2 +=
+      Math.floor((days - 1) / 365);
+
+    days =
+      (days - 1) % 365;
+  }
+
+  const gd = days + 1;
+
+  const leap =
+    gy2 % 4 === 0 &&
+    (gy2 % 100 !== 0 ||
+      gy2 % 400 === 0);
+
+  const monthDays = [
+    0,
+    31,
+    leap ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+
+  let gm = 1;
+  let remaining = gd;
+
+  while (
+    gm <= 12 &&
+    remaining > monthDays[gm]
+  ) {
+    remaining -= monthDays[gm];
+    gm++;
+  }
+
+  return new Date(
+    Date.UTC(
+      gy2,
+      gm - 1,
+      remaining,
+      12,
+      0,
+      0
+    )
+  );
+}
+
+/*
+ * RSS parser
+ */
 function parseFeed(
   xml: string,
   sourceDomain: string,
@@ -397,118 +623,57 @@ function parseFeed(
   rawItems: number;
 } {
   const blocks = [
-    ...(xml.match(
-      /<item\b[\s\S]*?<\/item>/gi
-    ) || []),
-    ...(xml.match(
-      /<entry\b[\s\S]*?<\/entry>/gi
-    ) || []),
+    ...(xml.match(/<item\b[\s\S]*?<\/item>/gi) || []),
+    ...(xml.match(/<entry\b[\s\S]*?<\/entry>/gi) || []),
   ];
 
   const results: Candidate[] = [];
 
   for (const block of blocks) {
-    const title =
-      extractTag(
-        block,
-        "title"
-      );
+    const title = extractTag(block, "title");
 
-    const link =
-      extractLink(block);
+    const link = extractLink(block);
 
     const description =
-      extractTag(
-        block,
-        "description"
-      ) ||
-      extractTag(
-        block,
-        "summary"
-      ) ||
-      extractTag(
-        block,
-        "content"
-      );
+      extractTag(block, "description") ||
+      extractTag(block, "summary") ||
+      extractTag(block, "content");
 
     const published =
-      extractTag(
-        block,
-        "pubDate"
-      ) ||
-      extractTag(
-        block,
-        "published"
-      ) ||
-      extractTag(
-        block,
-        "updated"
-      ) ||
-      extractTag(
-        block,
-        "dc:date"
-      );
+      extractTag(block, "pubDate") ||
+      extractTag(block, "published") ||
+      extractTag(block, "updated") ||
+      extractTag(block, "dc:date");
 
     if (!title || !link) {
       continue;
     }
 
-    let domain =
-      sourceDomain;
+    let domain = sourceDomain;
 
     try {
-      const linkDomain =
-        normalizeDomain(
-          new URL(
-            link
-          ).hostname
-        );
+      const linkDomain = normalizeDomain(
+        new URL(link).hostname
+      );
 
-      if (
-        isTrustedIranianMedia(
-          linkDomain
-        )
-      ) {
-        domain =
-          linkDomain;
+      if (isTrustedIranianMedia(linkDomain)) {
+        domain = linkDomain;
       }
     } catch {
       // دامنه منبع حفظ می‌شود
     }
 
-    if (
-      !isTrustedIranianMedia(
-        domain
-      )
-    ) {
+    if (!isTrustedIranianMedia(domain)) {
       continue;
     }
 
     results.push({
-      title:
-        cleanText(title),
-
-      url:
-        link.trim(),
-
-      source:
-        getMediaName(
-          domain,
-          sourceName
-        ),
-
-      domain:
-        normalizeDomain(
-          domain
-        ),
-
-      publishedAt:
-        published || undefined,
-
-      description:
-        cleanText(
-          description
-        ),
+      title: cleanText(title),
+      url: link.trim(),
+      source: getMediaName(domain, sourceName),
+      domain: normalizeDomain(domain),
+      publishedAt: published || undefined,
+      description: cleanText(description),
     });
   }
 
@@ -518,33 +683,33 @@ function parseFeed(
   };
 }
 
+/*
+ * فیلتر نهایی خبر
+ *
+ * هدف:
+ * فقط خبر واقعاً مرتبط با ثبت احوال.
+ */
 function isRelevantNews(
   title: string,
   description = ""
 ): boolean {
   const normalizedTitle =
-    normalizePersianText(
-      title
-    );
+    normalizePersianText(title);
 
   const normalizedDescription =
-    normalizePersianText(
-      description
-    );
+    normalizePersianText(description);
 
   const fullText =
     `${normalizedTitle} ${normalizedDescription}`;
 
   /*
-   * عنوان مستقیماً ثبت احوال را دارد.
+   * عبارت مستقیم در عنوان
    */
   if (
     STRONG_REGISTRATION_TERMS.some(
       (term) =>
         normalizedTitle.includes(
-          normalizePersianText(
-            term
-          )
+          normalizePersianText(term)
         )
     )
   ) {
@@ -552,15 +717,13 @@ function isRelevantNews(
   }
 
   /*
-   * موضوعات اختصاصی ثبت احوال
+   * عبارات اختصاصی
    */
   const hasSecondary =
     SECONDARY_REGISTRATION_TERMS.some(
       (term) =>
         normalizedTitle.includes(
-          normalizePersianText(
-            term
-          )
+          normalizePersianText(term)
         )
     );
 
@@ -585,32 +748,22 @@ function isRelevantNews(
       "هواشناسی",
     ];
 
-    if (
-      clearlyUnrelated.some(
-        (term) =>
-          normalizedTitle.includes(
-            normalizePersianText(
-              term
-            )
-          )
-      )
-    ) {
-      return false;
-    }
-
-    return true;
+    return !clearlyUnrelated.some(
+      (term) =>
+        normalizedTitle.includes(
+          normalizePersianText(term)
+        )
+    );
   }
 
   /*
-   * واژه عمومی بدون زمینه ثبت احوال رد می‌شود.
+   * واژه عمومی بدون زمینه ثبت احوال
    */
   const hasContext =
     REGISTRATION_CONTEXT_TERMS.some(
       (term) =>
         fullText.includes(
-          normalizePersianText(
-            term
-          )
+          normalizePersianText(term)
         )
     );
 
@@ -622,14 +775,10 @@ function isRelevantNews(
     CONTEXT_ONLY_TERMS.some(
       (term) =>
         normalizedTitle.includes(
-          normalizePersianText(
-            term
-          )
+          normalizePersianText(term)
         ) ||
         normalizedDescription.includes(
-          normalizePersianText(
-            term
-          )
+          normalizePersianText(term)
         )
     );
 
@@ -638,24 +787,20 @@ function isRelevantNews(
   }
 
   /*
-   * اگر موضوع فقط در توضیحات آمده،
-   * باید عبارت مشخص ثبت احوال نیز وجود داشته باشد.
+   * اگر ثبت احوال فقط در توضیحات است،
+   * باید عبارت مشخص ثبت احوال نیز باشد.
    */
   const descriptionHasRegistration =
     STRONG_REGISTRATION_TERMS.some(
       (term) =>
         normalizedDescription.includes(
-          normalizePersianText(
-            term
-          )
+          normalizePersianText(term)
         )
     ) ||
     SECONDARY_REGISTRATION_TERMS.some(
       (term) =>
         normalizedDescription.includes(
-          normalizePersianText(
-            term
-          )
+          normalizePersianText(term)
         )
     );
 
@@ -684,236 +829,94 @@ function isRelevantNews(
   return !clearlyUnrelatedTitle.some(
     (term) =>
       normalizedTitle.includes(
-        normalizePersianText(
-          term
-        )
+        normalizePersianText(term)
       )
   );
 }
 
 /*
- * تاریخ مقاوم‌تر
+ * بازه دقیق:
+ * هر روز 22:30 تهران تا 22:30 روز بعد
  */
-function parseDate(
-  value?: string
-): Date | null {
-  if (!value) {
-    return null;
-  }
-
-  const normalized =
-    value.trim();
-
-  if (!normalized) {
-    return null;
-  }
-
-  /*
-   * ISO / RFC / معمولی
-   */
-  const direct =
-    new Date(
-      normalized
-    );
-
-  if (
-    !Number.isNaN(
-      direct.getTime()
-    )
-  ) {
-    return direct;
-  }
-
-  /*
-   * تبدیل اعداد فارسی
-   */
-  const western =
-    normalized
-      .replace(
-        /[۰-۹]/g,
-        (d) =>
-          String(
-            "۰۱۲۳۴۵۶۷۸۹".indexOf(
-              d
-            )
-          )
-      )
-      .replace(
-        /[٠-٩]/g,
-        (d) =>
-          String(
-            "٠١٢٣٤٥٦٧٨٩".indexOf(
-              d
-            )
-          )
-      );
-
-  const second =
-    new Date(
-      western
-    );
-
-  if (
-    !Number.isNaN(
-      second.getTime()
-    )
-  ) {
-    return second;
-  }
-
-  return null;
-}
-
 function getReportWindow() {
-  const now =
-    new Date();
+  const now = new Date();
 
   const parts =
     new Intl.DateTimeFormat(
       "en-CA",
       {
-        timeZone:
-          "Asia/Tehran",
-
-        year:
-          "numeric",
-
-        month:
-          "2-digit",
-
-        day:
-          "2-digit",
-
-        hour:
-          "2-digit",
-
-        minute:
-          "2-digit",
-
-        second:
-          "2-digit",
-
-        hour12:
-          false,
+        timeZone: "Asia/Tehran",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
       }
-    ).formatToParts(
-      now
-    );
+    ).formatToParts(now);
 
   const getPart =
     (type: string) =>
       Number(
         parts.find(
-          (item) =>
-            item.type ===
-            type
+          (item) => item.type === type
         )?.value || 0
       );
 
-  const year =
-    getPart("year");
+  const year = getPart("year");
+  const month = getPart("month");
+  const day = getPart("day");
+  const hour = getPart("hour");
+  const minute = getPart("minute");
 
-  const month =
-    getPart("month");
+  let end = new Date(
+    Date.UTC(
+      year,
+      month - 1,
+      day,
+      19,
+      0,
+      0
+    )
+  );
 
-  const day =
-    getPart("day");
-
-  const hour =
-    getPart("hour");
-
-  const minute =
-    getPart("minute");
-
-  /*
-   * 22:30 تهران = 19:00 UTC
-   */
-  let end =
-    new Date(
-      Date.UTC(
-        year,
-        month - 1,
-        day,
-        19,
-        0,
-        0
-      )
-    );
-
-  /*
-   * اگر هنوز به 22:30 امروز نرسیده‌ایم،
-   * آخرین پایان کامل، روز قبل است.
-   */
   if (
     hour < 22 ||
-    (
-      hour === 22 &&
-      minute < 30
-    )
+    (hour === 22 && minute < 30)
   ) {
-    end =
-      new Date(
-        end.getTime() -
-        24 *
-        60 *
-        60 *
-        1000
-      );
+    end = new Date(
+      end.getTime() -
+        24 * 60 * 60 * 1000
+    );
   }
 
-  const start =
-    new Date(
-      end.getTime() -
-      24 *
-      60 *
-      60 *
-      1000
-    );
+  const start = new Date(
+    end.getTime() -
+      24 * 60 * 60 * 1000
+  );
 
   const formatTehran =
     (date: Date) =>
       new Intl.DateTimeFormat(
         "fa-IR-u-ca-persian",
         {
-          timeZone:
-            "Asia/Tehran",
-
-          year:
-            "numeric",
-
-          month:
-            "2-digit",
-
-          day:
-            "2-digit",
-
-          hour:
-            "2-digit",
-
-          minute:
-            "2-digit",
-
-          second:
-            "2-digit",
-
-          hour12:
-            false,
+          timeZone: "Asia/Tehran",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
         }
-      ).format(
-        date
-      );
+      ).format(date);
 
   return {
     start,
     end,
-    startTehran:
-      formatTehran(
-        start
-      ),
-    endTehran:
-      formatTehran(
-        end
-      ),
+    startTehran: formatTehran(start),
+    endTehran: formatTehran(end),
   };
 }
 
@@ -926,23 +929,18 @@ function isInsideWindow(
     return false;
   }
 
-  const time =
-    date.getTime();
+  const time = date.getTime();
 
   return (
-    time >=
-      start.getTime() &&
-    time <
-      end.getTime()
+    time >= start.getTime() &&
+    time < end.getTime()
   );
 }
 
 function normalizeTitle(
   title: string
 ): string {
-  return normalizePersianText(
-    title
-  )
+  return normalizePersianText(title)
     .replace(
       /[\u064B-\u065F\u0670]/g,
       ""
@@ -961,35 +959,24 @@ function normalizeTitle(
 function dedupeNews(
   items: NewsItem[]
 ): NewsItem[] {
-  const seen =
-    new Set<string>();
+  const seen = new Set<string>();
 
-  const result:
-    NewsItem[] = [];
+  const result: NewsItem[] = [];
 
-  for (
-    const item of items
-  ) {
-    const key =
-      normalizeTitle(
-        item.title
-      );
+  for (const item of items) {
+    const key = normalizeTitle(item.title);
 
     if (!key) {
       continue;
     }
 
-    if (
-      seen.has(key)
-    ) {
+    if (seen.has(key)) {
       continue;
     }
 
     seen.add(key);
 
-    result.push(
-      item
-    );
+    result.push(item);
   }
 
   return result;
@@ -998,35 +985,32 @@ function dedupeNews(
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit = {},
-  timeoutMs =
-    REQUEST_TIMEOUT_MS
+  timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<Response> {
   const controller =
     new AbortController();
 
-  const timer =
-    setTimeout(
-      () =>
-        controller.abort(),
-      timeoutMs
-    );
+  const timer = setTimeout(
+    () => controller.abort(),
+    timeoutMs
+  );
 
   try {
     return await fetch(
       input,
       {
         ...init,
-        signal:
-          controller.signal,
+        signal: controller.signal,
       }
     );
   } finally {
-    clearTimeout(
-      timer
-    );
+    clearTimeout(timer);
   }
 }
 
+/*
+ * دریافت RSS
+ */
 async function fetchSource(
   source: {
     url: string;
@@ -1039,34 +1023,16 @@ async function fetchSource(
   candidates: Candidate[];
   diagnostics: SourceResult;
 }> {
-  const diagnostics:
-    SourceResult = {
-    source:
-      source.source,
-
-    domain:
-      source.domain,
-
-    url:
-      source.url,
-
-    httpStatus:
-      null,
-
-    rawItems:
-      0,
-
-    parsedItems:
-      0,
-
-    relevantItems:
-      0,
-
-    windowItems:
-      0,
-
-    error:
-      null,
+  const diagnostics: SourceResult = {
+    source: source.source,
+    domain: source.domain,
+    url: source.url,
+    httpStatus: null,
+    rawItems: 0,
+    parsedItems: 0,
+    relevantItems: 0,
+    windowItems: 0,
+    error: null,
   };
 
   try {
@@ -1076,14 +1042,11 @@ async function fetchSource(
         {
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (compatible; SedayeSmart/2.0)",
-
+              "Mozilla/5.0 (compatible; SedayeSmart/3.0)",
             Accept:
               "application/rss+xml, application/xml, text/xml, */*",
           },
-
-          cache:
-            "no-store",
+          cache: "no-store",
         }
       );
 
@@ -1103,10 +1066,7 @@ async function fetchSource(
     const xml =
       await response.text();
 
-    if (
-      !xml ||
-      xml.length < 50
-    ) {
+    if (!xml || xml.length < 50) {
       diagnostics.error =
         "empty_or_invalid_response";
 
@@ -1145,9 +1105,7 @@ async function fetchSource(
       relevant.filter(
         (item) =>
           isInsideWindow(
-            parseDate(
-              item.publishedAt
-            ),
+            parseDate(item.publishedAt),
             start,
             end
           )
@@ -1157,16 +1115,348 @@ async function fetchSource(
       windowItems.length;
 
     return {
-      candidates:
-        windowItems,
-
+      candidates: windowItems,
       diagnostics,
     };
   } catch (error) {
     diagnostics.error =
       error instanceof Error
-        ? error.name ===
-          "AbortError"
+        ? error.name === "AbortError"
+          ? "timeout"
+          : error.message
+        : String(error);
+
+    return {
+      candidates: [],
+      diagnostics,
+    };
+  }
+}
+
+/*
+ * استخراج لینک‌های مقاله از HTML
+ */
+function extractArticleLinks(
+  html: string,
+  sourceDomain: string
+): string[] {
+  const links: string[] = [];
+
+  const patterns = [
+    /href=["']([^"']+)["']/gi,
+    /data-url=["']([^"']+)["']/gi,
+  ];
+
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(html)) !== null) {
+      let href = match[1];
+
+      if (!href) {
+        continue;
+      }
+
+      href = href.trim();
+
+      if (href.startsWith("/")) {
+        href =
+          `https://${sourceDomain}${href}`;
+      }
+
+      if (
+        !/^https?:\/\//i.test(href)
+      ) {
+        continue;
+      }
+
+      try {
+        const url = new URL(href);
+
+        if (
+          normalizeDomain(url.hostname) !==
+          normalizeDomain(sourceDomain)
+        ) {
+          continue;
+        }
+
+        if (
+          !url.pathname.includes("/news/")
+        ) {
+          continue;
+        }
+
+        links.push(url.toString());
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return [...new Set(links)];
+}
+
+/*
+ * عنوان مقاله از HTML
+ */
+function extractArticleTitle(
+  html: string
+): string {
+  const selectors = [
+    /<h1[^>]*>([\s\S]*?)<\/h1>/i,
+    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
+    /<title[^>]*>([\s\S]*?)<\/title>/i,
+  ];
+
+  for (const regex of selectors) {
+    const match = html.match(regex);
+
+    if (match?.[1]) {
+      const value =
+        cleanText(
+          decodeXml(match[1])
+        );
+
+      if (value) {
+        return value;
+      }
+    }
+  }
+
+  return "";
+}
+
+/*
+ * توضیح مقاله
+ */
+function extractArticleDescription(
+  html: string
+): string {
+  const selectors = [
+    /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
+  ];
+
+  for (const regex of selectors) {
+    const match = html.match(regex);
+
+    if (match?.[1]) {
+      const value =
+        cleanText(
+          decodeXml(match[1])
+        );
+
+      if (value) {
+        return value;
+      }
+    }
+  }
+
+  return "";
+}
+
+/*
+ * منبع اختصاصی HTML
+ */
+async function fetchSpecialSource(
+  source: {
+    url: string;
+    domain: string;
+    source: string;
+  },
+  start: Date,
+  end: Date
+): Promise<{
+  candidates: Candidate[];
+  diagnostics: SourceResult;
+}> {
+  const diagnostics: SourceResult = {
+    source: source.source,
+    domain: source.domain,
+    url: source.url,
+    httpStatus: null,
+    rawItems: 0,
+    parsedItems: 0,
+    relevantItems: 0,
+    windowItems: 0,
+    error: null,
+  };
+
+  try {
+    const response =
+      await fetchWithTimeout(
+        source.url,
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (compatible; SedayeSmart/3.0)",
+            Accept:
+              "text/html,application/xhtml+xml,*/*",
+          },
+          cache: "no-store",
+        }
+      );
+
+    diagnostics.httpStatus =
+      response.status;
+
+    if (!response.ok) {
+      diagnostics.error =
+        `HTTP ${response.status}`;
+
+      return {
+        candidates: [],
+        diagnostics,
+      };
+    }
+
+    const html =
+      await response.text();
+
+    if (!html || html.length < 200) {
+      diagnostics.error =
+        "empty_or_invalid_response";
+
+      return {
+        candidates: [],
+        diagnostics,
+      };
+    }
+
+    const links =
+      extractArticleLinks(
+        html,
+        source.domain
+      ).slice(
+        0,
+        MAX_SPECIAL_SOURCE_ITEMS
+      );
+
+    diagnostics.rawItems =
+      links.length;
+
+    const candidates: Candidate[] = [];
+
+    /*
+     * برای جلوگیری از فشار زیاد:
+     * مقاله‌ها به صورت موازی با سقف محدود خوانده می‌شوند.
+     */
+    const articleResults =
+      await Promise.all(
+        links.map(
+          async (url) => {
+            try {
+              const articleResponse =
+                await fetchWithTimeout(
+                  url,
+                  {
+                    headers: {
+                      "User-Agent":
+                        "Mozilla/5.0 (compatible; SedayeSmart/3.0)",
+                      Accept:
+                        "text/html,application/xhtml+xml,*/*",
+                    },
+                    cache: "no-store",
+                  },
+                  REQUEST_TIMEOUT_MS
+                );
+
+              if (!articleResponse.ok) {
+                return null;
+              }
+
+              const articleHtml =
+                await articleResponse.text();
+
+              const title =
+                extractArticleTitle(
+                  articleHtml
+                );
+
+              const description =
+                extractArticleDescription(
+                  articleHtml
+                );
+
+              /*
+               * تاریخ دقیق تسنیم از URL مقاله
+               */
+              const published =
+                parseTasnimDateFromUrl(
+                  url
+                );
+
+              if (!title || !published) {
+                return null;
+              }
+
+              return {
+                title,
+                url,
+                source:
+                  getMediaName(
+                    source.domain,
+                    source.source
+                  ),
+                domain:
+                  normalizeDomain(
+                    source.domain
+                  ),
+                publishedAt:
+                  published.toISOString(),
+                description,
+              } satisfies Candidate;
+            } catch {
+              return null;
+            }
+          }
+        )
+      );
+
+    for (const item of articleResults) {
+      if (!item) {
+        continue;
+      }
+
+      candidates.push(item);
+    }
+
+    diagnostics.parsedItems =
+      candidates.length;
+
+    const relevant =
+      candidates.filter(
+        (item) =>
+          isRelevantNews(
+            item.title,
+            item.description
+          )
+      );
+
+    diagnostics.relevantItems =
+      relevant.length;
+
+    const windowItems =
+      relevant.filter(
+        (item) =>
+          isInsideWindow(
+            parseDate(item.publishedAt),
+            start,
+            end
+          )
+      );
+
+    diagnostics.windowItems =
+      windowItems.length;
+
+    return {
+      candidates: windowItems,
+      diagnostics,
+    };
+  } catch (error) {
+    diagnostics.error =
+      error instanceof Error
+        ? error.name === "AbortError"
           ? "timeout"
           : error.message
         : String(error);
@@ -1185,7 +1475,7 @@ async function getNews(
   news: NewsItem[];
   diagnostics: SourceResult[];
 }> {
-  const responses =
+  const rssResponses =
     await Promise.all(
       RSS_SOURCES.map(
         (source) =>
@@ -1197,15 +1487,25 @@ async function getNews(
       )
     );
 
-  const candidates:
-    Candidate[] = [];
+  const specialResponses =
+    await Promise.all(
+      SPECIAL_SOURCES.map(
+        (source) =>
+          fetchSpecialSource(
+            source,
+            start,
+            end
+          )
+      )
+    );
 
-  const diagnostics:
-    SourceResult[] = [];
+  const candidates: Candidate[] = [];
+  const diagnostics: SourceResult[] = [];
 
-  for (
-    const result of responses
-  ) {
+  for (const result of [
+    ...rssResponses,
+    ...specialResponses,
+  ]) {
     candidates.push(
       ...result.candidates
     );
@@ -1230,42 +1530,38 @@ async function getNews(
             item.description
           )
       )
-      .map(
-        (item) => {
-          const date =
-            parseDate(
-              item.publishedAt
-            );
+      .map((item) => {
+        const date =
+          parseDate(
+            item.publishedAt
+          );
 
-          if (!date) {
-            return null;
-          }
-
-          return {
-            title:
-              cleanText(
-                item.title
-              ),
-
-            url:
-              item.url,
-
-            source:
-              getMediaName(
-                item.domain,
-                item.source
-              ),
-
-            domain:
-              normalizeDomain(
-                item.domain
-              ),
-
-            publishedAt:
-              date.toISOString(),
-          };
+        if (!date) {
+          return null;
         }
-      )
+
+        return {
+          title:
+            cleanText(item.title),
+
+          url:
+            item.url,
+
+          source:
+            getMediaName(
+              item.domain,
+              item.source
+            ),
+
+          domain:
+            normalizeDomain(
+              item.domain
+            ),
+
+          publishedAt:
+            date.toISOString(),
+        };
+      })
       .filter(
         (
           item
@@ -1306,17 +1602,12 @@ async function sendBaleMessage(
   text: string
 ) {
   const token =
-    process.env
-      .BALE_SMART_TOKEN;
+    process.env.BALE_SMART_TOKEN;
 
   const chatId =
-    process.env
-      .BALE_GROUP_ID;
+    process.env.BALE_GROUP_ID;
 
-  if (
-    !token ||
-    !chatId
-  ) {
+  if (!token || !chatId) {
     throw new Error(
       "BALE_SMART_TOKEN or BALE_GROUP_ID is missing"
     );
@@ -1326,24 +1617,17 @@ async function sendBaleMessage(
     await fetch(
       `https://tapi.bale.ai/bot${token}/sendMessage`,
       {
-        method:
-          "POST",
-
+        method: "POST",
         headers: {
           "Content-Type":
             "application/json",
         },
-
-        body:
-          JSON.stringify({
-            chat_id:
-              chatId,
-
-            text,
-
-            disable_web_page_preview:
-              false,
-          }),
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          disable_web_page_preview:
+            false,
+        }),
       }
     );
 
@@ -1392,15 +1676,11 @@ async function getScheduleState() {
         url,
         {
           headers: {
-            apikey:
-              serviceKey,
-
+            apikey: serviceKey,
             Authorization:
               `Bearer ${serviceKey}`,
           },
-
-          cache:
-            "no-store",
+          cache: "no-store",
         }
       );
 
@@ -1412,9 +1692,7 @@ async function getScheduleState() {
       await response.json();
 
     if (
-      !Array.isArray(
-        rows
-      ) ||
+      !Array.isArray(rows) ||
       rows.length === 0
     ) {
       return true;
@@ -1450,34 +1728,24 @@ function formatNewsMessage(
       {
         timeZone:
           "Asia/Tehran",
-
         year:
           "numeric",
-
         month:
           "2-digit",
-
         day:
           "2-digit",
-
         hour:
           "2-digit",
-
         minute:
           "2-digit",
-
         second:
           "2-digit",
-
         hour12:
           false,
       }
-    ).format(
-      sentAt
-    );
+    ).format(sentAt);
 
-  const lines:
-    string[] = [];
+  const lines: string[] = [];
 
   lines.push(
     "📰 خلاصه اخبار ثبت احوال در رسانه‌های ایران"
@@ -1519,9 +1787,7 @@ function formatNewsMessage(
     "🇮🇷 منابع فقط از رسانه‌های معتبر داخل ایران انتخاب شده‌اند."
   );
 
-  return lines.join(
-    "\n"
-  );
+  return lines.join("\n");
 }
 
 export async function GET(
@@ -1534,22 +1800,13 @@ export async function GET(
     const scheduleEnabled =
       await getScheduleState();
 
-    if (
-      !scheduleEnabled
-    ) {
+    if (!scheduleEnabled) {
       return NextResponse.json({
-        ok:
-          true,
-
-        cancelled:
-          true,
-
-        sent:
-          false,
-
+        ok: true,
+        cancelled: true,
+        sent: false,
         reason:
           "schedule_news_disabled",
-
         runtime_ms:
           Date.now() -
           startedAt,
@@ -1582,7 +1839,7 @@ export async function GET(
       );
 
     /*
-     * اگر خبر مرتبط نداریم:
+     * اگر خبر مرتبط وجود ندارد:
      * هیچ پیام بله‌ای ارسال نمی‌شود.
      */
     if (
@@ -1591,25 +1848,16 @@ export async function GET(
         MIN_MEDIA
     ) {
       return NextResponse.json({
-        ok:
-          true,
-
-        cancelled:
-          false,
-
-        sent:
-          false,
-
+        ok: true,
+        cancelled: false,
+        sent: false,
         reason:
           "no_relevant_iranian_media",
 
         news: {
           totalFetched:
             result.diagnostics.reduce(
-              (
-                total,
-                item
-              ) =>
+              (total, item) =>
                 total +
                 item.parsedItems,
               0
@@ -1617,17 +1865,13 @@ export async function GET(
 
           relevantBeforeWindow:
             result.diagnostics.reduce(
-              (
-                total,
-                item
-              ) =>
+              (total, item) =>
                 total +
                 item.relevantItems,
               0
             ),
 
-          selected:
-            0,
+          selected: 0,
 
           mediaCount:
             mediaSet.size,
@@ -1684,25 +1928,18 @@ export async function GET(
         {
           timeZone:
             "Asia/Tehran",
-
           year:
             "numeric",
-
           month:
             "2-digit",
-
           day:
             "2-digit",
-
           hour:
             "2-digit",
-
           minute:
             "2-digit",
-
           second:
             "2-digit",
-
           hour12:
             false,
         }
@@ -1711,14 +1948,9 @@ export async function GET(
       );
 
     return NextResponse.json({
-      ok:
-        true,
-
-      cancelled:
-        false,
-
-      sent:
-        true,
+      ok: true,
+      cancelled: false,
+      sent: true,
 
       sent_at:
         actualSentAt.toISOString(),
@@ -1726,18 +1958,14 @@ export async function GET(
       sent_at_tehran:
         sentAtTehran,
 
-      bale_status:
-        200,
+      bale_status: 200,
 
       bale,
 
       news: {
         totalFetched:
           result.diagnostics.reduce(
-            (
-              total,
-              item
-            ) =>
+            (total, item) =>
               total +
               item.parsedItems,
             0
@@ -1745,10 +1973,7 @@ export async function GET(
 
         relevantBeforeWindow:
           result.diagnostics.reduce(
-            (
-              total,
-              item
-            ) =>
+            (total, item) =>
               total +
               item.relevantItems,
             0
@@ -1791,11 +2016,8 @@ export async function GET(
   } catch (error) {
     return NextResponse.json(
       {
-        ok:
-          false,
-
-        sent:
-          false,
+        ok: false,
+        sent: false,
 
         error:
           error instanceof Error
@@ -1807,9 +2029,8 @@ export async function GET(
           startedAt,
       },
       {
-        status:
-          500,
+        status: 500,
       }
     );
   }
-    }
+  }
