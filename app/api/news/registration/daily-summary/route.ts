@@ -350,81 +350,157 @@ function jalaliToGregorian(
     return null;
   }
 
-  const gyBase = jy <= 979 ? 621 : 1600;
-  const jyBase = jy <= 979 ? jy : jy - 979;
+  const div = (a: number, b: number) =>
+    Math.floor(a / b);
 
-  let days =
-    365 * jyBase +
-    Math.floor(jyBase / 33) * 8 +
-    Math.floor((jyBase % 33 + 3) / 4);
+  const mod = (a: number, b: number) =>
+    a - Math.floor(a / b) * b;
 
-  if (jm < 7) {
-    days += (jm - 1) * 31;
-  } else {
-    days += (jm - 7) * 30 + 186;
+  const breaks = [
+    -61,
+    9,
+    38,
+    199,
+    426,
+    686,
+    756,
+    818,
+    1111,
+    1181,
+    1210,
+    1635,
+    2060,
+    2097,
+    2192,
+    2262,
+    2347,
+    2380,
+    2455,
+    3178,
+  ];
+
+  const bl = breaks.length;
+
+  let gy = jy + 621;
+  let leapJ = -14;
+  let jp = breaks[0];
+  let jmBreak = 0;
+  let jump = 0;
+
+  for (let i = 1; i < bl; i++) {
+    jmBreak = breaks[i];
+    jump = jmBreak - jp;
+
+    if (jy < jmBreak) {
+      break;
+    }
+
+    leapJ +=
+      div(jump, 33) * 8 +
+      div(mod(jump, 33) + 3, 4);
+
+    jp = jmBreak;
   }
 
-  days += jd - 1;
+  let n = jy - jp;
 
-  let gy = gyBase + 400 * Math.floor(days / 146097);
-  days %= 146097;
+  leapJ +=
+    div(n, 33) * 8 +
+    div(mod(n, 33) + 3, 4);
 
-  if (days >= 36525) {
-    days--;
+  if (
+    mod(jump, 33) === 4 &&
+    jump - n === 4
+  ) {
+    leapJ++;
+  }
 
-    gy += 100 * Math.floor(days / 36524);
-    days %= 36524;
+  const leapG =
+    div(gy, 4) -
+    div((div(gy, 100) + 1) * 3, 4) -
+    150;
 
-    if (days >= 365) {
-      days++;
+  const march =
+    20 + leapJ - leapG;
+
+  let dayOfYear: number;
+
+  if (jm <= 6) {
+    dayOfYear =
+      (jm - 1) * 31 +
+      (jd - 1);
+  } else {
+    dayOfYear =
+      186 +
+      (jm - 7) * 30 +
+      (jd - 1);
+  }
+
+  let gregorianYear = gy;
+  let gregorianMonth = 3;
+  let gregorianDay = march;
+
+  let remaining = dayOfYear;
+
+  const daysRemainingInMarch =
+    31 - march;
+
+  if (remaining <= daysRemainingInMarch) {
+    gregorianDay += remaining;
+  } else {
+    remaining -=
+      daysRemainingInMarch + 1;
+
+    gregorianMonth = 4;
+    gregorianDay = 1;
+
+    const monthDays = [
+      30,
+      31,
+      30,
+      31,
+      31,
+      30,
+      31,
+      30,
+      31,
+    ];
+
+    for (const daysInMonth of monthDays) {
+      if (remaining < daysInMonth) {
+        gregorianDay += remaining;
+        remaining = 0;
+        break;
+      }
+
+      remaining -= daysInMonth;
+      gregorianMonth++;
+
+      if (gregorianMonth === 13) {
+        gregorianYear++;
+        gregorianMonth = 1;
+      }
+    }
+
+    if (remaining > 0) {
+      gregorianDay += remaining;
     }
   }
 
-  gy += 4 * Math.floor(days / 1461);
-  days %= 1461;
-
-  if (days >= 366) {
-    gy += Math.floor((days - 1) / 365);
-    days = (days - 1) % 365;
-  }
-
-  const gd = days + 1;
-
-  const leap =
-    gy % 4 === 0 &&
-    (gy % 100 !== 0 || gy % 400 === 0);
-
-  const monthDays = [
-    31,
-    leap ? 29 : 28,
-    31,
-    30,
-    31,
-    30,
-    31,
-    31,
-    30,
-    31,
-    30,
-    31,
-  ];
-
-  let gm = 1;
-  let remaining = gd;
-
-  while (
-    gm <= 12 &&
-    remaining > monthDays[gm - 1]
+  if (
+    gregorianMonth < 1 ||
+    gregorianMonth > 12 ||
+    gregorianDay < 1 ||
+    gregorianDay > 31
   ) {
-    remaining -= monthDays[gm - 1];
-    gm++;
+    return null;
   }
 
   return new Date(
     Date.UTC(
-      gy,
-      gm - 1,
-      remaining,
+      gregorianYear,
+      gregorianMonth - 1,
+      gregorianDay,
       hour - 3,
       minute - 30,
       0
@@ -563,10 +639,6 @@ function parseFeed(
       continue;
     }
 
-    /*
-     * اگر تاریخ RSS معتبر نیست، از تاریخ URL
-     * برای تسنیم استفاده می‌کنیم.
-     */
     let publishedAt = published || undefined;
 
     if (!publishedAt && /tasnimnews\./i.test(domain)) {
@@ -725,10 +797,6 @@ function isRelevantNews(
   );
 }
 
-/*
- * بازه گزارش:
- * 22:30 تهران تا 22:30 روز بعد
- */
 function getReportWindow() {
   const now = new Date();
 
@@ -760,9 +828,6 @@ function getReportWindow() {
   const hour = getPart("hour");
   const minute = getPart("minute");
 
-  /*
-   * 19:00 UTC = 22:30 تهران
-   */
   let end = new Date(
     Date.UTC(
       year,
@@ -1867,4 +1932,4 @@ export async function GET(
       }
     );
   }
-}
+    }
