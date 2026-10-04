@@ -11,6 +11,8 @@ const schedules = [
     time: "۰۸:۱۵ تهران",
     description:
       "ارسال خودکار تقویم روزانه، مناسبت‌ها و زمان واقعی ارسال",
+    cancelLabel: "🛑 لغو تقویم",
+    enableLabel: "▶️ فعال‌سازی تقویم",
   },
   {
     kind: "news" as ScheduleKind,
@@ -18,6 +20,8 @@ const schedules = [
     time: "۲۲:۳۰ تهران",
     description:
       "خلاصه روزانه اخبار ثبت احوال از رسانه‌های معتبر",
+    cancelLabel: "🛑 لغو اخبار ثبت احوال",
+    enableLabel: "▶️ فعال‌سازی اخبار ثبت احوال",
   },
 ];
 
@@ -104,10 +108,20 @@ export default function ManagerPage() {
   ) {
     const next = !states[kind];
 
+    const schedule = schedules.find(
+      (item) => item.kind === kind
+    );
+
+    const actionLabel = next
+      ? schedule?.enableLabel ||
+        "فعال‌سازی ارسال"
+      : schedule?.cancelLabel ||
+        "لغو ارسال";
+
     const confirmed = window.confirm(
       next
-        ? "ارسال خودکار این بخش دوباره فعال شود؟"
-        : "آیا ارسال خودکار این بخش لغو شود؟"
+        ? `«${actionLabel}» انجام شود؟`
+        : `آیا «${actionLabel}» انجام شود؟`
     );
 
     if (!confirmed) return;
@@ -150,8 +164,8 @@ export default function ManagerPage() {
 
       setMessage(
         next
-          ? "✅ ارسال خودکار فعال شد."
-          : "🛑 ارسال خودکار این مورد لغو شد."
+          ? `✅ ${schedule?.title || "ارسال"} فعال شد.`
+          : `🛑 ${schedule?.title || "ارسال"} لغو شد.`
       );
     } catch (error: any) {
       setMessage(
@@ -335,8 +349,9 @@ export default function ManagerPage() {
 
                 </div>
 
-                {/* CANCEL / ENABLE BUTTON */}
+                {/* دکمه اختصاصی لغو/فعال‌سازی */}
                 <button
+                  type="button"
                   onClick={() =>
                     toggleSchedule(
                       schedule.kind
@@ -364,6 +379,8 @@ export default function ManagerPage() {
                       "inherit",
                     fontWeight:
                       "bold",
+                    fontSize:
+                      "15px",
                     cursor:
                       saving ===
                       schedule.kind
@@ -380,8 +397,8 @@ export default function ManagerPage() {
                   schedule.kind
                     ? "در حال ثبت..."
                     : enabled
-                    ? "🛑 لغو ارسال"
-                    : "▶️ فعال‌سازی ارسال"}
+                    ? schedule.cancelLabel
+                    : schedule.enableLabel}
                 </button>
 
               </div>
@@ -402,6 +419,8 @@ export default function ManagerPage() {
                 "12px",
               background:
                 "#f5f7fb",
+              lineHeight:
+                "2",
             }}
           >
             {message}
@@ -465,6 +484,7 @@ export default function ManagerPage() {
         />
 
         <button
+          type="button"
           onClick={analyze}
           disabled={
             loading ||
@@ -711,4 +731,4 @@ export default function ManagerPage() {
 
     </main>
   );
-              }
+        }
