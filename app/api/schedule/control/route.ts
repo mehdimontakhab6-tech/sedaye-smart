@@ -1,11 +1,13 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
+export const dynamic = "force-dynamic";
+
 type ScheduleKey = "calendar" | "news";
 
 function getSupabaseConfig(env: CloudflareEnv) {
   return {
     url: env.NEXT_PUBLIC_SUPABASE_URL,
-    key: env.SUPABASE_SERVICE_ROLE_KEY
+    serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
   };
 }
 
@@ -14,25 +16,52 @@ async function getSetting(
   key: string,
   fallback = true
 ) {
-  const { url, key: serviceKey } = getSupabaseConfig(env);
+  const { url, serviceKey } =
+    getSupabaseConfig(env);
+
+  if (!url || !serviceKey) {
+    throw new Error(
+      "تنظیمات Supabase در Cloudflare کامل نیست."
+    );
+  }
 
   const response = await fetch(
-    `${url}/rest/v1/settings?select=key,value&key=eq.${encodeURIComponent(key)}&limit=1`,
+    `${url}/rest/v1/settings?select=key,value&key=eq.${encodeURIComponent(
+      key
+    )}&limit=1`,
     {
+      method: "GET",
+      cache: "no-store",
       headers: {
         apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`
-      }
+        Authorization: `Bearer ${serviceKey}`,
+        Accept: "application/json",
+      },
     }
   );
 
+  const text = await response.text();
+
   if (!response.ok) {
-    return fallback;
+    throw new Error(
+      `Supabase GET ${response.status}: ${text}`
+    );
   }
 
-  const rows = await response.json();
+  let rows: any;
 
-  if (!Array.isArray(rows) || !rows.length) {
+  try {
+    rows = JSON.parse(text);
+  } catch {
+    throw new Error(
+      "پاسخ Supabase قابل خواندن نیست."
+    );
+  }
+
+  if (
+    !Array.isArray(rows) ||
+    rows.length === 0
+  ) {
     return fallback;
   }
 
@@ -44,7 +73,14 @@ async function setSetting(
   key: string,
   enabled: boolean
 ) {
-  const { url, key: serviceKey } = getSupabaseConfig(env);
+  const { url, serviceKey } =
+    getSupabaseConfig(env);
+
+  if (!url || !serviceKey) {
+    throw new Error(
+      "تنظیمات Supabase در Cloudflare کامل نیست."
+    );
+  }
 
   const response = await fetch(
     `${url}/rest/v1/settings?on_conflict=key`,
@@ -54,63 +90,90 @@ async function setSetting(
         apikey: serviceKey,
         Authorization: `Bearer ${serviceKey}`,
         "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=representation"
+        Prefer:
+          "resolution=merge-duplicates,return=representation",
       },
       body: JSON.stringify({
         key,
         value: String(enabled),
-        updated_at: new Date().toISOString()
-      })
+        updated_at: new Date().toISOString(),
+      }),
     }
   );
 
+  const text = await response.text();
+
   if (!response.ok) {
-    const errorText = await response.text();
     throw new Error(
-      `Supabase setting update failed: ${response.status} ${errorText}`
+      `Supabase POST ${response.status}: ${text}`
     );
   }
+
+  return text;
 }
 
 export async function GET() {
   try {
-    const { env } = await getCloudflareContext();
+    const { env } =
+      await getCloudflareContext({
+        async: true,
+      });
 
-    const calendar = await getSetting(
-      env,
-      "schedule_calendar",
-      true
+    const calendar =
+      await getSetting(
+        env,
+        "schedule_calendar",
+        true
+      );
+
+    const news =
+      await getSetting(
+        env,
+        "schedule_news",
+        true
+      );
+
+    return Response.json(
+      {
+        ok: true,
+        calendar,
+        news,
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate",
+        },
+      }
     );
-
-    const news = await getSetting(
-      env,
-      "schedule_news",
-      true
-    );
-
-    return Response.json({
-      ok: true,
-      calendar,
-      news
-    });
   } catch (error) {
-    console.error("[schedule/control] GET error:", error);
+    console.error(
+      "[schedule/control] GET error:",
+      error
+    );
 
     return Response.json(
       {
         ok: false,
-        error: "خواندن وضعیت ارسال‌های زمان‌بندی‌شده انجام نشد."
+        error:
+          error instanceof Error
+            ? error.message
+            : "خواندن وضعیت ارسال‌های زمان‌بندی‌شده انجام نشد.",
       },
       { status: 500 }
     );
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request
+) {
   try {
     const body = await request.json();
 
-    const schedule = body?.schedule as ScheduleKey;
+    const schedule =
+      body?.schedule as ScheduleKey;
+
     const enabled = body?.enabled;
 
     if (
@@ -120,23 +183,29 @@ export async function POST(request: Request) {
       return Response.json(
         {
           ok: false,
-          error: "نوع ارسال نامعتبر است."
+          error: "نوع ارسال نامعتبر است.",
         },
         { status: 400 }
       );
     }
 
-    if (typeof enabled !== "boolean") {
+    if (
+      typeof enabled !== "boolean"
+    ) {
       return Response.json(
         {
           ok: false,
-          error: "وضعیت ارسال نامعتبر است."
+          error:
+            "وضعیت ارسال نامعتبر است.",
         },
         { status: 400 }
       );
     }
 
-    const { env } = await getCloudflareContext();
+    const { env } =
+      await getCloudflareContext({
+        async: true,
+      });
 
     const settingKey =
       schedule === "calendar"
@@ -149,18 +218,31 @@ export async function POST(request: Request) {
       enabled
     );
 
-    return Response.json({
-      ok: true,
-      schedule,
-      enabled
-    });
+    return Response.json(
+      {
+        ok: true,
+        schedule,
+        enabled,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
   } catch (error) {
-    console.error("[schedule/control] POST error:", error);
+    console.error(
+      "[schedule/control] POST error:",
+      error
+    );
 
     return Response.json(
       {
         ok: false,
-        error: "ذخیره وضعیت ارسال انجام نشد."
+        error:
+          error instanceof Error
+            ? error.message
+            : "ذخیره وضعیت ارسال انجام نشد.",
       },
       { status: 500 }
     );
