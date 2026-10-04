@@ -53,7 +53,10 @@ function getPersianDate(date: Date) {
 }
 
 function toPersianNumber(value: number | string) {
-  return String(value).replace(/\d/g, (d) => digits[Number(d)]);
+  return String(value).replace(
+    /\d/g,
+    (d) => digits[Number(d)]
+  );
 }
 
 function getWeekday(date: Date) {
@@ -104,7 +107,14 @@ function getPersianZodiac(month: number) {
 }
 
 function getMoonPhase(date: Date) {
-  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
+  const knownNewMoon = Date.UTC(
+    2000,
+    0,
+    6,
+    18,
+    14
+  );
+
   const synodicMonth = 29.530588853;
 
   const age =
@@ -116,13 +126,26 @@ function getMoonPhase(date: Date) {
       ? age + synodicMonth
       : age;
 
-  if (normalized < 1.85) return "ماه نو 🌑";
-  if (normalized < 7.38) return "هلال افزاینده 🌒";
-  if (normalized < 9.22) return "ربع اول 🌓";
-  if (normalized < 14.77) return "تربیع افزاینده 🌔";
-  if (normalized < 16.61) return "ماه کامل 🌕";
-  if (normalized < 22.15) return "تربیع کاهنده 🌖";
-  if (normalized < 23.99) return "ربع آخر 🌗";
+  if (normalized < 1.85)
+    return "ماه نو 🌑";
+
+  if (normalized < 7.38)
+    return "هلال افزاینده 🌒";
+
+  if (normalized < 9.22)
+    return "ربع اول 🌓";
+
+  if (normalized < 14.77)
+    return "تربیع افزاینده 🌔";
+
+  if (normalized < 16.61)
+    return "ماه کامل 🌕";
+
+  if (normalized < 22.15)
+    return "تربیع کاهنده 🌖";
+
+  if (normalized < 23.99)
+    return "ربع آخر 🌗";
 
   return "هلال کاهنده 🌘";
 }
@@ -173,13 +196,32 @@ async function getEvents(persianYear: number) {
 
     const data = await response.json();
 
-    if (Array.isArray(data)) return data;
+    const events: any[] = [];
 
-    if (Array.isArray(data?.events)) {
-      return data.events;
+    if (Array.isArray(data)) {
+      return data;
     }
 
-    return [];
+    const yearData =
+      data?.[String(persianYear)];
+
+    if (Array.isArray(yearData)) {
+      for (const monthData of yearData) {
+        if (Array.isArray(monthData?.events)) {
+          events.push(
+            ...monthData.events
+          );
+        }
+      }
+    }
+
+    if (Array.isArray(data?.events)) {
+      events.push(
+        ...data.events
+      );
+    }
+
+    return events;
   } catch {
     return [];
   }
@@ -197,16 +239,39 @@ function getEventsForDay(
       ""
     );
 
-    const normalizedDate = normalize(jDate);
+    const normalizedDate =
+      normalize(jDate);
 
-    const match = normalizedDate.match(
-      /(\d{1,2})[\/\-](\d{1,2})/
+    const match =
+      normalizedDate.match(
+        /^(?:\d{4}[\/\-])?(\d{1,2})[\/\-](\d{1,2})$/
+      );
+
+    if (match) {
+      const month = Number(match[1]);
+      const day = Number(match[2]);
+
+      if (
+        month === persianMonth &&
+        day === persianDay
+      ) {
+        return true;
+      }
+    }
+
+    const month = Number(
+      event?.jMonth ??
+      event?.month ??
+      event?.persianMonth ??
+      0
     );
 
-    if (!match) return false;
-
-    const month = Number(match[1]);
-    const day = Number(match[2]);
+    const day = Number(
+      event?.jDay ??
+      event?.day ??
+      event?.persianDay ??
+      0
+    );
 
     return (
       month === persianMonth &&
@@ -219,7 +284,11 @@ function getHoliday(events: any[]) {
   return events.some(
     (event) =>
       event?.isHoliday === true ||
+      event?.isHoliday === 1 ||
+      event?.isHoliday === "1" ||
       event?.holiday === true ||
+      event?.holiday === 1 ||
+      event?.holiday === "1" ||
       event?.is_holiday === true
   );
 }
@@ -230,6 +299,8 @@ function getEventText(events: any[]) {
       String(
         event?.text ||
         event?.title ||
+        event?.name ||
+        event?.description ||
         ""
       ).trim()
     )
@@ -244,7 +315,8 @@ export async function GET() {
         async: true
       });
 
-    const token = env?.BALE_SMART_TOKEN;
+    const token =
+      env?.BALE_SMART_TOKEN;
 
     const chatId = String(
       env?.BALE_GROUP_ID || ""
@@ -322,7 +394,6 @@ export async function GET() {
         todayEvents
       );
 
-    // ثبت زمان واقعی درست قبل از ارسال پیام به بله
     const sendTehran =
       getTehranParts();
 
@@ -342,15 +413,21 @@ export async function GET() {
 
       `🇮🇷 تاریخ شمسی: ` +
       `${toPersianNumber(persian.year)}/` +
-      `${toPersianNumber(String(persian.month).padStart(2, "0"))}/` +
-      `${toPersianNumber(String(persian.day).padStart(2, "0"))}\n` +
+      `${toPersianNumber(
+        String(persian.month).padStart(2, "0")
+      )}/` +
+      `${toPersianNumber(
+        String(persian.day).padStart(2, "0")
+      )}\n` +
 
       `🌍 تاریخ میلادی: ${gregorian}\n` +
 
       `🌙 تاریخ قمری: ${hijriText}\n` +
 
       `⏰ زمان واقعی ارسال: ` +
-      `${sendTehran.hour}:${sendTehran.minute}:${sendTehran.second}\n` +
+      `${sendTehran.hour}:` +
+      `${sendTehran.minute}:` +
+      `${sendTehran.second}\n` +
 
       `🗓️ روز هفته: ${weekday}\n` +
 
@@ -418,7 +495,6 @@ export async function GET() {
     });
 
   } catch (error) {
-
     return NextResponse.json(
       {
         ok: false,
@@ -433,4 +509,4 @@ export async function GET() {
       }
     );
   }
-  }
+}
