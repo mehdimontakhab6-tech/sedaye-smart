@@ -1431,13 +1431,13 @@ async function fetchSpecialSource(
         )
       );
 
-    const candidates =
-      results.filter(
-        (
-          item
-        ): item is Candidate =>
-          item !== null
-      );
+    const candidates = rawCandidates.filter(
+  (
+    item
+  ): item is Candidate =>
+    item !== null &&
+    typeof item.publishedAt === "string"
+);
 
     diagnostics.parsedItems =
       candidates.length;
