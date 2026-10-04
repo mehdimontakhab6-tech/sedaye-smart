@@ -18,7 +18,7 @@ function getTehranParts() {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false
+    hour12: false,
   }).formatToParts(now);
 
   const get = (type: string) =>
@@ -30,7 +30,7 @@ function getTehranParts() {
     day: Number(get("day")),
     hour: get("hour"),
     minute: get("minute"),
-    second: get("second")
+    second: get("second"),
   };
 }
 
@@ -41,7 +41,7 @@ function getPersianDate(date: Date) {
       timeZone: TIME_ZONE,
       year: "numeric",
       month: "2-digit",
-      day: "2-digit"
+      day: "2-digit",
     }
   ).formatToParts(date);
 
@@ -51,7 +51,7 @@ function getPersianDate(date: Date) {
   return {
     year: Number(normalize(get("year"))),
     month: Number(normalize(get("month"))),
-    day: Number(normalize(get("day")))
+    day: Number(normalize(get("day"))),
   };
 }
 
@@ -65,7 +65,7 @@ function toPersianNumber(value: number | string) {
 function getWeekday(date: Date) {
   return new Intl.DateTimeFormat("fa-IR", {
     timeZone: TIME_ZONE,
-    weekday: "long"
+    weekday: "long",
   }).format(date);
 }
 
@@ -97,7 +97,7 @@ function getYearProgress(
     percent: (
       (dayOfYear / totalDays) *
       100
-    ).toFixed(1)
+    ).toFixed(1),
   };
 }
 
@@ -114,7 +114,7 @@ function getPersianZodiac(month: number) {
     "قوس ♐",
     "جدی ♑",
     "دلو ♒",
-    "حوت ♓"
+    "حوت ♓",
   ];
 
   return signs[month - 1] || "";
@@ -173,8 +173,8 @@ async function getHijriDate(
       `https://api.aladhan.com/v1/gToH?date=${gregorian}`,
       {
         headers: {
-          Accept: "application/json"
-        }
+          Accept: "application/json",
+        },
       }
     );
 
@@ -191,7 +191,7 @@ async function getHijriDate(
         hijri.month?.ar ||
         hijri.month?.en ||
         "",
-      year: hijri.year
+      year: hijri.year,
     };
   } catch {
     return null;
@@ -206,8 +206,8 @@ async function getEvents(
       `https://hmarzban.github.io/pipe2time.ir/api/${persianYear}/events.json`,
       {
         headers: {
-          Accept: "application/json"
-        }
+          Accept: "application/json",
+        },
       }
     );
 
@@ -331,7 +331,197 @@ function getEventText(events: any[]) {
     .slice(0, 8);
 }
 
+/* ---------------------------------------
+   سخن بزرگان
+   --------------------------------------- */
+
+const GREAT_QUOTES = [
+  {
+    text: "آنچه می‌دانم این است که هیچ چیز نمی‌دانم.",
+    author: "سقراط",
+  },
+  {
+    text: "کیفیت زندگی ما به کیفیت پرسش‌هایی که می‌پرسیم وابسته است.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "دانش زمانی ارزشمندتر می‌شود که در عمل به کار گرفته شود.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "راه هزار کیلومتری با یک قدم آغاز می‌شود.",
+    author: "لائوتسه",
+  },
+  {
+    text: "خودت را بشناس؛ آغاز بسیاری از دانایی‌ها از همین‌جاست.",
+    author: "نقل به مضمون از سنت فلسفی یونان",
+  },
+  {
+    text: "بهترین زمان برای آغاز یک کار خوب، همین امروز است.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "انسان با اندیشه‌هایش ساخته می‌شود.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "آینده متعلق به کسانی است که امروز برای آن آماده می‌شوند.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "آرامش از جایی آغاز می‌شود که پذیرش را یاد می‌گیریم.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "هر دانشی که به عمل نرسد، فرصت رشد خود را از دست می‌دهد.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "برای تغییر جهان، نخست باید از خود آغاز کرد.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "گفت‌وگو پلی است میان انسان‌ها، حتی وقتی دیدگاه‌ها متفاوت است.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "پشتکار، فاصله میان تصمیم و نتیجه را کوتاه می‌کند.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "اشتباه می‌تواند آغاز یادگیری باشد، اگر از آن بیاموزیم.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "آدمی با انتخاب‌های روزانه‌اش آینده خود را می‌سازد.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "هیچ پیشرفتی بدون یادگیری و بازنگری پایدار نمی‌ماند.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "خرد فقط دانستن نیست؛ درست به‌کار بردن دانسته‌هاست.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "شنیدن واقعی، بخشی از هنر درست پاسخ دادن است.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "تغییرهای کوچک و پیوسته می‌توانند نتیجه‌های بزرگ بسازند.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "انسان زمانی رشد می‌کند که از پرسیدن نترسد.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "هر روز فرصتی برای بهتر کردن یک چیز کوچک است.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "مسئولیت‌پذیری، آغاز اعتمادسازی است.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "بهترین تصمیم همیشه آسان‌ترین تصمیم نیست.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "گاهی یک نگاه تازه، مسئله‌ای قدیمی را حل می‌کند.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "آگاهی نخستین گام برای ساختن تغییر پایدار است.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "آینده را کسانی می‌سازند که امروز مسئولانه عمل می‌کنند.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "همکاری زمانی قدرتمند است که هرکس سهم خود را درست انجام دهد.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "تجربه زمانی ارزشمند است که به بینش تبدیل شود.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "صبر، به معنای ایستادن نیست؛ یعنی ادامه دادن با آرامش.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "هر پاسخ خوب، از یک پرسش خوب آغاز می‌شود.",
+    author: "نقل به مضمون",
+  },
+  {
+    text: "دانایی با فروتنی کامل‌تر می‌شود.",
+    author: "نقل به مضمون",
+  },
+];
+
+/* ---------------------------------------
+   جرعه‌ای تفکر
+   --------------------------------------- */
+
+const THOUGHTS = [
+  "امروز فقط یک قدم کوچک بردار؛ مسیرهای بزرگ از قدم‌های کوچک ساخته می‌شوند.",
+  "قبل از پاسخ دادن، یک لحظه بیشتر گوش بده؛ شاید نکته اصلی همان‌جا باشد.",
+  "گاهی بهترین راه حل، نگاه کردن به مسئله از زاویه‌ای تازه است.",
+  "امروز یک کار را بهتر از دیروز انجام بده؛ همین کافی است.",
+  "آرامش یعنی بدانیم همه چیز را نمی‌توانیم کنترل کنیم، اما واکنش خود را می‌توانیم.",
+  "هر گفت‌وگوی خوب می‌تواند آغاز یک تغییر خوب باشد.",
+  "اگر چیزی ارزشمند است، برای بهتر شدنش زمان بگذار.",
+  "پیشرفت همیشه بزرگ و چشمگیر نیست؛ گاهی فقط یک انتخاب درست است.",
+  "امروز از خودت بپرس: چه چیزی را می‌توانم ساده‌تر انجام دهم؟",
+  "گاهی لازم نیست سریع‌تر حرکت کنیم؛ لازم است درست‌تر حرکت کنیم.",
+  "یک تصمیم کوچک امروز می‌تواند نتیجه بزرگی در آینده بسازد.",
+  "به جای تمرکز بر اینکه چه کسی مقصر است، ببین چگونه می‌توان مسئله را حل کرد.",
+  "یادگیری زمانی آغاز می‌شود که با اطمینان بگوییم: شاید راه بهتری هم وجود داشته باشد.",
+  "امروز فرصتی است برای ساختن چیزی که فردای بهتر به آن نیاز دارد.",
+  "هر انسانی چیزی برای آموختن و چیزی برای آموختن دادن دارد.",
+  "اگر راهی جواب نداد، خودت را سرزنش نکن؛ راه دیگری را امتحان کن.",
+  "گاهی یک جمله محترمانه می‌تواند فضای یک گفت‌وگو را کاملاً تغییر دهد.",
+  "به چیزهایی توجه کن که هر روز تکرار می‌کنی؛ آینده از همین تکرارها ساخته می‌شود.",
+  "مسائل پیچیده همیشه با راه‌حل‌های پیچیده حل نمی‌شوند.",
+  "امروز یک کار ناتمام را یک قدم جلو ببر.",
+  "در میان شتاب روزانه، چند دقیقه برای فکر کردن کنار بگذار.",
+  "به جای انتظار برای شرایط کامل، با امکانات موجود بهترین کار ممکن را انجام بده.",
+  "تفاوت میان دانستن و توانستن، تمرین است.",
+  "اگر می‌خواهی تغییری ببینی، سهم خودت در آن تغییر را پیدا کن.",
+  "گاهی بهترین پیشرفت، حذف یک عادت غیرضروری است.",
+  "آدم‌ها بیشتر از پاسخ کامل، به شنیده شدن واقعی نیاز دارند.",
+  "امروز می‌تواند روزی باشد که یک مسئله قدیمی را با روشی تازه ببینی.",
+  "هر تصمیم خوب، هم به عقل نیاز دارد و هم به مسئولیت‌پذیری.",
+  "برای ساختن اعتماد، ثبات در رفتار از حرف‌های بزرگ مهم‌تر است.",
+  "آخر روز از خودت بپرس: امروز چه چیزی آموختم؟",
+];
+
+/* ---------------------------------------
+   انتخاب پیام روز
+   --------------------------------------- */
+
+function getDailyContent(
+  dayOfYear: number
+) {
+  const index =
+    (dayOfYear - 1) %
+    THOUGHTS.length;
+
+  const quoteIndex =
+    (dayOfYear - 1) %
+    GREAT_QUOTES.length;
+
+  return {
+    thought: THOUGHTS[index],
+    quote: GREAT_QUOTES[quoteIndex],
+  };
+}
+
 /* بررسی فعال بودن ارسال تقویم */
+
 async function isCalendarEnabled(
   env: CloudflareEnv
 ) {
@@ -356,8 +546,8 @@ async function isCalendarEnabled(
         headers: {
           apikey: serviceKey,
           Authorization:
-            `Bearer ${serviceKey}`
-        }
+            `Bearer ${serviceKey}`,
+        },
       }
     );
 
@@ -395,7 +585,7 @@ export async function GET() {
   try {
     const { env } =
       await getCloudflareContext({
-        async: true
+        async: true,
       });
 
     /* اگر ارسال تقویم لغو شده باشد */
@@ -412,7 +602,7 @@ export async function GET() {
         cancelled: true,
         sent: false,
         message:
-          "ارسال تقویم لغو شده است."
+          "ارسال تقویم لغو شده است.",
       });
     }
 
@@ -428,10 +618,10 @@ export async function GET() {
         {
           ok: false,
           error:
-            "BALE_SMART_TOKEN یا BALE_GROUP_ID تنظیم نشده است."
+            "BALE_SMART_TOKEN یا BALE_GROUP_ID تنظیم نشده است.",
         },
         {
-          status: 500
+          status: 500,
         }
       );
     }
@@ -495,6 +685,13 @@ export async function GET() {
         todayEvents
       );
 
+    /* پیام اختصاصی همان روز */
+    const dailyContent =
+      getDailyContent(
+        progress.dayOfYear
+      );
+
+    /* زمان واقعی درست قبل از ارسال */
     const sendTehran =
       getTehranParts();
 
@@ -510,6 +707,7 @@ export async function GET() {
 
     const message =
       `☀️ روزت پر از اتفاقات خوب\n\n` +
+
       `📅 تقویم روزانه\n\n` +
 
       `🇮🇷 تاریخ شمسی: ` +
@@ -536,9 +734,13 @@ export async function GET() {
 
       `📊 پیشرفت سال ` +
       `${toPersianNumber(persian.year)}: ` +
-      `روز ${toPersianNumber(progress.dayOfYear)} ` +
-      `از ${toPersianNumber(progress.totalDays)} ` +
-      `— ${toPersianNumber(progress.percent)}٪\n` +
+      `روز ${toPersianNumber(
+        progress.dayOfYear
+      )} از ${toPersianNumber(
+        progress.totalDays
+      )} — ${toPersianNumber(
+        progress.percent
+      )}٪\n` +
 
       `🌙 وضعیت ماه: ${moonPhase}\n` +
 
@@ -549,15 +751,22 @@ export async function GET() {
       `${
         eventsText.length
           ? eventsText
-              .map((e) => `• ${e}`)
+              .map(
+                (e) => `• ${e}`
+              )
               .join("\n")
           : "• مناسبت ثبت‌شده‌ای برای امروز پیدا نشد."
       }\n\n` +
 
+      `💬 سخن بزرگان:\n` +
+
+      `«${dailyContent.quote.text}»\n` +
+
+      `— ${dailyContent.quote.author}\n\n` +
+
       `💭 جرعه‌ای تفکر:\n` +
 
-      `«هر روز فرصتی تازه برای بهتر دیدن، ` +
-      `بهتر اندیشیدن و بهتر ساختن است.»\n\n` +
+      `«${dailyContent.thought}»\n\n` +
 
       `🤝 با هم برای حل مسائل و ساختن فردایی بهتر`;
 
@@ -569,13 +778,13 @@ export async function GET() {
 
           headers: {
             "Content-Type":
-              "application/json"
+              "application/json",
           },
 
           body: JSON.stringify({
             chat_id: chatId,
-            text: message
-          })
+            text: message,
+          }),
         }
       );
 
@@ -590,14 +799,14 @@ export async function GET() {
         result?.ok === true,
 
       cancelled: false,
+
       sent: true,
 
       bale_status:
         response.status,
 
-      bale: result
+      bale: result,
     });
-
   } catch (error) {
     return NextResponse.json(
       {
@@ -606,11 +815,11 @@ export async function GET() {
         error:
           error instanceof Error
             ? error.message
-            : "خطای ناشناخته"
+            : "خطای ناشناخته",
       },
       {
-        status: 500
+        status: 500,
       }
     );
   }
-                       }
+  }
