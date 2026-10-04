@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-const TEHRAN_OFFSET = "+03:30";
 const MAX_NEWS = 20;
 const MIN_MEDIA = 1;
+const REQUEST_TIMEOUT_MS = 8000;
 
 type NewsItem = {
   title: string;
@@ -21,9 +21,7 @@ type Candidate = {
 };
 
 /*
- * فقط رسانه‌های داخلی معتبر ایران
- *
- * هیچ رسانه خارجی در این فهرست وجود ندارد.
+ * فقط رسانه‌های معتبر داخلی ایران
  */
 const TRUSTED_MEDIA: Record<string, string> = {
   "irna.ir": "ایرنا",
@@ -59,11 +57,7 @@ const TRUSTED_MEDIA: Record<string, string> = {
 };
 
 /*
- * دامنه‌هایی که صراحتاً نباید وارد خروجی شوند.
- *
- * این لیست عمداً شامل رسانه‌های خارجی و منابع
- * غیرایرانی است تا حتی اگر موتور جست‌وجو آنها را
- * برگرداند، فیلتر نهایی آنها را حذف کند.
+ * رسانه‌ها و منابع خارجی که نباید وارد خروجی شوند.
  */
 const BLOCKED_DOMAINS = new Set([
   "bbc.com",
@@ -109,7 +103,9 @@ function normalizeDomain(value: string): string {
 function isTrustedIranianMedia(domain: string): boolean {
   const normalized = normalizeDomain(domain);
 
-  if (!normalized) return false;
+  if (!normalized) {
+    return false;
+  }
 
   if (BLOCKED_DOMAINS.has(normalized)) {
     return false;
@@ -119,27 +115,27 @@ function isTrustedIranianMedia(domain: string): boolean {
     return true;
   }
 
-  /*
-   * اجازه زیر دامنه‌های رسانه‌های معتبر را هم می‌دهیم.
-   */
   return Object.keys(TRUSTED_MEDIA).some(
     (trusted) =>
-      normalized.endsWith("." + trusted) ||
-      normalized === trusted
+      normalized.endsWith("." + trusted)
   );
 }
 
-function getMediaName(domain: string, source?: string): string {
+function getMediaName(
+  domain: string,
+  source?: string
+): string {
   const normalized = normalizeDomain(domain);
 
   if (TRUSTED_MEDIA[normalized]) {
     return TRUSTED_MEDIA[normalized];
   }
 
-  const trusted = Object.keys(TRUSTED_MEDIA).find(
+  const trusted = Object.keys(
+    TRUSTED_MEDIA
+  ).find(
     (item) =>
-      normalized.endsWith("." + item) ||
-      normalized === item
+      normalized.endsWith("." + item)
   );
 
   if (trusted) {
@@ -176,7 +172,9 @@ function extractTag(
 
   const match = xml.match(regex);
 
-  return match ? decodeXml(cleanText(match[1])) : "";
+  return match
+    ? decodeXml(cleanText(match[1]))
+    : "";
 }
 
 function extractAttribute(
@@ -191,10 +189,44 @@ function extractAttribute(
 
   const match = xml.match(regex);
 
-  return match ? decodeXml(match[1].trim()) : "";
+  return match
+    ? decodeXml(match[1].trim())
+    : "";
 }
 
-function parseRss(xml: string): Candidate[] {
+/*
+ * درخواست خارجی با Timeout
+ *
+ * اگر سرویس خارجی پاسخ ندهد،
+ * API اصلی معطل نمی‌ماند.
+ */
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/*
+ * استخراج اخبار از RSS
+ */
+function parseRss(
+  xml: string
+): Candidate[] {
   const items: Candidate[] = [];
 
   const matches = xml.match(
@@ -221,7 +253,11 @@ function parseRss(xml: string): Candidate[] {
       extractTag(item, "source");
 
     const sourceUrl =
-      extractAttribute(item, "source", "url");
+      extractAttribute(
+        item,
+        "source",
+        "url"
+      );
 
     if (!title || !link) {
       continue;
@@ -239,7 +275,12 @@ function parseRss(xml: string): Candidate[] {
       continue;
     }
 
-    if (!isTrustedIranianMedia(domain)) {
+    /*
+     * فقط رسانه معتبر داخلی
+     */
+    if (
+      !isTrustedIranianMedia(domain)
+    ) {
       continue;
     }
 
@@ -247,21 +288,33 @@ function parseRss(xml: string): Candidate[] {
       title,
       url: link,
       source:
-        getMediaName(domain, source),
+        getMediaName(
+          domain,
+          source
+        ),
       domain,
-      publishedAt: pubDate || undefined,
+      publishedAt:
+        pubDate || undefined,
     });
   }
 
   return items;
 }
 
-function parseDate(value?: string): Date | null {
-  if (!value) return null;
+function parseDate(
+  value?: string
+): Date | null {
+  if (!value) {
+    return null;
+  }
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
     return null;
   }
 
@@ -269,12 +322,13 @@ function parseDate(value?: string): Date | null {
 }
 
 /*
- * تبدیل زمان ایران به UTC
+ * بازه دقیق گزارش:
  *
- * بازه:
- * 22:30 روز قبل
+ * ۲۲:۳۰ روز قبل تهران
  * تا
- * 22:30 روز جاری
+ * ۲۲:۳۰ روز جاری تهران
+ *
+ * ایران در حال حاضر UTC+3:30 است.
  */
 function getReportWindow(): {
   start: Date;
@@ -284,36 +338,38 @@ function getReportWindow(): {
 } {
   const now = new Date();
 
-  const tehranNow = new Intl.DateTimeFormat(
-    "en-CA",
-    {
-      timeZone: "Asia/Tehran",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }
-  ).formatToParts(now);
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone:
+          "Asia/Tehran",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    ).formatToParts(now);
 
   const year = Number(
-    tehranNow.find(
+    parts.find(
       (x) => x.type === "year"
     )?.value
   );
 
   const month = Number(
-    tehranNow.find(
+    parts.find(
       (x) => x.type === "month"
     )?.value
   );
 
   const day = Number(
-    tehranNow.find(
+    parts.find(
       (x) => x.type === "day"
     )?.value
   );
 
   /*
-   * 22:30 امروز تهران
+   * ۲۲:۳۰ تهران = ۱۹:۰۰ UTC
    */
   const end = new Date(
     Date.UTC(
@@ -326,45 +382,35 @@ function getReportWindow(): {
     )
   );
 
-  /*
-   * 22:30 روز قبل تهران
-   */
   const start = new Date(
     end.getTime() -
       24 * 60 * 60 * 1000
   );
 
+  const formatTehran =
+    (date: Date) =>
+      new Intl.DateTimeFormat(
+        "fa-IR-u-ca-persian",
+        {
+          timeZone:
+            "Asia/Tehran",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }
+      ).format(date);
+
   return {
     start,
     end,
     startTehran:
-      new Intl.DateTimeFormat(
-        "fa-IR-u-ca-persian",
-        {
-          timeZone: "Asia/Tehran",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        }
-      ).format(start),
+      formatTehran(start),
     endTehran:
-      new Intl.DateTimeFormat(
-        "fa-IR-u-ca-persian",
-        {
-          timeZone: "Asia/Tehran",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        }
-      ).format(end),
+      formatTehran(end),
   };
 }
 
@@ -377,7 +423,8 @@ function isInsideWindow(
     return false;
   }
 
-  const time = date.getTime();
+  const time =
+    date.getTime();
 
   return (
     time >= start.getTime() &&
@@ -394,14 +441,8 @@ function normalizeTitle(
       /[\u064B-\u065F\u0670]/g,
       ""
     )
-    .replace(
-      /ي/g,
-      "ی"
-    )
-    .replace(
-      /ك/g,
-      "ک"
-    )
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
     .replace(
       /[^\p{L}\p{N}\s]/gu,
       " "
@@ -413,12 +454,16 @@ function normalizeTitle(
 function dedupeNews(
   items: NewsItem[]
 ): NewsItem[] {
-  const seen = new Set<string>();
+  const seen =
+    new Set<string>();
+
   const result: NewsItem[] = [];
 
   for (const item of items) {
     const key =
-      normalizeTitle(item.title);
+      normalizeTitle(
+        item.title
+      );
 
     if (!key) {
       continue;
@@ -436,235 +481,163 @@ function dedupeNews(
 }
 
 /*
- * GDELT
+ * دریافت اخبار از GDELT
  *
- * GDELT ممکن است منابع خارجی هم برگرداند،
- * اما خروجی نهایی فقط از TRUSTED_MEDIA عبور می‌کند.
+ * فقط یک Query ترکیبی ارسال می‌شود
+ * تا زمان اجرای API کوتاه بماند.
  */
 async function fetchGdelt(
   start: Date,
   end: Date
 ): Promise<Candidate[]> {
-  const queries = [
-    '"ثبت احوال"',
-    '"سازمان ثبت احوال"',
-    '"ثبت احوال کشور"',
-    '"کارت ملی" "ثبت احوال"',
-    '"شناسنامه" "ثبت احوال"',
-  ];
+  const query =
+    '("ثبت احوال" OR "سازمان ثبت احوال" OR "ثبت احوال کشور" OR "کارت ملی" OR "شناسنامه")';
 
   const results: Candidate[] = [];
 
-  for (const query of queries) {
-    const url =
-      "https://api.gdeltproject.org/api/v2/doc/doc" +
-      "?query=" +
-      encodeURIComponent(query) +
-      "&mode=artlist" +
-      "&maxrecords=100" +
-      "&format=json" +
-      "&sort=HybridRel";
+  const url =
+    "https://api.gdeltproject.org/api/v2/doc/doc" +
+    "?query=" +
+    encodeURIComponent(query) +
+    "&mode=artlist" +
+    "&maxrecords=100" +
+    "&format=json" +
+    "&sort=HybridRel";
 
-    try {
-      const response =
-        await fetch(url, {
+  try {
+    const response =
+      await fetchWithTimeout(
+        url,
+        {
           headers: {
             "User-Agent":
               "sedaye-smart/1.0",
           },
           cache: "no-store",
-        });
+        }
+      );
 
-      if (!response.ok) {
+    if (!response.ok) {
+      return [];
+    }
+
+    const data =
+      await response.json();
+
+    const articles =
+      Array.isArray(
+        data?.articles
+      )
+        ? data.articles
+        : [];
+
+    for (
+      const article of articles
+    ) {
+      const title =
+        String(
+          article?.title || ""
+        ).trim();
+
+      const articleUrl =
+        String(
+          article?.url || ""
+        ).trim();
+
+      if (
+        !title ||
+        !articleUrl
+      ) {
         continue;
       }
 
-      const data =
-        await response.json();
+      let finalDomain = "";
 
-      const articles =
-        Array.isArray(data?.articles)
-          ? data.articles
-          : [];
-
-      for (const article of articles) {
-        const title =
-          String(
-            article?.title || ""
-          ).trim();
-
-        const articleUrl =
-          String(
-            article?.url || ""
-          ).trim();
-
-        const domain =
+      try {
+        finalDomain =
           normalizeDomain(
-            String(
-              article?.domain ||
-                article?.sourceCountry ||
-                ""
-            )
+            new URL(
+              articleUrl
+            ).hostname
           );
+      } catch {
+        continue;
+      }
 
-        if (!title || !articleUrl) {
-          continue;
-        }
+      /*
+       * فقط رسانه معتبر داخلی
+       */
+      if (
+        !isTrustedIranianMedia(
+          finalDomain
+        )
+      ) {
+        continue;
+      }
 
-        let finalDomain = domain;
+      const seendate =
+        String(
+          article?.seendate || ""
+        );
 
-        try {
-          finalDomain =
-            normalizeDomain(
-              new URL(articleUrl)
-                .hostname
-            );
-        } catch {
-          continue;
-        }
+      let publishedAt:
+        | string
+        | undefined;
 
-        /*
-         * فقط رسانه‌های معتبر داخلی
-         */
-        if (
-          !isTrustedIranianMedia(
-            finalDomain
-          )
-        ) {
-          continue;
-        }
-
-        const seendate =
-          String(
-            article?.seendate || ""
-          );
-
-        let publishedAt: string | undefined;
-
-        if (
-          /^\d{14}$/.test(seendate)
-        ) {
-          const parsed =
-            new Date(
-              Date.UTC(
-                Number(
-                  seendate.slice(0, 4)
-                ),
-                Number(
-                  seendate.slice(4, 6)
-                ) - 1,
-                Number(
-                  seendate.slice(6, 8)
-                ),
-                Number(
-                  seendate.slice(8, 10)
-                ),
-                Number(
-                  seendate.slice(10, 12)
-                ),
-                Number(
-                  seendate.slice(12, 14)
+      /*
+       * GDELT seendate:
+       * YYYYMMDDHHMMSS
+       */
+      if (
+        /^\d{14}$/.test(
+          seendate
+        )
+      ) {
+        const parsed =
+          new Date(
+            Date.UTC(
+              Number(
+                seendate.slice(
+                  0,
+                  4
+                )
+              ),
+              Number(
+                seendate.slice(
+                  4,
+                  6
+                )
+              ) - 1,
+              Number(
+                seendate.slice(
+                  6,
+                  8
+                )
+              ),
+              Number(
+                seendate.slice(
+                  8,
+                  10
+                )
+              ),
+              Number(
+                seendate.slice(
+                  10,
+                  12
+                )
+              ),
+              Number(
+                seendate.slice(
+                  12,
+                  14
                 )
               )
-            );
-
-          if (
-            isInsideWindow(
-              parsed,
-              start,
-              end
             )
-          ) {
-            publishedAt =
-              parsed.toISOString();
-          } else {
-            continue;
-          }
-        } else {
-          continue;
-        }
-
-        results.push({
-          title,
-          url: articleUrl,
-          source:
-            getMediaName(
-              finalDomain
-            ),
-          domain: finalDomain,
-          publishedAt,
-        });
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return results;
-}
-
-/*
- * Google News RSS به عنوان منبع پشتیبان
- *
- * حتی اگر Google News رسانه خارجی برگرداند،
- * مرحله فیلتر فقط رسانه داخلی معتبر را قبول می‌کند.
- */
-async function fetchGoogleNews(
-  start: Date,
-  end: Date
-): Promise<Candidate[]> {
-  const queries = [
-    '"ثبت احوال"',
-    '"سازمان ثبت احوال"',
-    '"ثبت احوال کشور"',
-    '"کارت ملی" "ثبت احوال"',
-    '"شناسنامه" "ثبت احوال"',
-  ];
-
-  const results: Candidate[] = [];
-
-  for (const query of queries) {
-    const rssUrl =
-      "https://news.google.com/rss/search?q=" +
-      encodeURIComponent(
-        query
-      ) +
-      "&hl=fa&gl=IR&ceid=IR:fa";
-
-    try {
-      const response =
-        await fetch(rssUrl, {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 sedaye-smart",
-          },
-          cache: "no-store",
-        });
-
-      if (!response.ok) {
-        continue;
-      }
-
-      const xml =
-        await response.text();
-
-      const candidates =
-        parseRss(xml);
-
-      for (const candidate of candidates) {
-        const date =
-          parseDate(
-            candidate.publishedAt
           );
 
-        /*
-         * برای رعایت دقیق بازه زمانی،
-         * خبری که تاریخ قابل تشخیص ندارد
-         * پذیرفته نمی‌شود.
-         */
         if (
           !isInsideWindow(
-            date,
+            parsed,
             start,
             end
           )
@@ -672,13 +645,121 @@ async function fetchGoogleNews(
           continue;
         }
 
-        results.push(
-          candidate
-        );
+        publishedAt =
+          parsed.toISOString();
+      } else {
+        continue;
       }
-    } catch {
-      continue;
+
+      results.push({
+        title,
+        url: articleUrl,
+        source:
+          getMediaName(
+            finalDomain
+          ),
+        domain:
+          finalDomain,
+        publishedAt,
+      });
+
+      /*
+       * بیشتر از ۲۰ مورد لازم نیست
+       */
+      if (
+        results.length >=
+        MAX_NEWS
+      ) {
+        break;
+      }
     }
+  } catch {
+    /*
+     * Timeout یا خطای GDELT
+     * نباید کل API را خراب کند.
+     */
+    return [];
+  }
+
+  return results;
+}
+
+/*
+ * Google News RSS به عنوان منبع پشتیبان
+ */
+async function fetchGoogleNews(
+  start: Date,
+  end: Date
+): Promise<Candidate[]> {
+  const query =
+    '("ثبت احوال" OR "سازمان ثبت احوال" OR "ثبت احوال کشور" OR "کارت ملی" OR "شناسنامه")';
+
+  const results: Candidate[] = [];
+
+  const rssUrl =
+    "https://news.google.com/rss/search?q=" +
+    encodeURIComponent(
+      query
+    ) +
+    "&hl=fa&gl=IR&ceid=IR:fa";
+
+  try {
+    const response =
+      await fetchWithTimeout(
+        rssUrl,
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 sedaye-smart",
+          },
+          cache: "no-store",
+        }
+      );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const xml =
+      await response.text();
+
+    const candidates =
+      parseRss(xml);
+
+    for (
+      const candidate of candidates
+    ) {
+      const date =
+        parseDate(
+          candidate.publishedAt
+        );
+
+      /*
+       * تاریخ نامعتبر پذیرفته نمی‌شود.
+       */
+      if (
+        !isInsideWindow(
+          date,
+          start,
+          end
+        )
+      ) {
+        continue;
+      }
+
+      results.push(
+        candidate
+      );
+
+      if (
+        results.length >=
+        MAX_NEWS
+      ) {
+        break;
+      }
+    }
+  } catch {
+    return [];
   }
 
   return results;
@@ -689,7 +770,7 @@ async function getNews(
   end: Date
 ): Promise<NewsItem[]> {
   /*
-   * ابتدا GDELT
+   * مرحله اول: GDELT
    */
   let candidates =
     await fetchGdelt(
@@ -698,8 +779,9 @@ async function getNews(
     );
 
   /*
-   * سپس Google News RSS
-   * در صورت نیاز.
+   * اگر حداقل یک خبر معتبر
+   * پیدا نشد، Google News
+   * به عنوان پشتیبان استفاده می‌شود.
    */
   if (
     candidates.length <
@@ -764,15 +846,15 @@ async function getNews(
       filtered
     );
 
-  /*
-   * حداکثر ۲۰ خبر
-   */
   return unique.slice(
     0,
     MAX_NEWS
   );
 }
 
+/*
+ * ارسال به بله
+ */
 async function sendBaleMessage(
   text: string
 ) {
@@ -782,7 +864,10 @@ async function sendBaleMessage(
   const chatId =
     process.env.BALE_GROUP_ID;
 
-  if (!token || !chatId) {
+  if (
+    !token ||
+    !chatId
+  ) {
     throw new Error(
       "BALE_SMART_TOKEN or BALE_GROUP_ID is missing"
     );
@@ -798,7 +883,8 @@ async function sendBaleMessage(
             "application/json",
         },
         body: JSON.stringify({
-          chat_id: chatId,
+          chat_id:
+            chatId,
           text,
           disable_web_page_preview:
             false,
@@ -823,22 +909,26 @@ async function sendBaleMessage(
   return data;
 }
 
+/*
+ * بررسی فعال بودن زمان‌بندی اخبار
+ */
 async function getScheduleState() {
   const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env
+      .NEXT_PUBLIC_SUPABASE_URL;
 
   const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
 
+  /*
+   * اگر تنظیمات در دسترس نباشد،
+   * ارسال را فعال فرض می‌کنیم.
+   */
   if (
     !supabaseUrl ||
     !serviceKey
   ) {
-    /*
-     * اگر تنظیمات زمان‌بندی در دسترس
-     * نباشد، برای جلوگیری از توقف ناخواسته،
-     * فعال فرض می‌شود.
-     */
     return true;
   }
 
@@ -850,14 +940,19 @@ async function getScheduleState() {
       "&limit=1";
 
     const response =
-      await fetch(url, {
-        headers: {
-          apikey: serviceKey,
-          Authorization:
-            `Bearer ${serviceKey}`,
-        },
-        cache: "no-store",
-      });
+      await fetchWithTimeout(
+        url,
+        {
+          headers: {
+            apikey:
+              serviceKey,
+            Authorization:
+              `Bearer ${serviceKey}`,
+          },
+          cache:
+            "no-store",
+        }
+      );
 
     if (!response.ok) {
       return true;
@@ -891,6 +986,9 @@ async function getScheduleState() {
   }
 }
 
+/*
+ * ساخت متن خبر
+ */
 function formatNewsMessage(
   news: NewsItem[],
   sentAt: Date
@@ -899,7 +997,8 @@ function formatNewsMessage(
     new Intl.DateTimeFormat(
       "fa-IR",
       {
-        timeZone: "Asia/Tehran",
+        timeZone:
+          "Asia/Tehran",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -948,9 +1047,14 @@ function formatNewsMessage(
     "🇮🇷 منابع انتخاب‌شده فقط از رسانه‌های معتبر داخل ایران هستند."
   );
 
-  return lines.join("\n");
+  return lines.join(
+    "\n"
+  );
 }
 
+/*
+ * API
+ */
 export async function GET(
   request: Request
 ) {
@@ -959,7 +1063,7 @@ export async function GET(
 
   try {
     /*
-     * کنترل فعال/لغو بودن ارسال
+     * بررسی فعال بودن ارسال
      */
     const scheduleEnabled =
       await getScheduleState();
@@ -974,6 +1078,9 @@ export async function GET(
       });
     }
 
+    /*
+     * محاسبه بازه گزارش
+     */
     const {
       start,
       end,
@@ -983,8 +1090,7 @@ export async function GET(
       getReportWindow();
 
     /*
-     * دریافت فقط اخبار رسانه‌های
-     * معتبر داخلی
+     * دریافت اخبار
      */
     const news =
       await getNews(
@@ -1001,9 +1107,10 @@ export async function GET(
       );
 
     /*
-     * اگر حتی یک رسانه معتبر
-     * داخلی پیدا نشد، هیچ پیامی
-     * به گروه ارسال نمی‌شود.
+     * اگر هیچ خبر معتبر داخلی
+     * وجود نداشته باشد:
+     *
+     * هیچ پیامی به بله ارسال نمی‌شود.
      */
     if (
       news.length === 0 ||
@@ -1019,8 +1126,7 @@ export async function GET(
         news: {
           totalFetched:
             news.length,
-          selected:
-            0,
+          selected: 0,
           mediaCount:
             mediaSet.size,
           minimumMedia:
@@ -1042,11 +1148,14 @@ export async function GET(
           end_tehran:
             endTehran,
         },
+        runtime_ms:
+          Date.now() -
+          startedAt.getTime(),
       });
     }
 
     /*
-     * زمان واقعی ارسال
+     * زمان قبل از ارسال
      */
     const sendTime =
       new Date();
@@ -1057,72 +1166,101 @@ export async function GET(
         sendTime
       );
 
+    /*
+     * ارسال به بله
+     */
     const bale =
       await sendBaleMessage(
         message
       );
 
+    /*
+     * زمان واقعی پس از موفقیت ارسال
+     */
     const actualSentAt =
       new Date();
+
+    const sentAtTehran =
+      new Intl.DateTimeFormat(
+        "fa-IR",
+        {
+          timeZone:
+            "Asia/Tehran",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }
+      ).format(
+        actualSentAt
+      );
 
     return NextResponse.json({
       ok: true,
       cancelled: false,
       sent: true,
+
       sent_at:
         actualSentAt.toISOString(),
+
       sent_at_tehran:
-        new Intl.DateTimeFormat(
-          "fa-IR",
-          {
-            timeZone:
-              "Asia/Tehran",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          }
-        ).format(
-          actualSentAt
-        ),
-      bale_status:
-        200,
+        sentAtTehran,
+
+      bale_status: 200,
+
       bale,
+
       news: {
         totalFetched:
           news.length,
+
         selected:
           news.length,
+
         mediaCount:
           mediaSet.size,
+
         minimumMedia:
           MIN_MEDIA,
+
         maximumMedia:
           MAX_NEWS,
+
         maximumNews:
           MAX_NEWS,
+
         minimumReached:
           mediaSet.size >=
           MIN_MEDIA,
       },
+
       report_window: {
         start:
           start.toISOString(),
+
         end:
           end.toISOString(),
+
         start_tehran:
           startTehran,
+
         end_tehran:
           endTehran,
       },
+
       runtime_ms:
         Date.now() -
         startedAt.getTime(),
     });
   } catch (error) {
+    /*
+     * خطای واقعی API را JSON می‌کنیم
+     * تا مرورگر به جای اتصال قطع‌شده،
+     * نتیجه قابل بررسی دریافت کند.
+     */
     return NextResponse.json(
       {
         ok: false,
@@ -1131,10 +1269,14 @@ export async function GET(
           error instanceof Error
             ? error.message
             : String(error),
+
+        runtime_ms:
+          Date.now() -
+          startedAt.getTime(),
       },
       {
         status: 500,
       }
     );
   }
-     }
+                 }
