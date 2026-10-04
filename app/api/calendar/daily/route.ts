@@ -35,12 +35,15 @@ function getTehranParts() {
 }
 
 function getPersianDate(date: Date) {
-  const parts = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).formatToParts(date);
+  const parts = new Intl.DateTimeFormat(
+    "fa-IR-u-ca-persian",
+    {
+      timeZone: TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }
+  ).formatToParts(date);
 
   const get = (type: string) =>
     parts.find((p) => p.type === type)?.value || "";
@@ -66,7 +69,10 @@ function getWeekday(date: Date) {
   }).format(date);
 }
 
-function getPersianDayOfYear(month: number, day: number) {
+function getPersianDayOfYear(
+  month: number,
+  day: number
+) {
   let total = 0;
 
   for (let m = 1; m < month; m++) {
@@ -76,14 +82,22 @@ function getPersianDayOfYear(month: number, day: number) {
   return total + day;
 }
 
-function getYearProgress(month: number, day: number) {
-  const dayOfYear = getPersianDayOfYear(month, day);
+function getYearProgress(
+  month: number,
+  day: number
+) {
+  const dayOfYear =
+    getPersianDayOfYear(month, day);
+
   const totalDays = 365;
 
   return {
     dayOfYear,
     totalDays,
-    percent: ((dayOfYear / totalDays) * 100).toFixed(1)
+    percent: (
+      (dayOfYear / totalDays) *
+      100
+    ).toFixed(1)
   };
 }
 
@@ -118,7 +132,8 @@ function getMoonPhase(date: Date) {
   const synodicMonth = 29.530588853;
 
   const age =
-    ((date.getTime() - knownNewMoon) / 86400000) %
+    ((date.getTime() - knownNewMoon) /
+      86400000) %
     synodicMonth;
 
   const normalized =
@@ -150,7 +165,9 @@ function getMoonPhase(date: Date) {
   return "هلال کاهنده 🌘";
 }
 
-async function getHijriDate(gregorian: string) {
+async function getHijriDate(
+  gregorian: string
+) {
   try {
     const response = await fetch(
       `https://api.aladhan.com/v1/gToH?date=${gregorian}`,
@@ -181,7 +198,9 @@ async function getHijriDate(gregorian: string) {
   }
 }
 
-async function getEvents(persianYear: number) {
+async function getEvents(
+  persianYear: number
+) {
   try {
     const response = await fetch(
       `https://hmarzban.github.io/pipe2time.ir/api/${persianYear}/events.json`,
@@ -207,7 +226,11 @@ async function getEvents(persianYear: number) {
 
     if (Array.isArray(yearData)) {
       for (const monthData of yearData) {
-        if (Array.isArray(monthData?.events)) {
+        if (
+          Array.isArray(
+            monthData?.events
+          )
+        ) {
           events.push(
             ...monthData.events
           );
@@ -308,12 +331,90 @@ function getEventText(events: any[]) {
     .slice(0, 8);
 }
 
+/* بررسی فعال بودن ارسال تقویم */
+async function isCalendarEnabled(
+  env: CloudflareEnv
+) {
+  try {
+    const url =
+      env.NEXT_PUBLIC_SUPABASE_URL;
+
+    const serviceKey =
+      env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !serviceKey) {
+      console.error(
+        "[calendar] Supabase configuration missing"
+      );
+
+      return true;
+    }
+
+    const response = await fetch(
+      `${url}/rest/v1/settings?select=key,value&key=eq.schedule_calendar&limit=1`,
+      {
+        headers: {
+          apikey: serviceKey,
+          Authorization:
+            `Bearer ${serviceKey}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      console.error(
+        "[calendar] Failed to read schedule setting:",
+        response.status
+      );
+
+      return true;
+    }
+
+    const rows =
+      await response.json();
+
+    if (
+      !Array.isArray(rows) ||
+      !rows.length
+    ) {
+      return true;
+    }
+
+    return rows[0]?.value !== "false";
+  } catch (error) {
+    console.error(
+      "[calendar] Schedule setting error:",
+      error
+    );
+
+    return true;
+  }
+}
+
 export async function GET() {
   try {
     const { env } =
       await getCloudflareContext({
         async: true
       });
+
+    /* اگر ارسال تقویم لغو شده باشد */
+    const enabled =
+      await isCalendarEnabled(env);
+
+    if (!enabled) {
+      console.log(
+        "[calendar] Sending is cancelled."
+      );
+
+      return NextResponse.json({
+        ok: true,
+        cancelled: true,
+        sent: false,
+        message:
+          "ارسال تقویم لغو شده است."
+      });
+    }
 
     const token =
       env?.BALE_SMART_TOKEN;
@@ -488,6 +589,9 @@ export async function GET() {
         response.ok &&
         result?.ok === true,
 
+      cancelled: false,
+      sent: true,
+
       bale_status:
         response.status,
 
@@ -509,4 +613,4 @@ export async function GET() {
       }
     );
   }
-}
+                       }
