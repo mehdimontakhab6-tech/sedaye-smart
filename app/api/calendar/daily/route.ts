@@ -111,9 +111,10 @@ function getMoonPhase(date: Date) {
     ((date.getTime() - knownNewMoon) / 86400000) %
     synodicMonth;
 
-  const normalized = age < 0
-    ? age + synodicMonth
-    : age;
+  const normalized =
+    age < 0
+      ? age + synodicMonth
+      : age;
 
   if (normalized < 1.85) return "ماه نو 🌑";
   if (normalized < 7.38) return "هلال افزاینده 🌒";
@@ -146,7 +147,10 @@ async function getHijriDate(gregorian: string) {
 
     return {
       day: hijri.day,
-      month: hijri.month?.ar || hijri.month?.en || "",
+      month:
+        hijri.month?.ar ||
+        hijri.month?.en ||
+        "",
       year: hijri.year
     };
   } catch {
@@ -241,6 +245,7 @@ export async function GET() {
       });
 
     const token = env?.BALE_SMART_TOKEN;
+
     const chatId = String(
       env?.BALE_GROUP_ID || ""
     );
@@ -260,25 +265,31 @@ export async function GET() {
 
     const now = new Date();
 
-    const tehran = getTehranParts();
+    const tehran =
+      getTehranParts();
 
-    const persian = getPersianDate(now);
+    const persian =
+      getPersianDate(now);
 
     const gregorian =
       `${tehran.year}-` +
       `${String(tehran.month).padStart(2, "0")}-` +
       `${String(tehran.day).padStart(2, "0")}`;
 
-    const weekday = getWeekday(now);
+    const weekday =
+      getWeekday(now);
 
-    const hijri = await getHijriDate(
-      `${String(tehran.day).padStart(2, "0")}-` +
-      `${String(tehran.month).padStart(2, "0")}-` +
-      `${tehran.year}`
-    );
+    const hijri =
+      await getHijriDate(
+        `${String(tehran.day).padStart(2, "0")}-` +
+        `${String(tehran.month).padStart(2, "0")}-` +
+        `${tehran.year}`
+      );
 
     const allEvents =
-      await getEvents(persian.year);
+      await getEvents(
+        persian.year
+      );
 
     const todayEvents =
       getEventsForDay(
@@ -288,7 +299,9 @@ export async function GET() {
       );
 
     const holiday =
-      getHoliday(todayEvents);
+      getHoliday(
+        todayEvents
+      );
 
     const progress =
       getYearProgress(
@@ -305,11 +318,18 @@ export async function GET() {
       );
 
     const eventsText =
-      getEventText(todayEvents);
+      getEventText(
+        todayEvents
+      );
 
-    const hijriText = hijri
-      ? `${hijri.day} ${hijri.month} ${hijri.year}`
-      : "نامشخص";
+    // ثبت زمان واقعی درست قبل از ارسال پیام به بله
+    const sendTehran =
+      getTehranParts();
+
+    const hijriText =
+      hijri
+        ? `${hijri.day} ${hijri.month} ${hijri.year}`
+        : "نامشخص";
 
     const status =
       holiday
@@ -329,8 +349,8 @@ export async function GET() {
 
       `🌙 تاریخ قمری: ${hijriText}\n` +
 
-      `⏰ ساعت: ` +
-      `${tehran.hour}:${tehran.minute}\n` +
+      `⏰ زمان واقعی ارسال: ` +
+      `${sendTehran.hour}:${sendTehran.minute}:${sendTehran.second}\n` +
 
       `🗓️ روز هفته: ${weekday}\n` +
 
@@ -363,21 +383,23 @@ export async function GET() {
 
       `🤝 با هم برای حل مسائل و ساختن فردایی بهتر`;
 
-    const response = await fetch(
-      `https://tapi.bale.ai/bot${token}/sendMessage`,
-      {
-        method: "POST",
+    const response =
+      await fetch(
+        `https://tapi.bale.ai/bot${token}/sendMessage`,
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type": "application/json"
-        },
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
 
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: message
-        })
-      }
-    );
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: message
+          })
+        }
+      );
 
     const result =
       await response
@@ -411,4 +433,4 @@ export async function GET() {
       }
     );
   }
-}
+  }
