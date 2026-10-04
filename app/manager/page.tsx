@@ -82,12 +82,12 @@ export default function ManagerPage() {
 
       const data = await response.json();
 
-      if (data?.ok && data?.states) {
+      if (data?.ok) {
         setStates({
           calendar:
-            data.states.calendar !== false,
+            data.calendar !== false,
           news:
-            data.states.news !== false,
+            data.news !== false,
         });
       }
     } catch {
@@ -125,7 +125,7 @@ export default function ManagerPage() {
               "application/json",
           },
           body: JSON.stringify({
-            kind,
+            schedule: kind,
             enabled: next,
           }),
         }
@@ -189,7 +189,6 @@ export default function ManagerPage() {
 
       </header>
 
-
       {/* HERO */}
       <section className="hero">
 
@@ -213,7 +212,6 @@ export default function ManagerPage() {
 
       </section>
 
-
       {/* SCHEDULE CONTROL */}
       <section className="managerPanel">
 
@@ -232,11 +230,10 @@ export default function ManagerPage() {
           </div>
 
           <span className="managerStatus">
-            فعال
+            کنترل فعال
           </span>
 
         </div>
-
 
         {schedules.map(
           (schedule) => {
@@ -313,7 +310,6 @@ export default function ManagerPage() {
 
                   </div>
 
-
                   <span
                     style={{
                       whiteSpace:
@@ -338,7 +334,6 @@ export default function ManagerPage() {
                   </span>
 
                 </div>
-
 
                 {/* CANCEL / ENABLE BUTTON */}
                 <button
@@ -395,7 +390,6 @@ export default function ManagerPage() {
           }
         )}
 
-
         {message && (
 
           <div
@@ -416,7 +410,6 @@ export default function ManagerPage() {
         )}
 
       </section>
-
 
       {/* SMART ASSISTANT */}
       <section className="managerPanel">
@@ -440,7 +433,6 @@ export default function ManagerPage() {
           </span>
 
         </div>
-
 
         <textarea
           value={text}
@@ -471,7 +463,6 @@ export default function ManagerPage() {
               "border-box",
           }}
         />
-
 
         <button
           onClick={analyze}
@@ -511,7 +502,6 @@ export default function ManagerPage() {
 
       </section>
 
-
       {/* ANALYSIS RESULT */}
       {result && (
 
@@ -532,7 +522,6 @@ export default function ManagerPage() {
             </div>
 
           </div>
-
 
           {!result.ok ? (
 
@@ -556,7 +545,6 @@ export default function ManagerPage() {
 
               </div>
 
-
               <div>
 
                 <strong>
@@ -568,7 +556,6 @@ export default function ManagerPage() {
                 </span>
 
               </div>
-
 
               <div>
 
@@ -589,7 +576,6 @@ export default function ManagerPage() {
 
               </div>
 
-
               <div>
 
                 <strong>
@@ -605,7 +591,6 @@ export default function ManagerPage() {
             </div>
 
           )}
-
 
           {result.issue && (
 
@@ -661,7 +646,6 @@ export default function ManagerPage() {
             </div>
 
           )}
-
 
           {result.existing_issue && (
 
@@ -727,4 +711,4 @@ export default function ManagerPage() {
 
     </main>
   );
-        }
+              }
