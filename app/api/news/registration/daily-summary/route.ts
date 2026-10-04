@@ -330,7 +330,11 @@ function normalizeDigits(value: string): string {
 }
 
 /*
- * تبدیل دقیق جلالی به میلادی
+ * تبدیل دقیق تاریخ جلالی به میلادی
+ * نمونه:
+ * 1405/07/10 -> 2026/10/02
+ * 1405/07/11 -> 2026/10/03
+ * 1405/07/12 -> 2026/10/04
  */
 function jalaliToGregorian(
   jy: number,
@@ -350,10 +354,10 @@ function jalaliToGregorian(
     return null;
   }
 
-  const div = (a: number, b: number) =>
+  const div = (a: number, b: number): number =>
     Math.floor(a / b);
 
-  const mod = (a: number, b: number) =>
+  const mod = (a: number, b: number): number =>
     a - Math.floor(a / b) * b;
 
   const breaks = [
@@ -384,8 +388,8 @@ function jalaliToGregorian(
   let gy = jy + 621;
   let leapJ = -14;
   let jp = breaks[0];
-  let jmBreak = 0;
   let jump = 0;
+  let jmBreak = 0;
 
   for (let i = 1; i < bl; i++) {
     jmBreak = breaks[i];
@@ -402,7 +406,7 @@ function jalaliToGregorian(
     jp = jmBreak;
   }
 
-  let n = jy - jp;
+  const n = jy - jp;
 
   leapJ +=
     div(n, 33) * 8 +
@@ -417,12 +421,18 @@ function jalaliToGregorian(
 
   const leapG =
     div(gy, 4) -
-    div((div(gy, 100) + 1) * 3, 4) -
+    div(
+      (div(gy, 100) + 1) * 3,
+      4
+    ) -
     150;
 
   const march =
     20 + leapJ - leapG;
 
+  /*
+   * محاسبه شماره روز سال جلالی
+   */
   let dayOfYear: number;
 
   if (jm <= 6) {
@@ -436,38 +446,56 @@ function jalaliToGregorian(
       (jd - 1);
   }
 
+  /*
+   * شروع سال جلالی در تقویم میلادی
+   * در سال 1405 برابر 28 مارس 2026 است.
+   */
   let gregorianYear = gy;
   let gregorianMonth = 3;
   let gregorianDay = march;
 
   let remaining = dayOfYear;
 
-  const daysRemainingInMarch =
+  /*
+   * روزهای باقی‌مانده از ماه مارس
+   */
+  const marchRemaining =
     31 - march;
 
-  if (remaining <= daysRemainingInMarch) {
+  if (remaining <= marchRemaining) {
     gregorianDay += remaining;
   } else {
-    remaining -=
-      daysRemainingInMarch + 1;
+    remaining -= marchRemaining + 1;
 
+    /*
+     * از اول آوریل ادامه می‌دهیم.
+     */
     gregorianMonth = 4;
     gregorianDay = 1;
 
     const monthDays = [
-      30,
-      31,
-      30,
-      31,
-      31,
-      30,
-      31,
-      30,
-      31,
+      30, // April
+      31, // May
+      30, // June
+      31, // July
+      31, // August
+      30, // September
+      31, // October
+      30, // November
+      31, // December
     ];
 
-    for (const daysInMonth of monthDays) {
-      if (remaining < daysInMonth) {
+    for (
+      let i = 0;
+      i < monthDays.length;
+      i++
+    ) {
+      const daysInMonth =
+        monthDays[i];
+
+      if (
+        remaining < daysInMonth
+      ) {
         gregorianDay += remaining;
         remaining = 0;
         break;
@@ -476,7 +504,9 @@ function jalaliToGregorian(
       remaining -= daysInMonth;
       gregorianMonth++;
 
-      if (gregorianMonth === 13) {
+      if (
+        gregorianMonth > 12
+      ) {
         gregorianYear++;
         gregorianMonth = 1;
       }
@@ -487,6 +517,9 @@ function jalaliToGregorian(
     }
   }
 
+  /*
+   * اعتبارسنجی نهایی
+   */
   if (
     gregorianMonth < 1 ||
     gregorianMonth > 12 ||
@@ -496,6 +529,10 @@ function jalaliToGregorian(
     return null;
   }
 
+  /*
+   * زمان ورودی بر اساس ساعت ایران است.
+   * ایران در این سیستم +03:30 در نظر گرفته می‌شود.
+   */
   return new Date(
     Date.UTC(
       gregorianYear,
