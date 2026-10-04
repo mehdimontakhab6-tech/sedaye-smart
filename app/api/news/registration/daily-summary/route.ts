@@ -4,17 +4,22 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 export const dynamic = "force-dynamic";
 
 /*
-  ============================================================
-  ثبت احوال در رسانه‌ها
-  ============================================================
+============================================================
+ثبت احوال در رسانه‌ها
+============================================================
 
-  قوانین:
-  1) بازه گزارش: 22:30 تهران تا 22:30 تهران
-  2) حداقل رسانه معتبر: 1
-  3) حداکثر رسانه مستقل: 20
-  4) حداکثر خبر منتخب: 20
-  5) فقط خبر واقعاً مرتبط با ثبت احوال
-  6) اگر هیچ خبر معتبر پیدا نشد، هیچ پیام صفر خبری ارسال نمی‌شود.
+قوانین:
+
+1. بازه گزارش دقیقاً 22:30 تا 22:30 به وقت تهران است.
+2. حداقل رسانه معتبر: 1
+3. حداکثر رسانه مستقل: 20
+4. حداکثر خبر منتخب: 20
+5. خبر باید واقعاً مرتبط با ثبت احوال باشد.
+6. خبرهای تکراری حذف می‌شوند.
+7. اگر حداقل 1 رسانه معتبر پیدا شود، گزارش ارسال می‌شود.
+8. اگر هیچ رسانه معتبر و خبر مرتبطی پیدا نشود، هیچ پیام
+   «0 خبر» به گروه ارسال نمی‌شود.
+============================================================
 */
 
 const TIME_ZONE = "Asia/Tehran";
@@ -57,7 +62,6 @@ const TRUSTED_MEDIA: Record<string, string> = {
   "dana.ir": "دانا",
   "rokna.net": "رکنا",
   "donya-e-eqtesad.com": "دنیای اقتصاد",
-  "irna.ir": "ایرنا",
   "iran-newspaper.com": "ایران",
   "ettelaat.com": "اطلاعات",
   "khabarfoori.com": "خبرفوری",
@@ -66,7 +70,7 @@ const TRUSTED_MEDIA: Record<string, string> = {
 };
 
 /* ============================================================
-   جست‌وجوهای مرتبط
+   جست‌وجوهای مرتبط با ثبت احوال
    ============================================================ */
 
 const SEARCH_QUERIES = [
@@ -76,6 +80,7 @@ const SEARCH_QUERIES = [
   '"رییس سازمان ثبت احوال" when:2d',
   '"ثبت احوال کشور" when:2d',
   '"اداره ثبت احوال" when:2d',
+  '"اداره کل ثبت احوال" when:2d',
   '"کارت ملی" "ثبت احوال" when:2d',
   '"شناسنامه" "ثبت احوال" when:2d',
   '"هویت دیجیتال" "ثبت احوال" when:2d',
@@ -85,10 +90,10 @@ const SEARCH_QUERIES = [
   '"انحصار وراثت" "ثبت احوال" when:2d',
   '"پایگاه خانوار" "ثبت احوال" when:2d',
   '"آمار جمعیتی" "ثبت احوال" when:2d',
-  '"ولادت" "ثبت احوال" when:2d',
-  '"فوت" "ثبت احوال" when:2d',
-  '"ازدواج" "ثبت احوال" when:2d',
-  '"طلاق" "ثبت احوال" when:2d',
+  '"ثبت ولادت" "ثبت احوال" when:2d',
+  '"ثبت فوت" "ثبت احوال" when:2d',
+  '"ثبت ازدواج" "ثبت احوال" when:2d',
+  '"ثبت طلاق" "ثبت احوال" when:2d',
   '"تغییر نام" "ثبت احوال" when:2d',
   '"نام خانوادگی" "ثبت احوال" when:2d',
 ];
@@ -107,7 +112,6 @@ const STRONG_KEYWORDS = [
   "اداره کل ثبت احوال",
   "اداره ثبت احوال",
   "سامانه سهیم",
-  "ساهیم ثبت احوال",
   "سامانه هدا",
   "هویت دیجیتال ایرانیان",
   "پایگاه اطلاعات جمعیت",
@@ -180,7 +184,7 @@ function normalizeText(value: string): string {
 }
 
 /* ============================================================
-   HTML decode ساده
+   Decode HTML
    ============================================================ */
 
 function decodeHtml(value: string): string {
@@ -197,68 +201,100 @@ function decodeHtml(value: string): string {
     .replace(/&nbsp;/gi, " ")
     .replace(/&#(\d+);/g, (_, code) => {
       const n = Number(code);
-      return Number.isFinite(n) ? String.fromCharCode(n) : "";
+      return Number.isFinite(n)
+        ? String.fromCharCode(n)
+        : "";
     })
     .replace(/&#x([0-9a-f]+);/gi, (_, code) => {
       const n = parseInt(code, 16);
-      return Number.isFinite(n) ? String.fromCharCode(n) : "";
+      return Number.isFinite(n)
+        ? String.fromCharCode(n)
+        : "";
     })
     .replace(/\s+/g, " ")
     .trim();
 }
 
 /* ============================================================
-   استخراج مقدار XML
+   استخراج تگ XML
    ============================================================ */
 
 function getXmlTag(
   block: string,
   tag: string
 ): string {
-  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedTag =
+    tag.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
 
   const regex = new RegExp(
     `<${escapedTag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapedTag}>`,
     "i"
   );
 
-  const match = block.match(regex);
+  const match =
+    block.match(regex);
 
-  return match ? decodeHtml(match[1]) : "";
+  return match
+    ? decodeHtml(match[1])
+    : "";
 }
 
 /* ============================================================
-   استخراج لینک
+   استخراج لینک خبر
    ============================================================ */
 
-function getItemLink(block: string): string {
-  const link = getXmlTag(block, "link");
+function getItemLink(
+  block: string
+): string {
+  const link =
+    getXmlTag(
+      block,
+      "link"
+    );
 
   if (link) {
     return link.trim();
   }
 
-  const hrefMatch = block.match(
-    /<link[^>]+href=["']([^"']+)["']/i
-  );
+  const hrefMatch =
+    block.match(
+      /<link[^>]+href=["']([^"']+)["']/i
+    );
 
-  return hrefMatch?.[1]?.trim() || "";
+  return (
+    hrefMatch?.[1]?.trim() ||
+    ""
+  );
 }
 
 /* ============================================================
-   تشخیص دامنه
+   استخراج دامنه
    ============================================================ */
 
-function getHostname(url: string): string {
+function getHostname(
+  url: string
+): string {
   try {
-    const parsed = new URL(url);
+    const parsed =
+      new URL(url);
+
     return parsed.hostname
       .toLowerCase()
-      .replace(/^www\./, "");
+      .replace(
+        /^www\./,
+        ""
+      );
   } catch {
     return "";
   }
 }
+
+/* ============================================================
+   تشخیص رسانه معتبر
+   ============================================================ */
 
 function getTrustedSource(
   url: string
@@ -266,18 +302,24 @@ function getTrustedSource(
   domain: string;
   name: string;
 } | null {
-  const hostname = getHostname(url);
+  const hostname =
+    getHostname(url);
 
   if (!hostname) {
     return null;
   }
 
-  for (const [domain, name] of Object.entries(
-    TRUSTED_MEDIA
-  )) {
+  for (
+    const [domain, name]
+    of Object.entries(
+      TRUSTED_MEDIA
+    )
+  ) {
     if (
       hostname === domain ||
-      hostname.endsWith(`.${domain}`)
+      hostname.endsWith(
+        `.${domain}`
+      )
     ) {
       return {
         domain,
@@ -293,31 +335,47 @@ function getTrustedSource(
    زمان تهران
    ============================================================ */
 
-function getTehranParts(date = new Date()) {
-  const formatter = new Intl.DateTimeFormat(
-    "en-CA",
-    {
-      timeZone: TIME_ZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    }
-  );
+function getTehranParts(
+  date = new Date()
+) {
+  const formatter =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone:
+          TIME_ZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      }
+    );
 
-  const parts = formatter.formatToParts(date);
+  const parts =
+    formatter.formatToParts(
+      date
+    );
 
-  const result: Record<string, number> = {};
+  const result:
+    Record<string, number> = {};
 
-  for (const part of parts) {
-    if (part.type === "literal") {
+  for (
+    const part of parts
+  ) {
+    if (
+      part.type ===
+      "literal"
+    ) {
       continue;
     }
 
-    result[part.type] = Number(part.value);
+    result[part.type] =
+      Number(
+        part.value
+      );
   }
 
   return {
@@ -331,11 +389,14 @@ function getTehranParts(date = new Date()) {
 }
 
 /* ============================================================
-   بازه دقیق 22:30 تا 22:30 تهران
+   بازه دقیق گزارش
    ============================================================ */
 
-function getReportWindow(now = new Date()) {
-  const parts = getTehranParts(now);
+function getReportWindow(
+  now = new Date()
+) {
+  const parts =
+    getTehranParts(now);
 
   const todayAnchorText =
     `${String(parts.year).padStart(4, "0")}-` +
@@ -345,33 +406,52 @@ function getReportWindow(now = new Date()) {
     `${String(REPORT_MINUTE).padStart(2, "0")}:00` +
     TEHRAN_OFFSET;
 
-  let end = new Date(todayAnchorText);
+  let end =
+    new Date(
+      todayAnchorText
+    );
 
   /*
-    اگر اجرای دستی قبل از 22:30 باشد،
-    آخرین بازه کامل 22:30 روز قبل تا 22:30 امروز/روز قبل است.
+    اگر قبل از 22:30 باشیم،
+    آخرین بازه کامل 22:30 روز قبل
+    تا 22:30 روز قبل است.
   */
 
-  if (now.getTime() < end.getTime()) {
-    end = new Date(
-      end.getTime() - 24 * 60 * 60 * 1000
-    );
+  if (
+    now.getTime() <
+    end.getTime()
+  ) {
+    end =
+      new Date(
+        end.getTime() -
+          24 *
+            60 *
+            60 *
+            1000
+      );
   }
 
-  const start = new Date(
-    end.getTime() - 24 * 60 * 60 * 1000
-  );
+  const start =
+    new Date(
+      end.getTime() -
+        24 *
+          60 *
+          60 *
+          1000
+    );
 
   return {
     start,
     end,
-    startIso: start.toISOString(),
-    endIso: end.toISOString(),
+    startIso:
+      start.toISOString(),
+    endIso:
+      end.toISOString(),
   };
 }
 
 /* ============================================================
-   تبدیل زمان به نمایش تهران
+   نمایش تاریخ و زمان تهران
    ============================================================ */
 
 function formatTehranDateTime(
@@ -380,7 +460,8 @@ function formatTehranDateTime(
   return new Intl.DateTimeFormat(
     "fa-IR",
     {
-      timeZone: TIME_ZONE,
+      timeZone:
+        TIME_ZONE,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -393,48 +474,79 @@ function formatTehranDateTime(
 }
 
 /* ============================================================
-   تشخیص ارتباط واقعی خبر
+   امتیاز ارتباط خبر با ثبت احوال
    ============================================================ */
 
 function calculateRelevance(
   title: string,
   description: string
 ): number {
-  const text = normalizeText(
-    `${title} ${description}`
-  );
+  const text =
+    normalizeText(
+      `${title} ${description}`
+    );
 
   let score = 0;
 
-  for (const keyword of STRONG_KEYWORDS) {
-    if (text.includes(normalizeText(keyword))) {
+  for (
+    const keyword
+    of STRONG_KEYWORDS
+  ) {
+    if (
+      text.includes(
+        normalizeText(
+          keyword
+        )
+      )
+    ) {
       score += 8;
     }
   }
 
-  for (const keyword of RELATED_KEYWORDS) {
-    if (text.includes(normalizeText(keyword))) {
+  for (
+    const keyword
+    of RELATED_KEYWORDS
+  ) {
+    if (
+      text.includes(
+        normalizeText(
+          keyword
+        )
+      )
+    ) {
       score += 3;
     }
   }
 
+  const hasStrong =
+    STRONG_KEYWORDS.some(
+      (keyword) =>
+        text.includes(
+          normalizeText(
+            keyword
+          )
+        )
+    );
+
+  const relatedCount =
+    RELATED_KEYWORDS.filter(
+      (keyword) =>
+        text.includes(
+          normalizeText(
+            keyword
+          )
+        )
+    ).length;
+
   /*
-    خبرهایی که فقط یکی از کلمات عمومی مثل «شناسنامه»
-    یا «جمعیت» را دارند، بدون نشانه‌ای از ثبت احوال
-    قابل قبول نیستند.
+    یک کلمه عمومی به تنهایی
+    برای قبول خبر کافی نیست.
   */
 
-  const hasStrong = STRONG_KEYWORDS.some(
-    (keyword) =>
-      text.includes(normalizeText(keyword))
-  );
-
-  const relatedCount = RELATED_KEYWORDS.filter(
-    (keyword) =>
-      text.includes(normalizeText(keyword))
-  ).length;
-
-  if (!hasStrong && relatedCount < 2) {
+  if (
+    !hasStrong &&
+    relatedCount < 2
+  ) {
     return 0;
   }
 
@@ -442,43 +554,78 @@ function calculateRelevance(
 }
 
 /* ============================================================
-   بررسی زمان انتشار
+   بررسی بازه انتشار
    ============================================================ */
 
 function isInsideReportWindow(
   publishedAt: string,
-  window: ReturnType<typeof getReportWindow>
+  window: ReturnType<
+    typeof getReportWindow
+  >
 ): boolean {
-  const timestamp = Date.parse(publishedAt);
+  const timestamp =
+    Date.parse(
+      publishedAt
+    );
 
-  if (!Number.isFinite(timestamp)) {
+  if (
+    !Number.isFinite(
+      timestamp
+    )
+  ) {
     return false;
   }
 
   return (
-    timestamp >= window.start.getTime() &&
-    timestamp < window.end.getTime()
+    timestamp >=
+      window.start.getTime() &&
+    timestamp <
+      window.end.getTime()
   );
 }
 
 /* ============================================================
-   استخراج آیتم‌های RSS
+   استخراج source از RSS
+   ============================================================ */
+
+function getSourceFromRss(
+  block: string
+): string {
+  const sourceMatch =
+    block.match(
+      /<source\b[^>]*url=["']([^"']+)["'][^>]*>/i
+    );
+
+  return (
+    sourceMatch?.[1]
+      ?.trim() || ""
+  );
+}
+
+/* ============================================================
+   پارس RSS
    ============================================================ */
 
 function parseRss(
   xml: string
 ): NewsItem[] {
-  const items: NewsItem[] = [];
+  const items:
+    NewsItem[] = [];
 
-  const blocks = xml.match(
-    /<item\b[\s\S]*?<\/item>/gi
-  ) || [];
+  const blocks =
+    xml.match(
+      /<item\b[\s\S]*?<\/item>/gi
+    ) || [];
 
-  for (const block of blocks) {
-    const title = getXmlTag(
-      block,
-      "title"
-    );
+  for (
+    const block
+    of blocks
+  ) {
+    const title =
+      getXmlTag(
+        block,
+        "title"
+      );
 
     const description =
       getXmlTag(
@@ -490,7 +637,10 @@ function parseRss(
         "content:encoded"
       );
 
-    const link = getItemLink(block);
+    const link =
+      getItemLink(
+        block
+      );
 
     const publishedAt =
       getXmlTag(
@@ -514,8 +664,34 @@ function parseRss(
       continue;
     }
 
-    const source =
-      getTrustedSource(link);
+    /*
+      Google News معمولاً لینک را
+      به news.google.com می‌دهد.
+      بنابراین رسانه را از source
+      استخراج می‌کنیم.
+    */
+
+    const sourceUrl =
+      getSourceFromRss(
+        block
+      );
+
+    let source =
+      getTrustedSource(
+        sourceUrl
+      );
+
+    /*
+      اگر source وجود نداشت،
+      خود لینک را نیز امتحان می‌کنیم.
+    */
+
+    if (!source) {
+      source =
+        getTrustedSource(
+          link
+        );
+    }
 
     if (!source) {
       continue;
@@ -527,7 +703,9 @@ function parseRss(
         description
       );
 
-    if (score <= 0) {
+    if (
+      score <= 0
+    ) {
       continue;
     }
 
@@ -536,8 +714,10 @@ function parseRss(
       description,
       link,
       publishedAt,
-      sourceDomain: source.domain,
-      sourceName: source.name,
+      sourceDomain:
+        source.domain,
+      sourceName:
+        source.name,
       score,
     });
   }
@@ -546,7 +726,7 @@ function parseRss(
 }
 
 /* ============================================================
-   fetch با timeout
+   Fetch با Timeout
    ============================================================ */
 
 async function fetchWithTimeout(
@@ -555,33 +735,39 @@ async function fetchWithTimeout(
   const controller =
     new AbortController();
 
-  const timer = setTimeout(
-    () => controller.abort(),
-    REQUEST_TIMEOUT_MS
-  );
+  const timer =
+    setTimeout(
+      () =>
+        controller.abort(),
+      REQUEST_TIMEOUT_MS
+    );
 
   try {
     return await fetch(
       url,
       {
         method: "GET",
-        signal: controller.signal,
+        signal:
+          controller.signal,
         headers: {
           Accept:
             "application/rss+xml, application/xml, text/xml, */*",
           "User-Agent":
             "sedaye-smart-news-bot/1.0",
         },
-        cache: "no-store",
+        cache:
+          "no-store",
       }
     );
   } finally {
-    clearTimeout(timer);
+    clearTimeout(
+      timer
+    );
   }
 }
 
 /* ============================================================
-   جست‌وجوی Google News RSS
+   Google News RSS
    ============================================================ */
 
 async function searchGoogleNews(
@@ -589,13 +775,19 @@ async function searchGoogleNews(
 ): Promise<string> {
   const url =
     `https://news.google.com/rss/search?` +
-    `q=${encodeURIComponent(query)}` +
+    `q=${encodeURIComponent(
+      query
+    )}` +
     `&hl=fa&gl=IR&ceid=IR:fa`;
 
   const response =
-    await fetchWithTimeout(url);
+    await fetchWithTimeout(
+      url
+    );
 
-  if (!response.ok) {
+  if (
+    !response.ok
+  ) {
     throw new Error(
       `Google News HTTP ${response.status}`
     );
@@ -605,18 +797,23 @@ async function searchGoogleNews(
 }
 
 /* ============================================================
-   حذف تکراری‌ها
+   حذف خبرهای تکراری
    ============================================================ */
 
 function normalizeTitle(
   title: string
 ): string {
-  return normalizeText(title)
+  return normalizeText(
+    title
+  )
     .replace(
       /[^\p{L}\p{N}\s]/gu,
       " "
     )
-    .replace(/\s+/g, " ")
+    .replace(
+      /\s+/g,
+      " "
+    )
     .trim();
 }
 
@@ -629,27 +826,41 @@ function deduplicateNews(
   const seenLinks =
     new Set<string>();
 
-  const result: NewsItem[] = [];
+  const result:
+    NewsItem[] = [];
 
-  for (const item of items) {
+  for (
+    const item
+    of items
+  ) {
     const titleKey =
-      normalizeTitle(item.title);
+      normalizeTitle(
+        item.title
+      );
 
     const linkKey =
       item.link
         .split("#")[0]
-        .split("?")[0]
         .trim();
 
     if (
-      seenTitles.has(titleKey) ||
-      seenLinks.has(linkKey)
+      seenTitles.has(
+        titleKey
+      ) ||
+      seenLinks.has(
+        linkKey
+      )
     ) {
       continue;
     }
 
-    seenTitles.add(titleKey);
-    seenLinks.add(linkKey);
+    seenTitles.add(
+      titleKey
+    );
+
+    seenLinks.add(
+      linkKey
+    );
 
     result.push(item);
   }
@@ -664,34 +875,47 @@ function deduplicateNews(
 function selectNews(
   items: NewsItem[]
 ): NewsItem[] {
-  const sorted = [...items].sort(
-    (a, b) => {
-      const scoreDifference =
-        b.score - a.score;
+  const sorted =
+    [...items].sort(
+      (a, b) => {
+        const scoreDifference =
+          b.score -
+          a.score;
 
-      if (scoreDifference !== 0) {
-        return scoreDifference;
+        if (
+          scoreDifference !==
+          0
+        ) {
+          return scoreDifference;
+        }
+
+        return (
+          Date.parse(
+            b.publishedAt
+          ) -
+          Date.parse(
+            a.publishedAt
+          )
+        );
       }
-
-      return (
-        Date.parse(b.publishedAt) -
-        Date.parse(a.publishedAt)
-      );
-    }
-  );
+    );
 
   const usedMedia =
     new Set<string>();
 
-  const selected: NewsItem[] = [];
+  const selected:
+    NewsItem[] = [];
 
   /*
     مرحله اول:
-    تا حد امکان از رسانه‌های مستقل
-    خبر انتخاب می‌کنیم.
+    اولویت با یک خبر از هر رسانه
+    برای افزایش تنوع منابع.
   */
 
-  for (const item of sorted) {
+  for (
+    const item
+    of sorted
+  ) {
     if (
       usedMedia.has(
         item.sourceDomain
@@ -701,7 +925,8 @@ function selectNews(
     }
 
     if (
-      usedMedia.size >= MAX_MEDIA
+      usedMedia.size >=
+      MAX_MEDIA
     ) {
       break;
     }
@@ -710,26 +935,32 @@ function selectNews(
       item.sourceDomain
     );
 
-    selected.push(item);
+    selected.push(
+      item
+    );
 
     if (
-      selected.length >= MAX_NEWS
+      selected.length >=
+      MAX_NEWS
     ) {
       break;
     }
   }
 
   /*
-    اگر تعداد خبر کمتر از 20 بود،
-    از رسانه‌های موجود خبرهای بعدی را
-    تکمیل می‌کنیم؛ ولی تعداد رسانه‌ها
-    هیچ‌وقت بیشتر از 20 نمی‌شود.
+    اگر کمتر از 20 خبر داشتیم،
+    از رسانه‌هایی که قبلاً انتخاب شده‌اند
+    خبرهای مرتبط بعدی را اضافه می‌کنیم.
   */
 
   if (
-    selected.length < MAX_NEWS
+    selected.length <
+    MAX_NEWS
   ) {
-    for (const item of sorted) {
+    for (
+      const item
+      of sorted
+    ) {
       if (
         selected.some(
           (selectedItem) =>
@@ -748,10 +979,13 @@ function selectNews(
         continue;
       }
 
-      selected.push(item);
+      selected.push(
+        item
+      );
 
       if (
-        selected.length >= MAX_NEWS
+        selected.length >=
+        MAX_NEWS
       ) {
         break;
       }
@@ -766,12 +1000,16 @@ function selectNews(
    ============================================================ */
 
 async function collectNews() {
-  const now = new Date();
+  const now =
+    new Date();
 
   const window =
-    getReportWindow(now);
+    getReportWindow(
+      now
+    );
 
-  const allItems: NewsItem[] = [];
+  const allItems:
+    NewsItem[] = [];
 
   const queryResults =
     await Promise.allSettled(
@@ -783,7 +1021,9 @@ async function collectNews() {
                 query
               );
 
-            return parseRss(xml);
+            return parseRss(
+              xml
+            );
           } catch (error) {
             console.error(
               "[news] query failed:",
@@ -797,7 +1037,10 @@ async function collectNews() {
       )
     );
 
-  for (const result of queryResults) {
+  for (
+    const result
+    of queryResults
+  ) {
     if (
       result.status ===
       "fulfilled"
@@ -807,11 +1050,6 @@ async function collectNews() {
       );
     }
   }
-
-  /*
-    فقط خبرهای داخل بازه دقیق
-    22:30 تا 22:30
-  */
 
   const insideWindow =
     allItems.filter(
@@ -828,7 +1066,9 @@ async function collectNews() {
     );
 
   const selected =
-    selectNews(unique);
+    selectNews(
+      unique
+    );
 
   const mediaSet =
     new Set(
@@ -849,13 +1089,14 @@ async function collectNews() {
     unique:
       unique.length,
     minimumReached:
-      mediaSet.size >= MIN_MEDIA,
+      mediaSet.size >=
+      MIN_MEDIA,
     window,
   };
 }
 
 /* ============================================================
-   تنظیمات Supabase
+   Supabase
    ============================================================ */
 
 function getSupabaseConfig(
@@ -870,7 +1111,7 @@ function getSupabaseConfig(
 }
 
 /* ============================================================
-   وضعیت ارسال اخبار
+   بررسی فعال بودن ارسال اخبار
    ============================================================ */
 
 async function isNewsEnabled(
@@ -880,13 +1121,9 @@ async function isNewsEnabled(
     url,
     serviceKey,
   } =
-    getSupabaseConfig(env);
-
-  /*
-    در صورت نبود تنظیمات،
-    برای جلوگیری از توقف ناخواسته
-    ارسال، فعال در نظر گرفته می‌شود.
-  */
+    getSupabaseConfig(
+      env
+    );
 
   if (
     !url ||
@@ -906,17 +1143,21 @@ async function isNewsEnabled(
         {
           method: "GET",
           headers: {
-            apikey: serviceKey,
+            apikey:
+              serviceKey,
             Authorization:
               `Bearer ${serviceKey}`,
             Accept:
               "application/json",
           },
-          cache: "no-store",
+          cache:
+            "no-store",
         }
       );
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       console.warn(
         "[news] settings read failed:",
         response.status
@@ -929,7 +1170,9 @@ async function isNewsEnabled(
       await response.json();
 
     if (
-      !Array.isArray(rows) ||
+      !Array.isArray(
+        rows
+      ) ||
       rows.length === 0
     ) {
       return true;
@@ -950,7 +1193,7 @@ async function isNewsEnabled(
 }
 
 /* ============================================================
-   تبدیل تاریخ میلادی گزارش به شمسی
+   تاریخ شمسی
    ============================================================ */
 
 function toPersianDate(
@@ -960,7 +1203,8 @@ function toPersianDate(
     return new Intl.DateTimeFormat(
       "fa-IR-u-ca-persian",
       {
-        timeZone: TIME_ZONE,
+        timeZone:
+          TIME_ZONE,
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -972,7 +1216,33 @@ function toPersianDate(
 }
 
 /* ============================================================
-   ساخت پیام بله
+   Escape HTML
+   ============================================================ */
+
+function escapeHtml(
+  value: string
+): string {
+  return String(value || "")
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    );
+}
+
+/* ============================================================
+   ساخت پیام
    ============================================================ */
 
 function buildBaleMessage(
@@ -1044,7 +1314,10 @@ function buildBaleMessage(
               " "
             )
             .trim()
-            .slice(0, 400);
+            .slice(
+              0,
+              400
+            );
 
         if (
           cleanDescription
@@ -1057,12 +1330,9 @@ function buildBaleMessage(
       }
 
       message +=
-        `🔗 <a href="${escapeHtmlAttribute(
+        `🔗 <a href="${escapeHtml(
           item.link
-        )}">متن کامل خبر</a>\n`;
-
-      message +=
-        `\n`;
+        )}">متن کامل خبر</a>\n\n`;
     }
   );
 
@@ -1073,38 +1343,6 @@ function buildBaleMessage(
     `🤖 <b>مدیر هوشمند گروه</b>`;
 
   return message;
-}
-
-/* ============================================================
-   جلوگیری از خراب شدن HTML بله
-   ============================================================ */
-
-function escapeHtml(
-  value: string
-): string {
-  return String(value || "")
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    );
-}
-
-function escapeHtmlAttribute(
-  value: string
-): string {
-  return escapeHtml(value);
 }
 
 /* ============================================================
@@ -1126,9 +1364,12 @@ async function sendToBale(
             "application/json",
         },
         body: JSON.stringify({
-          chat_id: chatId,
-          text: message,
-          parse_mode: "HTML",
+          chat_id:
+            chatId,
+          text:
+            message,
+          parse_mode:
+            "HTML",
           disable_web_page_preview:
             true,
         }),
@@ -1141,7 +1382,10 @@ async function sendToBale(
   let data: unknown;
 
   try {
-    data = JSON.parse(text);
+    data =
+      JSON.parse(
+        text
+      );
   } catch {
     data = text;
   }
@@ -1164,9 +1408,11 @@ export async function GET() {
     const {
       env,
     } =
-      await getCloudflareContext({
-        async: true,
-      });
+      await getCloudflareContext(
+        {
+          async: true,
+        }
+      );
 
     const token =
       env.BALE_SMART_TOKEN;
@@ -1191,7 +1437,7 @@ export async function GET() {
     }
 
     /*
-      بررسی دکمه/تنظیم لغو ارسال
+      بررسی وضعیت schedule_news
     */
 
     const enabled =
@@ -1203,8 +1449,10 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: true,
-          cancelled: true,
-          sent: false,
+          cancelled:
+            true,
+          sent:
+            false,
           message:
             "ارسال اخبار ثبت احوال لغو شده است.",
         },
@@ -1226,8 +1474,8 @@ export async function GET() {
 
     /*
       اگر حتی یک رسانه معتبر
-      وجود نداشته باشد، هیچ پیامی
-      به گروه ارسال نمی‌شود.
+      پیدا نشد، هیچ پیام بله‌ای
+      ارسال نمی‌شود.
     */
 
     if (
@@ -1235,14 +1483,16 @@ export async function GET() {
       MIN_MEDIA
     ) {
       console.log(
-        "[news] no valid media found; nothing will be sent."
+        "[news] no relevant trusted media found; nothing will be sent."
       );
 
       return NextResponse.json(
         {
           ok: true,
-          cancelled: false,
-          sent: false,
+          cancelled:
+            false,
+          sent:
+            false,
           reason:
             "no_relevant_media",
           news: {
@@ -1290,8 +1540,7 @@ export async function GET() {
     }
 
     /*
-      زمان واقعی ارسال را درست قبل از
-      ارسال به بله ثبت می‌کنیم.
+      زمان واقعی ارسال
     */
 
     const actualSendTime =
@@ -1314,12 +1563,16 @@ export async function GET() {
         message
       );
 
-    if (!bale.ok) {
+    if (
+      !bale.ok
+    ) {
       return NextResponse.json(
         {
           ok: false,
-          cancelled: false,
-          sent: false,
+          cancelled:
+            false,
+          sent:
+            false,
           actual_send_time:
             actualSendTime,
           news: {
@@ -1347,6 +1600,14 @@ export async function GET() {
               result.window.startIso,
             end:
               result.window.endIso,
+            start_tehran:
+              formatTehranDateTime(
+                result.window.start
+              ),
+            end_tehran:
+              formatTehranDateTime(
+                result.window.end
+              ),
           },
           bale,
         },
@@ -1359,8 +1620,10 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: true,
-        cancelled: false,
-        sent: true,
+        cancelled:
+          false,
+        sent:
+          true,
         actual_send_time:
           actualSendTime,
         news: {
@@ -1425,4 +1688,4 @@ export async function GET() {
       }
     );
   }
-}
+      }
