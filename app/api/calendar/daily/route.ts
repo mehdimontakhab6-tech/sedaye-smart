@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export const runtime = "edge";
-
 const TEHRAN_TZ = "Asia/Tehran";
 
 const WIDTH = 1024;
