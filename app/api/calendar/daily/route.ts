@@ -1636,6 +1636,12 @@ async function sendPhotoToBale(
   };
 }
 
+async function isCalendarEnabled(
+  env: CloudflareEnv
+) {
+  return true;
+}
+
 export async function GET() {
   try {
     const { env } =
