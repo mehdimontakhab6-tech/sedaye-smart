@@ -13,6 +13,9 @@
   "ai": {
     "binding": "AI"
   },
+  "browser": {
+    "binding": "BROWSER"
+  },
   "observability": {
     "enabled": true
   },
