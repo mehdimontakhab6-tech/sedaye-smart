@@ -100,25 +100,43 @@ function isPersianLeapYear(year: number) {
     `${year + 1}-03-20T12:00:00+03:30`
   );
 
-  const diff =
-    Math.round(
-      (next.getTime() - start.getTime()) / 86400000
-    );
+  const diff = Math.round(
+    (next.getTime() - start.getTime()) / 86400000
+  );
 
   return diff >= 366;
 }
 
-function getYearProgress(month: number, day: number, year: number) {
-  const dayOfYear = getPersianDayOfYear(month, day);
-  const totalDays = isPersianLeapYear(year) ? 366 : 365;
+function getYearProgress(
+  month: number,
+  day: number,
+  year: number
+) {
+  const dayOfYear = getPersianDayOfYear(
+    month,
+    day
+  );
+
+  const totalDays = isPersianLeapYear(year)
+    ? 366
+    : 365;
 
   return {
     dayOfYear,
     totalDays,
-    percent: ((dayOfYear / totalDays) * 100).toFixed(1),
-    remaining: Math.max(0, totalDays - dayOfYear),
+    percent: (
+      (dayOfYear / totalDays) *
+      100
+    ).toFixed(1),
+    remaining: Math.max(
+      0,
+      totalDays - dayOfYear
+    ),
     weeksRemaining: Math.ceil(
-      Math.max(0, totalDays - dayOfYear) / 7
+      Math.max(
+        0,
+        totalDays - dayOfYear
+      ) / 7
     ),
   };
 }
@@ -158,7 +176,9 @@ function getAnimal(year: number) {
     "خوک",
   ];
 
-  return animals[((year - 4) % 12 + 12) % 12];
+  return animals[
+    ((year - 4) % 12 + 12) % 12
+  ];
 }
 
 function getMoonPhase(date: Date) {
@@ -173,25 +193,41 @@ function getMoonPhase(date: Date) {
   const synodicMonth = 29.530588853;
 
   let age =
-    ((date.getTime() - knownNewMoon) / 86400000) %
+    ((date.getTime() - knownNewMoon) /
+      86400000) %
     synodicMonth;
 
   if (age < 0) {
     age += synodicMonth;
   }
 
-  if (age < 1.85) return "ماه نو 🌑";
-  if (age < 7.38) return "هلال افزاینده 🌒";
-  if (age < 9.22) return "ربع اول 🌓";
-  if (age < 14.77) return "تربیع افزاینده 🌔";
-  if (age < 16.61) return "ماه کامل 🌕";
-  if (age < 22.15) return "تربیع کاهنده 🌖";
-  if (age < 23.99) return "ربع آخر 🌗";
+  if (age < 1.85)
+    return "ماه نو 🌑";
+
+  if (age < 7.38)
+    return "هلال افزاینده 🌒";
+
+  if (age < 9.22)
+    return "ربع اول 🌓";
+
+  if (age < 14.77)
+    return "تربیع افزاینده 🌔";
+
+  if (age < 16.61)
+    return "ماه کامل 🌕";
+
+  if (age < 22.15)
+    return "تربیع کاهنده 🌖";
+
+  if (age < 23.99)
+    return "ربع آخر 🌗";
 
   return "هلال کاهنده 🌘";
 }
 
-async function getHijriDate(gregorian: string) {
+async function getHijriDate(
+  gregorian: string
+) {
   try {
     const response = await fetch(
       `https://api.aladhan.com/v1/gToH?date=${gregorian}`,
@@ -202,12 +238,17 @@ async function getHijriDate(gregorian: string) {
       }
     );
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return null;
+    }
 
     const json = await response.json();
+
     const hijri = json?.data?.hijri;
 
-    if (!hijri) return null;
+    if (!hijri) {
+      return null;
+    }
 
     return {
       day: hijri.day,
@@ -222,7 +263,9 @@ async function getHijriDate(gregorian: string) {
   }
 }
 
-async function getEvents(persianYear: number) {
+async function getEvents(
+  persianYear: number
+) {
   try {
     const response = await fetch(
       `https://hmarzban.github.io/pipe2time.ir/api/${persianYear}/events.json`,
@@ -233,7 +276,9 @@ async function getEvents(persianYear: number) {
       }
     );
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      return [];
+    }
 
     const data = await response.json();
 
@@ -243,18 +288,27 @@ async function getEvents(persianYear: number) {
 
     const events: any[] = [];
 
-    const yearData = data?.[String(persianYear)];
+    const yearData =
+      data?.[String(persianYear)];
 
     if (Array.isArray(yearData)) {
       for (const monthData of yearData) {
-        if (Array.isArray(monthData?.events)) {
-          events.push(...monthData.events);
+        if (
+          Array.isArray(
+            monthData?.events
+          )
+        ) {
+          events.push(
+            ...monthData.events
+          );
         }
       }
     }
 
     if (Array.isArray(data?.events)) {
-      events.push(...data.events);
+      events.push(
+        ...data.events
+      );
     }
 
     return events;
@@ -275,7 +329,8 @@ function getEventsForDay(
       ""
     );
 
-    const normalized = normalize(jDate);
+    const normalized =
+      normalize(jDate);
 
     const match = normalized.match(
       /^(?:\d{4}[\/\-])?(\d{1,2})[\/\-](\d{1,2})$/
@@ -290,16 +345,16 @@ function getEventsForDay(
 
     const eventMonth = Number(
       event?.jMonth ??
-      event?.month ??
-      event?.persianMonth ??
-      0
+        event?.month ??
+        event?.persianMonth ??
+        0
     );
 
     const eventDay = Number(
       event?.jDay ??
-      event?.day ??
-      event?.persianDay ??
-      0
+        event?.day ??
+        event?.persianDay ??
+        0
     );
 
     return (
@@ -309,15 +364,17 @@ function getEventsForDay(
   });
 }
 
-function getEventText(events: any[]) {
+function getEventText(
+  events: any[]
+) {
   return events
     .map((event) =>
       String(
         event?.text ||
-        event?.title ||
-        event?.name ||
-        event?.description ||
-        ""
+          event?.title ||
+          event?.name ||
+          event?.description ||
+          ""
       ).trim()
     )
     .filter(Boolean)
@@ -327,11 +384,9 @@ function getEventText(events: any[]) {
 /*
  * محتوای تأملی.
  *
- * فعلاً از نسبت دادن نقل‌قول‌های غیرمستند
- * به افراد مشهور خودداری شده است.
- *
- * این بخش بعداً می‌تواند با بانک ۳۶۵
- * نقل‌قول مستند و منبع‌دار تکمیل شود.
+ * فعلاً از نسبت دادن نقل‌قول‌های
+ * غیرمستند به افراد مشهور
+ * خودداری شده است.
  */
 
 const DAILY_CONTENT = [
@@ -439,53 +494,9 @@ const DAILY_CONTENT = [
 
 function getDailyContent(day: number) {
   return DAILY_CONTENT[
-    (day - 1) % DAILY_CONTENT.length
+    (day - 1) %
+      DAILY_CONTENT.length
   ];
-}
-
-async function isCalendarEnabled(
-  env: CloudflareEnv
-) {
-  try {
-    const url =
-      env.NEXT_PUBLIC_SUPABASE_URL;
-
-    const serviceKey =
-      env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!url || !serviceKey) {
-      return true;
-    }
-
-    const response = await fetch(
-      `${url}/rest/v1/settings?select=key,value&key=eq.schedule_calendar&limit=1`,
-      {
-        headers: {
-          apikey: serviceKey,
-          Authorization:
-            `Bearer ${serviceKey}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      return true;
-    }
-
-    const rows =
-      await response.json();
-
-    if (
-      !Array.isArray(rows) ||
-      rows.length === 0
-    ) {
-      return true;
-    }
-
-    return rows[0]?.value !== "false";
-  } catch {
-    return true;
-  }
 }
 
 function createInfographicHtml(data: {
@@ -506,36 +517,63 @@ function createInfographicHtml(data: {
   author: string;
   source: string;
 }) {
-  const eventsHtml = data.events.length
-    ? data.events
-        .map(
-          (event) => `
-            <div class="event">
-              <span class="bullet">●</span>
-              <span>${escapeHtml(event)}</span>
+  const progressValue = Math.min(
+    100,
+    Math.max(
+      0,
+      Number(data.progress)
+    )
+  );
+
+  const eventsHtml =
+    data.events.length
+      ? data.events
+          .map(
+            (event) => `
+              <div class="event-row">
+                <div class="event-icon">✓</div>
+                <div class="event-text">
+                  ${escapeHtml(event)}
+                </div>
+              </div>
+            `
+          )
+          .join("")
+      : `
+          <div class="event-row">
+            <div class="event-icon">•</div>
+            <div class="event-text">
+              مناسبتی برای امروز ثبت نشده است.
             </div>
-          `
-        )
-        .join("")
-    : `
-        <div class="event">
-          <span class="bullet">●</span>
-          <span>مناسبت ثبت‌شده‌ای برای امروز پیدا نشد.</span>
-        </div>
-      `;
+          </div>
+        `;
 
   return `
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
+
 <meta charset="utf-8">
-<meta name="viewport" content="width=${WIDTH}, height=${HEIGHT}">
+
+<meta
+  name="viewport"
+  content="width=${WIDTH}, height=${HEIGHT}"
+>
+
 <style>
 
 @font-face {
   font-family: Vazirmatn;
-  src: url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Regular.ttf") format("truetype");
+  src: url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Regular.ttf")
+    format("truetype");
   font-weight: 400;
+}
+
+@font-face {
+  font-family: Vazirmatn;
+  src: url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Bold.ttf")
+    format("truetype");
+  font-weight: 700;
 }
 
 * {
@@ -552,308 +590,888 @@ body {
 }
 
 body {
-  font-family: Vazirmatn, Arial, sans-serif;
+  font-family:
+    Vazirmatn,
+    Arial,
+    sans-serif;
+
   background:
+    radial-gradient(
+      circle at 90% 5%,
+      rgba(43, 125, 190, 0.16),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 5% 35%,
+      rgba(245, 171, 49, 0.12),
+      transparent 24%
+    ),
     linear-gradient(
       180deg,
-      #eef6fb 0%,
-      #ffffff 42%,
-      #f7fafc 100%
+      #f2f7fb 0%,
+      #ffffff 46%,
+      #f4f8fb 100%
     );
-  color: #17212b;
+
+  color: #182a3a;
 }
 
 .page {
   width: ${WIDTH}px;
   height: ${HEIGHT}px;
-  padding: 42px 48px 34px;
+
+  padding:
+    34px
+    42px
+    30px;
+
+  position: relative;
+
   display: flex;
   flex-direction: column;
+
+  overflow: hidden;
 }
 
-.header {
-  text-align: center;
-  margin-bottom: 22px;
-}
+/* HERO */
 
-.title {
-  font-size: 38px;
-  font-weight: 700;
-  color: #123c69;
-  margin-bottom: 10px;
-}
+.hero {
+  height: 258px;
 
-.subtitle {
-  font-size: 31px;
-  font-weight: 700;
-  color: #d88900;
-}
+  border-radius: 38px;
 
-.card {
-  background: rgba(255,255,255,0.96);
-  border: 2px solid #e3ebf2;
-  border-radius: 26px;
-  padding: 23px 28px;
-  margin-bottom: 17px;
+  padding:
+    34px
+    42px;
+
+  position: relative;
+  overflow: hidden;
+
+  color: white;
+
+  background:
+    linear-gradient(
+      135deg,
+      #0b3558 0%,
+      #145b8d 55%,
+      #2387b8 100%
+    );
+
   box-shadow:
-    0 8px 24px rgba(25, 55, 80, 0.06);
+    0 20px 45px
+    rgba(16, 63, 93, 0.20);
+
+  margin-bottom: 18px;
+}
+
+.hero::before {
+  content: "";
+
+  position: absolute;
+
+  width: 300px;
+  height: 300px;
+
+  border-radius: 50%;
+
+  top: -145px;
+  left: -90px;
+
+  background:
+    rgba(255,255,255,0.07);
+}
+
+.hero::after {
+  content: "";
+
+  position: absolute;
+
+  width: 240px;
+  height: 240px;
+
+  border-radius: 50%;
+
+  bottom: -160px;
+  right: -45px;
+
+  background:
+    rgba(255,190,55,0.16);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+}
+
+.brand {
+  font-size: 24px;
+  font-weight: 700;
+
+  opacity: 0.88;
+
+  margin-bottom: 8px;
+}
+
+.hero-title {
+  font-size: 38px;
+  line-height: 1.25;
+
+  font-weight: 700;
+
+  margin-bottom: 12px;
+}
+
+.hero-subtitle {
+  font-size: 23px;
+
+  color: #ffe6a9;
+
+  font-weight: 700;
+}
+
+.sun {
+  position: absolute;
+
+  left: 38px;
+  top: 35px;
+
+  width: 88px;
+  height: 88px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      #fff8d7 0%,
+      #ffd66a 55%,
+      #f2a62a 100%
+    );
+
+  box-shadow:
+    0 0 50px
+    rgba(255,207,86,0.34);
+}
+
+/* MAIN DATE */
+
+.date-panel {
+  margin-top: 16px;
+
+  min-height: 198px;
+
+  background: rgba(
+    255,
+    255,
+    255,
+    0.96
+  );
+
+  border: 1px solid #e1ebf2;
+
+  border-radius: 30px;
+
+  padding: 24px 30px;
+
+  box-shadow:
+    0 13px 35px
+    rgba(25,55,80,0.07);
+
+  position: relative;
+}
+
+.date-weekday {
+  color: #6b7d8b;
+
+  font-size: 22px;
+
+  font-weight: 700;
+
+  margin-bottom: 4px;
 }
 
 .date-main {
-  font-size: 29px;
+  color: #0d4771;
+
+  font-size: 46px;
+
   font-weight: 700;
-  color: #123c69;
-  margin-bottom: 9px;
+
+  letter-spacing: -1px;
+
+  line-height: 1.25;
+
+  margin-bottom: 14px;
 }
 
-.date-line {
-  font-size: 22px;
-  color: #596a78;
-  margin-bottom: 6px;
+.date-grid {
+  display: flex;
+
+  gap: 12px;
 }
 
-.time {
-  font-size: 24px;
-  font-weight: 700;
-  color: #123c69;
-  margin-top: 5px;
+.date-chip {
+  flex: 1;
+
+  background: #f4f8fb;
+
+  border-radius: 16px;
+
+  padding: 11px 14px;
+
+  border: 1px solid #e2ebf1;
 }
 
-.section-title {
-  font-size: 25px;
+.date-chip-label {
+  color: #82919c;
+
+  font-size: 14px;
+
+  margin-bottom: 3px;
+}
+
+.date-chip-value {
+  color: #314656;
+
+  font-size: 18px;
+
   font-weight: 700;
-  color: #123c69;
+}
+
+.clock {
+  position: absolute;
+
+  left: 27px;
+  top: 25px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #0d4d76,
+      #1c7fa9
+    );
+
+  color: white;
+
+  border-radius: 18px;
+
+  padding:
+    10px
+    17px;
+
+  font-size: 19px;
+
+  font-weight: 700;
+
+  box-shadow:
+    0 7px 17px
+    rgba(13,77,118,0.18);
+}
+
+/* YEAR PROGRESS */
+
+.progress-panel {
+  margin-top: 16px;
+
+  background: #ffffff;
+
+  border-radius: 30px;
+
+  padding: 21px 28px;
+
+  border: 1px solid #e2ebf1;
+
+  box-shadow:
+    0 12px 32px
+    rgba(25,55,80,0.06);
+}
+
+.panel-heading {
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
   margin-bottom: 13px;
 }
 
+.panel-title {
+  font-size: 23px;
+
+  color: #164e75;
+
+  font-weight: 700;
+}
+
+.percent {
+  font-size: 20px;
+
+  color: #e29a1d;
+
+  font-weight: 700;
+}
+
 .progress-track {
+  height: 25px;
+
   width: 100%;
-  height: 23px;
-  background: #e6edf3;
+
+  background: #e9eff4;
+
   border-radius: 20px;
+
+  padding: 4px;
+
   overflow: hidden;
 }
 
 .progress-fill {
-  width: ${Math.min(
-    100,
-    Number(data.progress)
-  )}%;
-  height: 23px;
-  background: linear-gradient(
-    90deg,
-    #d88900,
-    #f0ad2c
-  );
-  border-radius: 20px;
+  width: ${progressValue}%;
+
+  height: 17px;
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #f0a52a,
+      #f7c75d,
+      #eaa12c
+    );
+
+  box-shadow:
+    0 3px 9px
+    rgba(235,165,42,0.25);
 }
 
-.progress-info {
-  margin-top: 9px;
+.progress-meta {
   display: flex;
+
   justify-content: space-between;
-  font-size: 19px;
-  color: #596a78;
+
+  margin-top: 9px;
+
+  font-size: 16px;
+
+  color: #738390;
 }
+
+/* STATS */
 
 .stats {
   display: flex;
-  gap: 14px;
-  margin-bottom: 17px;
+
+  gap: 13px;
+
+  margin-top: 16px;
 }
 
 .stat {
   flex: 1;
+
+  min-height: 112px;
+
   background: #ffffff;
-  border: 2px solid #e3ebf2;
-  border-radius: 23px;
-  padding: 19px 15px;
-  min-height: 92px;
+
+  border-radius: 25px;
+
+  border: 1px solid #e1eaf0;
+
+  padding:
+    17px
+    13px;
+
+  text-align: center;
+
+  box-shadow:
+    0 10px 25px
+    rgba(25,55,80,0.055);
 }
 
-.stat-label {
-  font-size: 17px;
-  color: #778591;
-  margin-bottom: 6px;
-}
+.stat-icon {
+  font-size: 29px;
 
-.stat-value {
-  font-size: 21px;
-  font-weight: 700;
-  color: #243447;
-}
+  line-height: 1;
 
-.events {
-  padding-top: 1px;
-}
-
-.event {
-  display: flex;
-  gap: 9px;
-  align-items: flex-start;
-  font-size: 20px;
-  line-height: 1.45;
-  color: #334554;
   margin-bottom: 7px;
 }
 
-.bullet {
-  color: #d88900;
-  font-size: 12px;
-  margin-top: 8px;
+.stat-label {
+  font-size: 14px;
+
+  color: #83919c;
+
+  margin-bottom: 4px;
 }
 
-.quote-card {
+.stat-value {
+  font-size: 18px;
+
+  color: #274355;
+
+  font-weight: 700;
+
+  line-height: 1.35;
+}
+
+/* EVENTS */
+
+.events-panel {
+  margin-top: 16px;
+
   background:
     linear-gradient(
       135deg,
-      #fffaf0,
-      #fffdf8
+      #ffffff,
+      #f8fbfd
     );
-  border-color: #f0dfb9;
+
+  border-radius: 30px;
+
+  border: 1px solid #e0e9ef;
+
+  padding: 20px 27px;
+
+  box-shadow:
+    0 10px 28px
+    rgba(25,55,80,0.055);
 }
 
-.quote {
+.events-heading {
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
   font-size: 23px;
-  line-height: 1.55;
+
   font-weight: 700;
-  color: #273746;
+
+  color: #164e75;
+
+  margin-bottom: 13px;
+}
+
+.event-row {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 11px;
+
+  padding: 8px 0;
+
+  border-bottom:
+    1px solid #edf1f4;
+
+  font-size: 17px;
+
+  color: #3e5362;
+
+  line-height: 1.45;
+}
+
+.event-row:last-child {
+  border-bottom: none;
+}
+
+.event-icon {
+  flex: 0 0 27px;
+
+  width: 27px;
+  height: 27px;
+
+  border-radius: 50%;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  background: #e8f4f8;
+
+  color: #1681a5;
+
+  font-size: 14px;
+
+  font-weight: 700;
+}
+
+.event-text {
+  flex: 1;
+}
+
+/* QUOTE */
+
+.quote-panel {
+  margin-top: 16px;
+
+  border-radius: 30px;
+
+  padding:
+    21px
+    28px;
+
+  position: relative;
+
+  overflow: hidden;
+
+  background:
+    linear-gradient(
+      135deg,
+      #fff9ec,
+      #fffdf7
+    );
+
+  border: 1px solid #f0dfb6;
+
+  box-shadow:
+    0 10px 27px
+    rgba(184,133,42,0.07);
+}
+
+.quote-mark {
+  position: absolute;
+
+  left: 22px;
+  top: -9px;
+
+  font-size: 92px;
+
+  line-height: 1;
+
+  color: #edc66d;
+
+  opacity: 0.45;
+
+  font-family: Georgia, serif;
+}
+
+.quote-heading {
+  color: #a87312;
+
+  font-size: 20px;
+
+  font-weight: 700;
+
   margin-bottom: 9px;
 }
 
-.author {
-  font-size: 17px;
-  color: #687681;
+.quote {
+  position: relative;
+
+  z-index: 2;
+
+  color: #39434b;
+
+  font-size: 21px;
+
+  font-weight: 700;
+
+  line-height: 1.55;
+
+  margin-bottom: 8px;
 }
 
-.source {
+.quote-author {
+  color: #7d858b;
+
   font-size: 15px;
-  color: #89949c;
-  margin-top: 4px;
 }
 
-.thought-card {
+/* THOUGHT */
+
+.thought-panel {
+  margin-top: 16px;
+
+  border-radius: 30px;
+
+  padding:
+    20px
+    28px;
+
   background:
     linear-gradient(
       135deg,
-      #edf7fc,
-      #f8fbfd
+      #0d466b,
+      #176e91
     );
-  border-color: #d8eaf4;
+
+  color: white;
+
+  box-shadow:
+    0 14px 32px
+    rgba(16,77,108,0.18);
+
+  position: relative;
+
+  overflow: hidden;
+}
+
+.thought-panel::after {
+  content: "✦";
+
+  position: absolute;
+
+  left: 25px;
+  bottom: -25px;
+
+  font-size: 125px;
+
+  color:
+    rgba(255,255,255,0.07);
+}
+
+.thought-heading {
+  font-size: 20px;
+
+  color: #ffe4a1;
+
+  font-weight: 700;
+
+  margin-bottom: 8px;
 }
 
 .thought {
-  font-size: 22px;
+  font-size: 20px;
+
   line-height: 1.55;
-  color: #243447;
-  font-weight: 600;
+
+  font-weight: 700;
+
+  position: relative;
+
+  z-index: 2;
 }
+
+/* FOOTER */
 
 .footer {
   margin-top: auto;
+
+  padding-top: 17px;
+
   text-align: center;
-  font-size: 23px;
+
+  color: #527083;
+
+  font-size: 19px;
+
   font-weight: 700;
-  color: #123c69;
-  padding-top: 10px;
+
+  letter-spacing: 0.2px;
+}
+
+.footer-line {
+  width: 110px;
+
+  height: 3px;
+
+  border-radius: 5px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #e8a32b,
+      #1b7197
+    );
+
+  margin:
+    0 auto
+    10px;
 }
 
 </style>
 </head>
 
 <body>
+
 <div class="page">
 
-  <div class="header">
-    <div class="title">
-      تقویم روزانه گروه صدای کارکنان ثبت احوال
-    </div>
-    <div class="subtitle">
-      ☀️ روزت پر از اتفاقات خوب
-    </div>
-  </div>
+  <!-- HERO -->
 
-  <div class="card">
+  <section class="hero">
+
+    <div class="sun"></div>
+
+    <div class="hero-content">
+
+      <div class="brand">
+        صدای کارکنان ثبت احوال
+      </div>
+
+      <div class="hero-title">
+        تقویم روزانه گروه
+      </div>
+
+      <div class="hero-subtitle">
+        ☀️ روزت پر از اتفاقات خوب
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- DATE -->
+
+  <section class="date-panel">
+
+    <div class="clock">
+      ⏰ ${escapeHtml(data.time)}
+    </div>
+
+    <div class="date-weekday">
+      ${escapeHtml(data.weekday)}
+    </div>
+
     <div class="date-main">
-      ${escapeHtml(data.weekday)} — ${escapeHtml(data.persianDate)}
+      ${escapeHtml(data.persianDate)}
     </div>
 
-    <div class="date-line">
-      میلادی: ${escapeHtml(data.gregorianDate)}
+    <div class="date-grid">
+
+      <div class="date-chip">
+        <div class="date-chip-label">
+          میلادی
+        </div>
+
+        <div class="date-chip-value">
+          ${escapeHtml(data.gregorianDate)}
+        </div>
+      </div>
+
+      <div class="date-chip">
+        <div class="date-chip-label">
+          قمری
+        </div>
+
+        <div class="date-chip-value">
+          ${escapeHtml(data.hijriDate)}
+        </div>
+      </div>
+
     </div>
 
-    <div class="date-line">
-      قمری: ${escapeHtml(data.hijriDate)}
-    </div>
+  </section>
 
-    <div class="time">
-      ⏰ ساعت تهران: ${escapeHtml(data.time)}
-    </div>
-  </div>
+  <!-- YEAR PROGRESS -->
 
-  <div class="card">
-    <div class="section-title">
-      📊 چشم‌انداز سال
+  <section class="progress-panel">
+
+    <div class="panel-heading">
+
+      <div class="panel-title">
+        📊 چشم‌انداز سال
+      </div>
+
+      <div class="percent">
+        ${escapeHtml(data.progress)}٪
+      </div>
+
     </div>
 
     <div class="progress-track">
+
       <div class="progress-fill"></div>
+
     </div>
 
-    <div class="progress-info">
+    <div class="progress-meta">
+
       <span>
-        ${escapeHtml(data.progress)}٪ از سال گذشته
+        ${escapeHtml(data.remaining)}
+        روز باقی‌مانده
       </span>
 
       <span>
-        ${escapeHtml(data.remaining)} روز باقی‌مانده
+        حدود
+        ${escapeHtml(data.weeksRemaining)}
+        هفته
       </span>
+
     </div>
 
-    <div class="progress-info">
-      <span>
-        حدود ${escapeHtml(data.weeksRemaining)} هفته باقی‌مانده
-      </span>
-    </div>
-  </div>
+  </section>
 
-  <div class="stats">
+  <!-- STATS -->
+
+  <section class="stats">
 
     <div class="stat">
-      <div class="stat-label">ماه</div>
+
+      <div class="stat-icon">
+        🌙
+      </div>
+
+      <div class="stat-label">
+        وضعیت ماه
+      </div>
+
       <div class="stat-value">
         ${escapeHtml(data.moon)}
       </div>
+
     </div>
 
     <div class="stat">
-      <div class="stat-label">برج</div>
+
+      <div class="stat-icon">
+        ♈
+      </div>
+
+      <div class="stat-label">
+        برج
+      </div>
+
       <div class="stat-value">
         ${escapeHtml(data.zodiac)}
       </div>
+
     </div>
 
     <div class="stat">
-      <div class="stat-label">نماد سال</div>
+
+      <div class="stat-icon">
+        🐎
+      </div>
+
+      <div class="stat-label">
+        نماد سال
+      </div>
+
       <div class="stat-value">
         ${escapeHtml(data.animal)}
       </div>
+
     </div>
 
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="section-title">
+  <!-- EVENTS -->
+
+  <section class="events-panel">
+
+    <div class="events-heading">
       📌 مناسبت‌های امروز
     </div>
 
-    <div class="events">
-      ${eventsHtml}
-    </div>
-  </div>
+    ${eventsHtml}
 
-  <div class="card quote-card">
-    <div class="section-title">
+  </section>
+
+  <!-- QUOTE -->
+
+  <section class="quote-panel">
+
+    <div class="quote-mark">
+      “
+    </div>
+
+    <div class="quote-heading">
       💬 سخن امروز
     </div>
 
@@ -861,30 +1479,39 @@ body {
       «${escapeHtml(data.quote)}»
     </div>
 
-    <div class="author">
+    <div class="quote-author">
       — ${escapeHtml(data.author)}
+      · ${escapeHtml(data.source)}
     </div>
 
-    <div class="source">
-      منبع: ${escapeHtml(data.source)}
-    </div>
-  </div>
+  </section>
 
-  <div class="card thought-card">
-    <div class="section-title">
+  <!-- THOUGHT -->
+
+  <section class="thought-panel">
+
+    <div class="thought-heading">
       💭 جرعه‌ای تفکر
     </div>
 
     <div class="thought">
       «${escapeHtml(data.thought)}»
     </div>
-  </div>
 
-  <div class="footer">
+  </section>
+
+  <!-- FOOTER -->
+
+  <footer class="footer">
+
+    <div class="footer-line"></div>
+
     هم‌صدایی برای تحول و بهبود
-  </div>
+
+  </footer>
 
 </div>
+
 </body>
 </html>
 `;
@@ -925,15 +1552,18 @@ async function createInfographic(
       "screenshot",
       {
         html,
+
         viewport: {
           width: WIDTH,
           height: HEIGHT,
           deviceScaleFactor: 1,
         },
+
         screenshotOptions: {
           fullPage: false,
           type: "png",
         },
+
         gotoOptions: {
           waitUntil: "networkidle0",
           timeout: 30000,
@@ -943,9 +1573,9 @@ async function createInfographic(
 
   if (!response.ok) {
     const errorText =
-      await response.text().catch(
-        () => ""
-      );
+      await response
+        .text()
+        .catch(() => "");
 
     throw new Error(
       `خطا در تولید تصویر توسط Browser Run: ${response.status} ${errorText}`
@@ -976,23 +1606,24 @@ async function sendPhotoToBale(
   );
 
   form.append(
-  "photo",
-  new Blob(
-    [new Uint8Array(png)],
-    {
-      type: "image/png",
-    }
-  ),
-  "calendar.png"
-);
-
-  const response = await fetch(
-    `https://tapi.bale.ai/bot${token}/sendPhoto`,
-    {
-      method: "POST",
-      body: form,
-    }
+    "photo",
+    new Blob(
+      [new Uint8Array(png)],
+      {
+        type: "image/png",
+      }
+    ),
+    "calendar.png"
   );
+
+  const response =
+    await fetch(
+      `https://tapi.bale.ai/bot${token}/sendPhoto`,
+      {
+        method: "POST",
+        body: form,
+      }
+    );
 
   const result =
     await response
@@ -1013,8 +1644,7 @@ export async function GET() {
       });
 
     /*
-     * این قسمت دست‌نخورده باقی مانده
-     * تا امکان لغو ارسال تقویم حفظ شود.
+     * حفظ قابلیت لغو ارسال تقویم
      */
     const enabled =
       await isCalendarEnabled(env);
@@ -1061,16 +1691,24 @@ export async function GET() {
 
     const gregorian =
       `${tehran.year}-` +
-      `${String(tehran.month).padStart(2, "0")}-` +
-      `${String(tehran.day).padStart(2, "0")}`;
+      `${String(
+        tehran.month
+      ).padStart(2, "0")}-` +
+      `${String(
+        tehran.day
+      ).padStart(2, "0")}`;
 
     const weekday =
       getWeekday(now);
 
     const hijri =
       await getHijriDate(
-        `${String(tehran.day).padStart(2, "0")}-` +
-        `${String(tehran.month).padStart(2, "0")}-` +
+        `${String(
+          tehran.day
+        ).padStart(2, "0")}-` +
+        `${String(
+          tehran.month
+        ).padStart(2, "0")}-` +
         `${tehran.year}`
       );
 
@@ -1116,8 +1754,16 @@ export async function GET() {
 
           persianDate:
             `${fa(persian.year)}/` +
-            `${fa(String(persian.month).padStart(2, "0"))}/` +
-            `${fa(String(persian.day).padStart(2, "0"))}`,
+            `${fa(
+              String(
+                persian.month
+              ).padStart(2, "0")
+            )}/` +
+            `${fa(
+              String(
+                persian.day
+              ).padStart(2, "0")
+            )}`,
 
           hijriDate:
             hijriText,
@@ -1134,7 +1780,9 @@ export async function GET() {
             fa(progress.remaining),
 
           weeksRemaining:
-            fa(progress.weeksRemaining),
+            fa(
+              progress.weeksRemaining
+            ),
 
           moon:
             getMoonPhase(now),
@@ -1192,7 +1840,9 @@ export async function GET() {
       bale:
         sent.result,
     });
+
   } catch (error) {
+
     console.error(
       "[calendar] error:",
       error
@@ -1201,6 +1851,7 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: false,
+
         error:
           error instanceof Error
             ? error.message
@@ -1211,4 +1862,4 @@ export async function GET() {
       }
     );
   }
-    }
+}
