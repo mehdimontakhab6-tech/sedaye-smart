@@ -1499,12 +1499,10 @@ async function fetchSpecialSource(
       );
 
     const candidates =
-      results.filter(
-        (
-          item
-        ): item =>
-          item !== null
-      );
+  results.filter(
+    (item) =>
+      item !== null
+  );
 
     diagnostics.parsedItems =
       candidates.length;
