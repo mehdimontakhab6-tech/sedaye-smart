@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { satori } from "@cf-wasm/satori/workerd";
-import { Resvg } from "@cf-wasm/resvg/workerd";
 
 const TIME_ZONE = "Asia/Tehran";
 const WIDTH = 1024;
@@ -10,16 +8,22 @@ const HEIGHT = 1536;
 const digits = "۰۱۲۳۴۵۶۷۸۹";
 
 function fa(value: number | string) {
-  return String(value).replace(
-    /\d/g,
-    (d) => digits[Number(d)]
-  );
+  return String(value).replace(/\d/g, (d) => digits[Number(d)]);
 }
 
 function normalize(value: string) {
   return value.replace(/[۰-۹]/g, (d) =>
     String(digits.indexOf(d))
   );
+}
+
+function escapeHtml(value: string) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function getTehranParts() {
@@ -77,10 +81,7 @@ function getWeekday(date: Date) {
   }).format(date);
 }
 
-function getPersianDayOfYear(
-  month: number,
-  day: number
-) {
+function getPersianDayOfYear(month: number, day: number) {
   let total = 0;
 
   for (let m = 1; m < month; m++) {
@@ -90,24 +91,34 @@ function getPersianDayOfYear(
   return total + day;
 }
 
-function getYearProgress(
-  month: number,
-  day: number
-) {
-  const dayOfYear = getPersianDayOfYear(month, day);
+function isPersianLeapYear(year: number) {
+  const start = new Date(
+    `${year}-03-20T12:00:00+03:30`
+  );
 
-  const totalDays = 365;
+  const next = new Date(
+    `${year + 1}-03-20T12:00:00+03:30`
+  );
+
+  const diff =
+    Math.round(
+      (next.getTime() - start.getTime()) / 86400000
+    );
+
+  return diff >= 366;
+}
+
+function getYearProgress(month: number, day: number, year: number) {
+  const dayOfYear = getPersianDayOfYear(month, day);
+  const totalDays = isPersianLeapYear(year) ? 366 : 365;
 
   return {
     dayOfYear,
     totalDays,
-    percent: (
-      (dayOfYear / totalDays) *
-      100
-    ).toFixed(1),
-    remaining: Math.max(
-      0,
-      totalDays - dayOfYear
+    percent: ((dayOfYear / totalDays) * 100).toFixed(1),
+    remaining: Math.max(0, totalDays - dayOfYear),
+    weeksRemaining: Math.ceil(
+      Math.max(0, totalDays - dayOfYear) / 7
     ),
   };
 }
@@ -147,9 +158,7 @@ function getAnimal(year: number) {
     "خوک",
   ];
 
-  return animals[
-    ((year - 4) % 12 + 12) % 12
-  ];
+  return animals[((year - 4) % 12 + 12) % 12];
 }
 
 function getMoonPhase(date: Date) {
@@ -164,8 +173,7 @@ function getMoonPhase(date: Date) {
   const synodicMonth = 29.530588853;
 
   let age =
-    ((date.getTime() - knownNewMoon) /
-      86400000) %
+    ((date.getTime() - knownNewMoon) / 86400000) %
     synodicMonth;
 
   if (age < 0) {
@@ -183,9 +191,7 @@ function getMoonPhase(date: Date) {
   return "هلال کاهنده 🌘";
 }
 
-async function getHijriDate(
-  gregorian: string
-) {
+async function getHijriDate(gregorian: string) {
   try {
     const response = await fetch(
       `https://api.aladhan.com/v1/gToH?date=${gregorian}`,
@@ -216,9 +222,7 @@ async function getHijriDate(
   }
 }
 
-async function getEvents(
-  persianYear: number
-) {
+async function getEvents(persianYear: number) {
   try {
     const response = await fetch(
       `https://hmarzban.github.io/pipe2time.ir/api/${persianYear}/events.json`,
@@ -239,17 +243,12 @@ async function getEvents(
 
     const events: any[] = [];
 
-    const yearData =
-      data?.[String(persianYear)];
+    const yearData = data?.[String(persianYear)];
 
     if (Array.isArray(yearData)) {
       for (const monthData of yearData) {
-        if (
-          Array.isArray(monthData?.events)
-        ) {
-          events.push(
-            ...monthData.events
-          );
+        if (Array.isArray(monthData?.events)) {
+          events.push(...monthData.events);
         }
       }
     }
@@ -325,25 +324,14 @@ function getEventText(events: any[]) {
     .slice(0, 5);
 }
 
-function isHoliday(events: any[]) {
-  return events.some(
-    (event) =>
-      event?.isHoliday === true ||
-      event?.isHoliday === 1 ||
-      event?.isHoliday === "1" ||
-      event?.holiday === true ||
-      event?.holiday === 1 ||
-      event?.holiday === "1" ||
-      event?.is_holiday === true
-  );
-}
-
 /*
- * بانک اولیه محتوای روزانه.
+ * محتوای تأملی.
  *
- * نکته:
- * این بخش عمداً با نقل‌قول‌های جعلی پر نشده است.
- * بانک ۳۶۵ سخن مستند در مرحله بعدی اضافه می‌شود.
+ * فعلاً از نسبت دادن نقل‌قول‌های غیرمستند
+ * به افراد مشهور خودداری شده است.
+ *
+ * این بخش بعداً می‌تواند با بانک ۳۶۵
+ * نقل‌قول مستند و منبع‌دار تکمیل شود.
  */
 
 const DAILY_CONTENT = [
@@ -351,7 +339,7 @@ const DAILY_CONTENT = [
     thought:
       "امروز فقط یک قدم کوچک بردار؛ مسیرهای بزرگ از قدم‌های کوچک ساخته می‌شوند.",
     quote:
-      "دانایی، آغاز هر تغییر پایدار است.",
+      "پیشرفت، نتیجه قدم‌های کوچک و پیوسته است.",
     author:
       "محتوای تأملی گروه",
     source:
@@ -381,7 +369,7 @@ const DAILY_CONTENT = [
     thought:
       "امروز یک کار را بهتر از دیروز انجام بده؛ همین کافی است.",
     quote:
-      "پیشرفت، مجموعه‌ای از قدم‌های کوچک و پیوسته است.",
+      "بهتر شدن، همیشه با یک تغییر کوچک آغاز می‌شود.",
     author:
       "محتوای تأملی گروه",
     source:
@@ -451,8 +439,7 @@ const DAILY_CONTENT = [
 
 function getDailyContent(day: number) {
   return DAILY_CONTENT[
-    (day - 1) %
-      DAILY_CONTENT.length
+    (day - 1) % DAILY_CONTENT.length
   ];
 }
 
@@ -501,38 +488,7 @@ async function isCalendarEnabled(
   }
 }
 
-async function getFont() {
-  const response = await fetch(
-    "https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Regular.ttf"
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      "خطا در دریافت فونت فارسی"
-    );
-  }
-
-  return response.arrayBuffer();
-}
-
-function makeElement(
-  type: string,
-  style: Record<string, unknown>,
-  children?: unknown
-) {
-  return {
-    type,
-    props: {
-      style,
-      ...(children !== undefined
-        ? { children }
-        : {}),
-    },
-  };
-}
-
-async function createInfographic(data: {
-  title: string;
+function createInfographicHtml(data: {
   weekday: string;
   persianDate: string;
   hijriDate: string;
@@ -540,6 +496,7 @@ async function createInfographic(data: {
   time: string;
   progress: string;
   remaining: string;
+  weeksRemaining: string;
   moon: string;
   zodiac: string;
   animal: string;
@@ -549,456 +506,455 @@ async function createInfographic(data: {
   author: string;
   source: string;
 }) {
-  const fontData = await getFont();
-
-  const eventNodes =
-    data.events.length
-      ? data.events.map((event) =>
-          makeElement(
-            "div",
-            {
-              display: "flex",
-              direction: "rtl",
-              fontSize: 28,
-              lineHeight: 1.5,
-              marginBottom: 10,
-              color: "#243447",
-            },
-            `• ${event}`
-          )
+  const eventsHtml = data.events.length
+    ? data.events
+        .map(
+          (event) => `
+            <div class="event">
+              <span class="bullet">●</span>
+              <span>${escapeHtml(event)}</span>
+            </div>
+          `
         )
-      : [
-          makeElement(
-            "div",
-            {
-              display: "flex",
-              direction: "rtl",
-              fontSize: 27,
-              color: "#536271",
-            },
-            "• مناسبت ثبت‌شده‌ای برای امروز پیدا نشد."
-          ),
-        ];
+        .join("")
+    : `
+        <div class="event">
+          <span class="bullet">●</span>
+          <span>مناسبت ثبت‌شده‌ای برای امروز پیدا نشد.</span>
+        </div>
+      `;
 
-  const tree = makeElement(
-    "div",
-    {
-      width: WIDTH,
-      height: HEIGHT,
-      display: "flex",
-      flexDirection: "column",
-      direction: "rtl",
-      background:
-        "linear-gradient(180deg,#f4f8fb 0%,#ffffff 100%)",
-      fontFamily: "Vazirmatn",
-      color: "#17212b",
-      padding: 48,
-      boxSizing: "border-box",
-    },
-    [
-      makeElement(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          textAlign: "center",
-          paddingBottom: 30,
-        },
-        [
-          makeElement(
-            "div",
-            {
-              fontSize: 40,
-              fontWeight: 700,
-              color: "#123c69",
-              marginBottom: 14,
-            },
-            data.title
-          ),
-          makeElement(
-            "div",
-            {
-              fontSize: 34,
-              fontWeight: 700,
-              color: "#d88900",
-            },
-            "☀️ روزت پر از اتفاقات خوب"
-          ),
-        ]
-      ),
+  return `
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=${WIDTH}, height=${HEIGHT}">
+<style>
 
-      makeElement(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "column",
-          background: "#ffffff",
-          borderRadius: 30,
-          padding: 32,
-          marginBottom: 24,
-          border: "2px solid #e5edf4",
-        },
-        [
-          makeElement(
-            "div",
-            {
-              fontSize: 31,
-              fontWeight: 700,
-              color: "#123c69",
-              marginBottom: 18,
-            },
-            `${data.weekday} — ${data.persianDate}`
-          ),
+@font-face {
+  font-family: Vazirmatn;
+  src: url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Regular.ttf") format("truetype");
+  font-weight: 400;
+}
 
-          makeElement(
-            "div",
-            {
-              fontSize: 25,
-              color: "#4b5d6b",
-              marginBottom: 10,
-            },
-            `میلادی: ${data.gregorianDate}`
-          ),
+* {
+  box-sizing: border-box;
+}
 
-          makeElement(
-            "div",
-            {
-              fontSize: 25,
-              color: "#4b5d6b",
-              marginBottom: 10,
-            },
-            `قمری: ${data.hijriDate}`
-          ),
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: ${WIDTH}px;
+  height: ${HEIGHT}px;
+  overflow: hidden;
+}
 
-          makeElement(
-            "div",
-            {
-              fontSize: 27,
-              color: "#123c69",
-              fontWeight: 700,
-            },
-            `⏰ ساعت تهران: ${data.time}`
-          ),
-        ]
-      ),
+body {
+  font-family: Vazirmatn, Arial, sans-serif;
+  background:
+    linear-gradient(
+      180deg,
+      #eef6fb 0%,
+      #ffffff 42%,
+      #f7fafc 100%
+    );
+  color: #17212b;
+}
 
-      makeElement(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "column",
-          background: "#ffffff",
-          borderRadius: 30,
-          padding: 32,
-          marginBottom: 24,
-          border: "2px solid #e5edf4",
-        },
-        [
-          makeElement(
-            "div",
-            {
-              fontSize: 29,
-              fontWeight: 700,
-              color: "#123c69",
-              marginBottom: 16,
-            },
-            "📊 چشم‌انداز سال"
-          ),
+.page {
+  width: ${WIDTH}px;
+  height: ${HEIGHT}px;
+  padding: 42px 48px 34px;
+  display: flex;
+  flex-direction: column;
+}
 
-          makeElement(
-            "div",
-            {
-              height: 28,
-              width: 880,
-              background: "#e6edf3",
-              borderRadius: 20,
-              display: "flex",
-              overflow: "hidden",
-              marginBottom: 14,
-            },
-            makeElement(
-              "div",
-              {
-                width: `${Math.min(
-                  100,
-                  Number(
-                    data.progress
-                  )
-                )}%`,
-                height: 28,
-                background: "#d88900",
-                borderRadius: 20,
-              }
-            )
-          ),
+.header {
+  text-align: center;
+  margin-bottom: 22px;
+}
 
-          makeElement(
-            "div",
-            {
-              fontSize: 24,
-              color: "#536271",
-            },
-            `روز ${data.progress}% از سال — ${data.remaining} روز باقی‌مانده`
-          ),
-        ]
-      ),
+.title {
+  font-size: 38px;
+  font-weight: 700;
+  color: #123c69;
+  margin-bottom: 10px;
+}
 
-      makeElement(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "row",
-          gap: 18,
-          marginBottom: 24,
-        },
-        [
-          makeElement(
-            "div",
-            {
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              background: "#ffffff",
-              borderRadius: 26,
-              padding: 26,
-              border: "2px solid #e5edf4",
-            },
-            [
-              makeElement(
-                "div",
-                {
-                  fontSize: 23,
-                  color: "#6a7782",
-                  marginBottom: 8,
-                },
-                "ماه"
-              ),
-              makeElement(
-                "div",
-                {
-                  fontSize: 27,
-                  fontWeight: 700,
-                },
-                data.moon
-              ),
-            ]
-          ),
+.subtitle {
+  font-size: 31px;
+  font-weight: 700;
+  color: #d88900;
+}
 
-          makeElement(
-            "div",
-            {
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              background: "#ffffff",
-              borderRadius: 26,
-              padding: 26,
-              border: "2px solid #e5edf4",
-            },
-            [
-              makeElement(
-                "div",
-                {
-                  fontSize: 23,
-                  color: "#6a7782",
-                  marginBottom: 8,
-                },
-                "برج"
-              ),
-              makeElement(
-                "div",
-                {
-                  fontSize: 27,
-                  fontWeight: 700,
-                },
-                data.zodiac
-              ),
-            ]
-          ),
+.card {
+  background: rgba(255,255,255,0.96);
+  border: 2px solid #e3ebf2;
+  border-radius: 26px;
+  padding: 23px 28px;
+  margin-bottom: 17px;
+  box-shadow:
+    0 8px 24px rgba(25, 55, 80, 0.06);
+}
 
-          makeElement(
-            "div",
-            {
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              background: "#ffffff",
-              borderRadius: 26,
-              padding: 26,
-              border: "2px solid #e5edf4",
-            },
-            [
-              makeElement(
-                "div",
-                {
-                  fontSize: 23,
-                  color: "#6a7782",
-                  marginBottom: 8,
-                },
-                "نماد سال"
-              ),
-              makeElement(
-                "div",
-                {
-                  fontSize: 27,
-                  fontWeight: 700,
-                },
-                data.animal
-              ),
-            ]
-          ),
-        ]
-      ),
+.date-main {
+  font-size: 29px;
+  font-weight: 700;
+  color: #123c69;
+  margin-bottom: 9px;
+}
 
-      makeElement(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "column",
-          background: "#ffffff",
-          borderRadius: 30,
-          padding: 30,
-          marginBottom: 24,
-          border: "2px solid #e5edf4",
-        },
-        [
-          makeElement(
-            "div",
-            {
-              fontSize: 29,
-              fontWeight: 700,
-              color: "#123c69",
-              marginBottom: 15,
-            },
-            "📌 مناسبت‌های امروز"
-          ),
-          ...eventNodes,
-        ]
-      ),
+.date-line {
+  font-size: 22px;
+  color: #596a78;
+  margin-bottom: 6px;
+}
 
-      makeElement(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "column",
-          background: "#fffaf0",
-          borderRadius: 30,
-          padding: 30,
-          marginBottom: 24,
-          border: "2px solid #f0dfb9",
-        },
-        [
-          makeElement(
-            "div",
-            {
-              fontSize: 29,
-              fontWeight: 700,
-              color: "#9b6500",
-              marginBottom: 15,
-            },
-            "💬 سخن امروز"
-          ),
-          makeElement(
-            "div",
-            {
-              fontSize: 29,
-              lineHeight: 1.6,
-              fontWeight: 600,
-              marginBottom: 14,
-            },
-            `«${data.quote}»`
-          ),
-          makeElement(
-            "div",
-            {
-              fontSize: 22,
-              color: "#59636c",
-              marginBottom: 6,
-            },
-            `— ${data.author}`
-          ),
-          makeElement(
-            "div",
-            {
-              fontSize: 19,
-              color: "#78838c",
-            },
-            `منبع: ${data.source}`
-          ),
-        ]
-      ),
+.time {
+  font-size: 24px;
+  font-weight: 700;
+  color: #123c69;
+  margin-top: 5px;
+}
 
-      makeElement(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "column",
-          background: "#eef6fb",
-          borderRadius: 30,
-          padding: 30,
-          marginBottom: 28,
-        },
-        [
-          makeElement(
-            "div",
-            {
-              fontSize: 29,
-              fontWeight: 700,
-              color: "#123c69",
-              marginBottom: 14,
-            },
-            "💭 جرعه‌ای تفکر"
-          ),
-          makeElement(
-            "div",
-            {
-              fontSize: 27,
-              lineHeight: 1.65,
-              color: "#243447",
-            },
-            `«${data.thought}»`
-          ),
-        ]
-      ),
+.section-title {
+  font-size: 25px;
+  font-weight: 700;
+  color: #123c69;
+  margin-bottom: 13px;
+}
 
-      makeElement(
-        "div",
-        {
-          marginTop: "auto",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          fontSize: 26,
-          fontWeight: 700,
-          color: "#123c69",
-          paddingTop: 18,
-        },
-        "هم‌صدایی برای تحول و بهبود"
-      ),
-    ]
+.progress-track {
+  width: 100%;
+  height: 23px;
+  background: #e6edf3;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  width: ${Math.min(
+    100,
+    Number(data.progress)
+  )}%;
+  height: 23px;
+  background: linear-gradient(
+    90deg,
+    #d88900,
+    #f0ad2c
   );
+  border-radius: 20px;
+}
 
-  const svg = await satori(tree, {
-    width: WIDTH,
-    height: HEIGHT,
-    fonts: [
+.progress-info {
+  margin-top: 9px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 19px;
+  color: #596a78;
+}
+
+.stats {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 17px;
+}
+
+.stat {
+  flex: 1;
+  background: #ffffff;
+  border: 2px solid #e3ebf2;
+  border-radius: 23px;
+  padding: 19px 15px;
+  min-height: 92px;
+}
+
+.stat-label {
+  font-size: 17px;
+  color: #778591;
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 21px;
+  font-weight: 700;
+  color: #243447;
+}
+
+.events {
+  padding-top: 1px;
+}
+
+.event {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 20px;
+  line-height: 1.45;
+  color: #334554;
+  margin-bottom: 7px;
+}
+
+.bullet {
+  color: #d88900;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.quote-card {
+  background:
+    linear-gradient(
+      135deg,
+      #fffaf0,
+      #fffdf8
+    );
+  border-color: #f0dfb9;
+}
+
+.quote {
+  font-size: 23px;
+  line-height: 1.55;
+  font-weight: 700;
+  color: #273746;
+  margin-bottom: 9px;
+}
+
+.author {
+  font-size: 17px;
+  color: #687681;
+}
+
+.source {
+  font-size: 15px;
+  color: #89949c;
+  margin-top: 4px;
+}
+
+.thought-card {
+  background:
+    linear-gradient(
+      135deg,
+      #edf7fc,
+      #f8fbfd
+    );
+  border-color: #d8eaf4;
+}
+
+.thought {
+  font-size: 22px;
+  line-height: 1.55;
+  color: #243447;
+  font-weight: 600;
+}
+
+.footer {
+  margin-top: auto;
+  text-align: center;
+  font-size: 23px;
+  font-weight: 700;
+  color: #123c69;
+  padding-top: 10px;
+}
+
+</style>
+</head>
+
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="title">
+      تقویم روزانه گروه صدای کارکنان ثبت احوال
+    </div>
+    <div class="subtitle">
+      ☀️ روزت پر از اتفاقات خوب
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="date-main">
+      ${escapeHtml(data.weekday)} — ${escapeHtml(data.persianDate)}
+    </div>
+
+    <div class="date-line">
+      میلادی: ${escapeHtml(data.gregorianDate)}
+    </div>
+
+    <div class="date-line">
+      قمری: ${escapeHtml(data.hijriDate)}
+    </div>
+
+    <div class="time">
+      ⏰ ساعت تهران: ${escapeHtml(data.time)}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">
+      📊 چشم‌انداز سال
+    </div>
+
+    <div class="progress-track">
+      <div class="progress-fill"></div>
+    </div>
+
+    <div class="progress-info">
+      <span>
+        ${escapeHtml(data.progress)}٪ از سال گذشته
+      </span>
+
+      <span>
+        ${escapeHtml(data.remaining)} روز باقی‌مانده
+      </span>
+    </div>
+
+    <div class="progress-info">
+      <span>
+        حدود ${escapeHtml(data.weeksRemaining)} هفته باقی‌مانده
+      </span>
+    </div>
+  </div>
+
+  <div class="stats">
+
+    <div class="stat">
+      <div class="stat-label">ماه</div>
+      <div class="stat-value">
+        ${escapeHtml(data.moon)}
+      </div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-label">برج</div>
+      <div class="stat-value">
+        ${escapeHtml(data.zodiac)}
+      </div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-label">نماد سال</div>
+      <div class="stat-value">
+        ${escapeHtml(data.animal)}
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <div class="section-title">
+      📌 مناسبت‌های امروز
+    </div>
+
+    <div class="events">
+      ${eventsHtml}
+    </div>
+  </div>
+
+  <div class="card quote-card">
+    <div class="section-title">
+      💬 سخن امروز
+    </div>
+
+    <div class="quote">
+      «${escapeHtml(data.quote)}»
+    </div>
+
+    <div class="author">
+      — ${escapeHtml(data.author)}
+    </div>
+
+    <div class="source">
+      منبع: ${escapeHtml(data.source)}
+    </div>
+  </div>
+
+  <div class="card thought-card">
+    <div class="section-title">
+      💭 جرعه‌ای تفکر
+    </div>
+
+    <div class="thought">
+      «${escapeHtml(data.thought)}»
+    </div>
+  </div>
+
+  <div class="footer">
+    هم‌صدایی برای تحول و بهبود
+  </div>
+
+</div>
+</body>
+</html>
+`;
+}
+
+async function createInfographic(
+  env: CloudflareEnv,
+  data: {
+    weekday: string;
+    persianDate: string;
+    hijriDate: string;
+    gregorianDate: string;
+    time: string;
+    progress: string;
+    remaining: string;
+    weeksRemaining: string;
+    moon: string;
+    zodiac: string;
+    animal: string;
+    events: string[];
+    thought: string;
+    quote: string;
+    author: string;
+    source: string;
+  }
+) {
+  if (!env.BROWSER) {
+    throw new Error(
+      "اتصال BROWSER در Cloudflare تنظیم نشده است."
+    );
+  }
+
+  const html =
+    createInfographicHtml(data);
+
+  const response =
+    await env.BROWSER.quickAction(
+      "screenshot",
       {
-        name: "Vazirmatn",
-        data: fontData,
-        weight: 400,
-        style: "normal",
-      },
-    ],
-  });
+        html,
+        viewport: {
+          width: WIDTH,
+          height: HEIGHT,
+          deviceScaleFactor: 1,
+        },
+        screenshotOptions: {
+          fullPage: false,
+          type: "png",
+        },
+        gotoOptions: {
+          waitUntil: "networkidle0",
+          timeout: 30000,
+        },
+      }
+    );
 
-  const renderer =
-    await Resvg.async(svg);
+  if (!response.ok) {
+    const errorText =
+      await response.text().catch(
+        () => ""
+      );
 
-  const png =
-    renderer.render().asPng();
+    throw new Error(
+      `خطا در تولید تصویر توسط Browser Run: ${response.status} ${errorText}`
+    );
+  }
 
-  return png;
+  return new Uint8Array(
+    await response.arrayBuffer()
+  );
 }
 
 async function sendPhotoToBale(
@@ -1057,8 +1013,8 @@ export async function GET() {
       });
 
     /*
-     * این بخش عمداً حفظ شده تا
-     * دکمه لغو تقویم همچنان کار کند.
+     * این قسمت دست‌نخورده باقی مانده
+     * تا امکان لغو ارسال تقویم حفظ شود.
      */
     const enabled =
       await isCalendarEnabled(env);
@@ -1076,9 +1032,10 @@ export async function GET() {
     const token =
       env?.BALE_SMART_TOKEN;
 
-    const chatId = String(
-      env?.BALE_GROUP_ID || ""
-    );
+    const chatId =
+      String(
+        env?.BALE_GROUP_ID || ""
+      );
 
     if (!token || !chatId) {
       return NextResponse.json(
@@ -1087,11 +1044,14 @@ export async function GET() {
           error:
             "BALE_SMART_TOKEN یا BALE_GROUP_ID تنظیم نشده است.",
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
     }
 
-    const now = new Date();
+    const now =
+      new Date();
 
     const tehran =
       getTehranParts();
@@ -1129,7 +1089,8 @@ export async function GET() {
     const progress =
       getYearProgress(
         persian.month,
-        persian.day
+        persian.day,
+        persian.year
       );
 
     const content =
@@ -1148,61 +1109,64 @@ export async function GET() {
       `${tehran.second}`;
 
     const infographic =
-      await createInfographic({
-        title:
-          "تقویم روزانه گروه صدای کارکنان ثبت احوال",
+      await createInfographic(
+        env,
+        {
+          weekday,
 
-        weekday,
+          persianDate:
+            `${fa(persian.year)}/` +
+            `${fa(String(persian.month).padStart(2, "0"))}/` +
+            `${fa(String(persian.day).padStart(2, "0"))}`,
 
-        persianDate:
-          `${fa(persian.year)}/` +
-          `${fa(String(persian.month).padStart(2, "0"))}/` +
-          `${fa(String(persian.day).padStart(2, "0"))}`,
+          hijriDate:
+            hijriText,
 
-        hijriDate:
-          hijriText,
+          gregorianDate:
+            gregorian,
 
-        gregorianDate:
-          gregorian,
+          time,
 
-        time,
+          progress:
+            progress.percent,
 
-        progress:
-          progress.percent,
+          remaining:
+            fa(progress.remaining),
 
-        remaining:
-          fa(progress.remaining),
+          weeksRemaining:
+            fa(progress.weeksRemaining),
 
-        moon:
-          getMoonPhase(now),
+          moon:
+            getMoonPhase(now),
 
-        zodiac:
-          getPersianZodiac(
-            persian.month
-          ),
+          zodiac:
+            getPersianZodiac(
+              persian.month
+            ),
 
-        animal:
-          getAnimal(
-            persian.year
-          ),
+          animal:
+            getAnimal(
+              persian.year
+            ),
 
-        events:
-          getEventText(
-            todayEvents
-          ),
+          events:
+            getEventText(
+              todayEvents
+            ),
 
-        thought:
-          content.thought,
+          thought:
+            content.thought,
 
-        quote:
-          content.quote,
+          quote:
+            content.quote,
 
-        author:
-          content.author,
+          author:
+            content.author,
 
-        source:
-          content.source,
-      });
+          source:
+            content.source,
+        }
+      );
 
     const sent =
       await sendPhotoToBale(
@@ -1242,7 +1206,9 @@ export async function GET() {
             ? error.message
             : "خطای ناشناخته",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
     }
