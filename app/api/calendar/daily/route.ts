@@ -976,15 +976,15 @@ async function sendPhotoToBale(
   );
 
   form.append(
-    "photo",
-    new Blob(
-      [png],
-      {
-        type: "image/png",
-      }
-    ),
-    "calendar.png"
-  );
+  "photo",
+  new Blob(
+    [new Uint8Array(png)],
+    {
+      type: "image/png",
+    }
+  ),
+  "calendar.png"
+);
 
   const response = await fetch(
     `https://tapi.bale.ai/bot${token}/sendPhoto`,
