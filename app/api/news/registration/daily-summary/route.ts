@@ -1502,7 +1502,7 @@ async function fetchSpecialSource(
       results.filter(
         (
           item
-        ): item is Candidate =>
+        ): item =>
           item !== null
       );
 
