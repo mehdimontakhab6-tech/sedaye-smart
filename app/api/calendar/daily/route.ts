@@ -1,59 +1,22 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-const TEHRAN_TZ = "Asia/Tehran";
-
+const TIME_ZONE = "Asia/Tehran";
 const WIDTH = 1024;
-const HEIGHT = 1700;
+const HEIGHT = 1536;
 
-const BALE_API = "https://tapi.bale.ai/bot";
+const digits = "۰۱۲۳۴۵۶۷۸۹";
 
-type Env = {
-  BALE_SMART_TOKEN: string;
-  BALE_GROUP_ID: string;
-  BROWSER: any;
-};
-
-type DailyContent = {
-  quote: string;
-  author: string;
-  source: string;
-  thought: string;
-};
-
-type PersianDate = {
-  year: number;
-  month: number;
-  day: number;
-};
-
-type Progress = {
-  percent: number;
-  dayOfYear: number;
-  remaining: number;
-  totalDays: number;
-};
-
-/* =========================================================
-   ابزارهای عمومی
-========================================================= */
-
-function faDigits(value: string | number): string {
-  return String(value).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+function fa(value: number | string) {
+  return String(value).replace(/\d/g, (d) => digits[Number(d)]);
 }
 
-function normalizePersian(text: string): string {
-  return text
-    .replace(/ي/g, "ی")
-    .replace(/ى/g, "ی")
-    .replace(/ك/g, "ک")
-    .replace(/\u200c/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function normalize(value: string) {
+  return value.replace(/[۰-۹]/g, (d) => String(digits.indexOf(d)));
 }
 
-function escapeHtml(text: string): string {
-  return String(text)
+function escapeHtml(value: string) {
+  return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -61,13 +24,11 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
-/* =========================================================
-   تاریخ تهران
-========================================================= */
-
 function getTehranParts() {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: TEHRAN_TZ,
+  const now = new Date();
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -75,10 +36,7 @@ function getTehranParts() {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-    weekday: "long",
-  });
-
-  const parts = formatter.formatToParts(new Date());
+  }).formatToParts(now);
 
   const get = (type: string) =>
     parts.find((p) => p.type === type)?.value || "";
@@ -87,270 +45,99 @@ function getTehranParts() {
     year: Number(get("year")),
     month: Number(get("month")),
     day: Number(get("day")),
-    hour: Number(get("hour")),
-    minute: Number(get("minute")),
-    second: Number(get("second")),
-    weekday: get("weekday"),
+    hour: get("hour"),
+    minute: get("minute"),
+    second: get("second"),
   };
 }
 
-/* =========================================================
-   تبدیل میلادی به جلالی
-========================================================= */
+function getPersianDate(date: Date) {
+  const parts = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
 
-function gregorianToJalali(gy: number, gm: number, gd: number): PersianDate {
-  const gdm = [
-    0,
-    31,
-    59,
-    90,
-    120,
-    151,
-    181,
-    212,
-    243,
-    273,
-    304,
-    334,
-  ];
-
-  let gy2 = gm > 2 ? gy + 1 : gy;
-
-  let days =
-    355666 +
-    365 * gy +
-    Math.floor((gy2 + 3) / 4) -
-    Math.floor((gy2 + 99) / 100) +
-    Math.floor((gy2 + 399) / 400) +
-    gd +
-    gdm[gm - 1];
-
-  let jy = -1595 + 33 * Math.floor(days / 12053);
-
-  days %= 12053;
-
-  jy += 4 * Math.floor(days / 1461);
-
-  days %= 1461;
-
-  if (days > 365) {
-    jy += Math.floor((days - 1) / 365);
-    days = (days - 1) % 365;
-  }
-
-  let jd = days + 1;
-
-  let jm =
-    jd <= 186
-      ? Math.ceil(jd / 31)
-      : Math.ceil((jd - 186) / 30) + 6;
-
-  let day =
-    jd <= 186
-      ? ((jd - 1) % 31) + 1
-      : ((jd - 187) % 30) + 1;
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value || "";
 
   return {
-    year: jy,
-    month: jm,
-    day,
+    year: Number(normalize(get("year"))),
+    month: Number(normalize(get("month"))),
+    day: Number(normalize(get("day"))),
   };
 }
 
-/* =========================================================
-   نام‌ها
-========================================================= */
-
-const PERSIAN_MONTHS = [
-  "",
-  "فروردین",
-  "اردیبهشت",
-  "خرداد",
-  "تیر",
-  "مرداد",
-  "شهریور",
-  "مهر",
-  "آبان",
-  "آذر",
-  "دی",
-  "بهمن",
-  "اسفند",
-];
-
-const WEEKDAYS: Record<string, string> = {
-  Saturday: "شنبه",
-  Sunday: "یکشنبه",
-  Monday: "دوشنبه",
-  Tuesday: "سه‌شنبه",
-  Wednesday: "چهارشنبه",
-  Thursday: "پنجشنبه",
-  Friday: "جمعه",
-};
-
-const GREGORIAN_MONTHS = [
-  "",
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-/* =========================================================
-   تاریخ قمری تقریبی
-========================================================= */
-
-function getIslamicDate(date: Date) {
-  const jd =
-    Math.floor(
-      date.getTime() / 86400000
-    ) + 2440588;
-
-  const l =
-    jd - 1948440 + 10632;
-
-  const n =
-    Math.floor((l - 1) / 10631);
-
-  const l2 =
-    l - 10631 * n + 354;
-
-  const j =
-    Math.floor(
-      (10985 - l2) / 5316
-    ) *
-      Math.floor(
-        (50 * l2) / 17719
-      ) +
-    Math.floor(l2 / 5670) *
-      Math.floor(
-        (43 * l2) / 15238
-      );
-
-  const l3 =
-    l2 -
-    Math.floor(
-      (30 - j) / 15
-    ) *
-      Math.floor(
-        (17719 * j) / 50
-      ) -
-    Math.floor(j / 16) *
-      Math.floor(
-        (15238 * j) / 43
-      ) +
-    29;
-
-  const m = Math.floor((24 * l3) / 709);
-
-  const d =
-    l3 -
-    Math.floor(
-      (709 * m) / 24
-    );
-
-  const y =
-    30 * n +
-    j -
-    30;
-
-  return {
-    year: y,
-    month: m,
-    day: d,
-  };
+function getWeekday(date: Date) {
+  return new Intl.DateTimeFormat("fa-IR", {
+    timeZone: TIME_ZONE,
+    weekday: "long",
+  }).format(date);
 }
 
-const ISLAMIC_MONTHS = [
-  "",
-  "محرم",
-  "صفر",
-  "ربیع‌الاول",
-  "ربیع‌الثانی",
-  "جمادی‌الاول",
-  "جمادی‌الثانی",
-  "رجب",
-  "شعبان",
-  "رمضان",
-  "شوال",
-  "ذیقعده",
-  "ذیحجه",
-];
+function getPersianDayOfYear(month: number, day: number) {
+  let total = 0;
 
-/* =========================================================
-   سال شمسی
-========================================================= */
-
-function isLeapPersianYear(year: number): boolean {
-  const remainder = year % 33;
-
-  return [
-    1,
-    5,
-    9,
-    13,
-    17,
-    22,
-    26,
-    30,
-  ].includes(remainder);
-}
-
-function getTotalDaysPersianYear(year: number): number {
-  return isLeapPersianYear(year) ? 366 : 365;
-}
-
-function getDayOfYearPersian(
-  month: number,
-  day: number
-): number {
-  if (month <= 6) {
-    return (month - 1) * 31 + day;
+  for (let m = 1; m < month; m++) {
+    total += m <= 6 ? 31 : m <= 11 ? 30 : 29;
   }
 
-  return 186 + (month - 7) * 30 + day;
+  return total + day;
+}
+
+function isPersianLeapYear(year: number) {
+  const start = new Date(`${year}-03-20T12:00:00+03:30`);
+  const next = new Date(`${year + 1}-03-20T12:00:00+03:30`);
+
+  const diff = Math.round(
+    (next.getTime() - start.getTime()) / 86400000
+  );
+
+  return diff >= 366;
 }
 
 function getYearProgress(
-  year: number,
   month: number,
-  day: number
-): Progress {
-  const totalDays =
-    getTotalDaysPersianYear(year);
-
-  const dayOfYear =
-    getDayOfYearPersian(month, day);
-
-  const remaining =
-    totalDays - dayOfYear;
-
-  const percent = Math.round(
-    (dayOfYear / totalDays) * 100
-  );
+  day: number,
+  year: number
+) {
+  const dayOfYear = getPersianDayOfYear(month, day);
+  const totalDays = isPersianLeapYear(year) ? 366 : 365;
 
   return {
-    percent,
     dayOfYear,
-    remaining,
     totalDays,
+    percent: ((dayOfYear / totalDays) * 100).toFixed(1),
+    remaining: Math.max(0, totalDays - dayOfYear),
+    weeksRemaining: Math.ceil(
+      Math.max(0, totalDays - dayOfYear) / 7
+    ),
   };
 }
 
-/* =========================================================
-   حیوان سال
-   ۱۴۰۰ = گاو
-========================================================= */
+function getPersianZodiac(month: number) {
+  const signs = [
+    "حمل ♈",
+    "ثور ♉",
+    "جوزا ♊",
+    "سرطان ♋",
+    "اسد ♌",
+    "سنبله ♍",
+    "میزان ♎",
+    "عقرب ♏",
+    "قوس ♐",
+    "جدی ♑",
+    "دلو ♒",
+    "حوت ♓",
+  ];
 
-function getIranianAnimal(year: number): string {
+  return signs[month - 1] || "";
+}
+
+function getAnimal(year: number) {
   const animals = [
+    "موش",
     "گاو",
     "ببر",
     "خرگوش",
@@ -362,310 +149,218 @@ function getIranianAnimal(year: number): string {
     "خروس",
     "سگ",
     "خوک",
-    "موش",
   ];
 
-  return animals[(year - 1400) % 12 < 0
-    ? ((year - 1400) % 12) + 12
-    : (year - 1400) % 12];
+  return animals[((year - 4) % 12 + 12) % 12];
 }
 
-/* =========================================================
-   برج
-========================================================= */
+function getMoonPhase(date: Date) {
+  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
+  const synodicMonth = 29.530588853;
 
-function getZodiac(
-  month: number,
-  day: number
-): string {
-  if (month === 1) return "حمل ♈";
-  if (month === 2) return "ثور ♉";
-  if (month === 3) return "جوزا ♊";
-  if (month === 4) return "سرطان ♋";
-  if (month === 5) return "اسد ♌";
-  if (month === 6) return "سنبله ♍";
-  if (month === 7) return "میزان ♎";
-  if (month === 8) return "عقرب ♏";
-  if (month === 9) return "قوس ♐";
-  if (month === 10) return "جدی ♑";
-  if (month === 11) return "دلو ♒";
-  return "حوت ♓";
-}
-
-/* =========================================================
-   وضعیت تقریبی ماه
-========================================================= */
-
-function getMoonPhase(date: Date): string {
-  const knownNewMoon =
-    Date.UTC(2000, 0, 6, 18, 14);
-
-  const synodicMonth =
-    29.530588853;
-
-  const days =
-    (date.getTime() - knownNewMoon) /
-    86400000;
-
-  const age =
-    ((days % synodicMonth) +
-      synodicMonth) %
+  let age =
+    ((date.getTime() - knownNewMoon) / 86400000) %
     synodicMonth;
 
-  if (age < 1.85)
-    return "ماه نو 🌑";
+  if (age < 0) {
+    age += synodicMonth;
+  }
 
-  if (age < 7.38)
-    return "هلال افزاینده 🌒";
-
-  if (age < 9.23)
-    return "تربیع اول 🌓";
-
-  if (age < 14.77)
-    return "محدب افزاینده 🌔";
-
-  if (age < 16.61)
-    return "ماه کامل 🌕";
-
-  if (age < 22.15)
-    return "محدب کاهنده 🌖";
-
-  if (age < 23.99)
-    return "تربیع آخر 🌗";
+  if (age < 1.85) return "ماه نو 🌑";
+  if (age < 7.38) return "هلال افزاینده 🌒";
+  if (age < 9.22) return "ربع اول 🌓";
+  if (age < 14.77) return "تربیع افزاینده 🌔";
+  if (age < 16.61) return "ماه کامل 🌕";
+  if (age < 22.15) return "تربیع کاهنده 🌖";
+  if (age < 23.99) return "ربع آخر 🌗";
 
   return "هلال کاهنده 🌘";
 }
 
-/* =========================================================
-   فصل
-========================================================= */
+async function getHijriDate(gregorian: string) {
+  try {
+    const response = await fetch(
+      `https://api.aladhan.com/v1/gToH?date=${gregorian}`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
 
-type Season =
-  | "spring"
-  | "summer"
-  | "autumn"
-  | "winter";
+    if (!response.ok) {
+      return null;
+    }
 
-function getSeason(month: number): Season {
-  if (month >= 1 && month <= 3)
-    return "spring";
+    const json = await response.json();
+    const hijri = json?.data?.hijri;
 
-  if (month >= 4 && month <= 6)
-    return "summer";
+    if (!hijri) {
+      return null;
+    }
 
-  if (month >= 7 && month <= 9)
-    return "autumn";
-
-  return "winter";
+    return {
+      day: hijri.day,
+      month:
+        hijri.month?.ar ||
+        hijri.month?.en ||
+        "",
+      year: hijri.year,
+    };
+  } catch {
+    return null;
+  }
 }
 
-/* =========================================================
-   پس‌زمینه‌های فصلی
-   انتخاب براساس روز سال
-========================================================= */
+async function getEvents(persianYear: number) {
+  try {
+    const response = await fetch(
+      `https://hmarzban.github.io/pipe2time.ir/api/${persianYear}/events.json`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
 
-const SEASONAL_BACKGROUNDS: Record<
-  Season,
-  string[]
-> = {
-  spring: [
-    "https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1400&q=90",
-  ],
+    if (!response.ok) {
+      return [];
+    }
 
-  summer: [
-    "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1470770903676-69b98201ea1c?auto=format&fit=crop&w=1400&q=90",
-  ],
+    const data = await response.json();
 
-  autumn: [
-    "https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=1400&q=90",
-  ],
+    if (Array.isArray(data)) {
+      return data;
+    }
 
-  winter: [
-    "https://images.unsplash.com/photo-1457269449834-928af64c684d?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1483664852095-d6cc6870702d?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1517299321609-52687d1bc55a?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1453306458620-5bbef13a5bca?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1516431883659-655d41c09bf9?auto=format&fit=crop&w=1400&q=90",
-    "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=1400&q=90",
-  ],
-};
+    const events: any[] = [];
 
-function getSeasonBackground(
-  season: Season,
-  dayOfYear: number
-): string {
-  const list =
-    SEASONAL_BACKGROUNDS[season];
+    const yearData =
+      data?.[String(persianYear)];
 
-  return list[
-    (dayOfYear - 1) % list.length
-  ];
+    if (Array.isArray(yearData)) {
+      for (const monthData of yearData) {
+        if (Array.isArray(monthData?.events)) {
+          events.push(...monthData.events);
+        }
+      }
+    }
+
+    if (Array.isArray(data?.events)) {
+      events.push(...data.events);
+    }
+
+    return events;
+  } catch {
+    return [];
+  }
 }
 
-/* =========================================================
-   مناسبت‌های ایران
-   کلید: ماه-روز
-========================================================= */
-
-const IRAN_EVENTS: Record<
-  string,
-  string[]
-> = {
-  "1-1": ["نوروز"],
-  "1-2": ["نوروز"],
-  "1-3": ["نوروز"],
-  "1-4": ["نوروز"],
-  "1-12": ["روز جمهوری اسلامی ایران"],
-  "1-13": ["روز طبیعت"],
-  "1-25": ["روز بزرگداشت عطار نیشابوری"],
-  "2-1": ["روز بزرگداشت سعدی"],
-  "2-10": ["روز ملی خلیج فارس"],
-  "2-25": ["روز بزرگداشت فردوسی"],
-  "3-14": ["رحلت امام خمینی"],
-  "3-15": ["قیام خونین ۱۵ خرداد"],
-  "3-31": ["روز ملی صنعت و معدن"],
-  "4-14": ["روز قلم"],
-  "4-25": ["روز بهزیستی و تأمین اجتماعی"],
-  "5-17": ["روز خبرنگار"],
-  "5-26": ["روز کارآفرینی و آموزش‌های فنی و حرفه‌ای"],
-  "6-1": ["روز پزشک"],
-  "6-4": ["روز کارمند"],
-  "6-5": ["روز بزرگداشت زکریای رازی"],
-  "6-13": ["روز تعاون"],
-  "6-17": ["روز جهانی صلح"],
-  "7-1": ["روز بزرگداشت مولانا"],
-  "7-7": ["روز آتش‌نشانی و ایمنی"],
-  "7-8": ["روز بزرگداشت مولوی"],
-  "7-14": ["روز تهران"],
-  "7-20": ["روز بزرگداشت حافظ"],
-  "8-13": ["روز دانش‌آموز"],
-  "8-24": ["روز کتاب و کتابخوانی"],
-  "9-5": ["روز بسیج مستضعفین"],
-  "9-7": ["روز نیروی دریایی"],
-  "9-16": ["روز دانشجو"],
-  "9-25": ["روز پژوهش"],
-  "10-1": ["روز ثبت احوال"],
-  "10-7": ["روز بزرگداشت نهضت سوادآموزی"],
-  "10-13": ["روز جهانی مقاومت"],
-  "11-12": ["روز بازگشت امام خمینی"],
-  "11-22": ["پیروزی انقلاب اسلامی"],
-  "12-5": ["روز مهندسی"],
-  "12-14": ["روز احسان و نیکوکاری"],
-  "12-15": ["روز درختکاری"],
-  "12-22": ["روز بزرگداشت شهدا"],
-};
-
-/* =========================================================
-   مناسبت‌های بین‌المللی
-========================================================= */
-
-const INTERNATIONAL_EVENTS: Record<
-  string,
-  string[]
-> = {
-  "1-4": ["روز جهانی آگاهی از مین"],
-  "2-3": ["روز جهانی آزادی مطبوعات"],
-  "2-15": ["روز جهانی خانواده"],
-  "3-8": ["روز جهانی زن"],
-  "3-20": ["روز جهانی شادی"],
-  "3-21": ["روز جهانی جنگل‌ها"],
-  "3-22": ["روز جهانی آب"],
-  "3-23": ["روز جهانی هواشناسی"],
-  "4-7": ["روز جهانی بهداشت"],
-  "4-22": ["روز زمین"],
-  "5-3": ["روز جهانی آزادی مطبوعات"],
-  "5-15": ["روز جهانی خانواده"],
-  "6-5": ["روز جهانی محیط زیست"],
-  "6-8": ["روز جهانی اقیانوس‌ها"],
-  "6-20": ["روز جهانی پناهندگان"],
-  "7-30": ["روز جهانی دوستی"],
-  "8-9": ["روز جهانی مردمان بومی"],
-  "8-12": ["روز جهانی جوانان"],
-  "9-8": ["روز جهانی سوادآموزی"],
-  "9-21": ["روز جهانی صلح"],
-  "10-1": ["روز جهانی سالمندان"],
-  "10-4": ["روز جهانی حیوانات"],
-  "10-5": ["روز جهانی معلم", "روز جهانی زیستگاه"],
-  "10-10": ["روز جهانی سلامت روان"],
-  "10-16": ["روز جهانی غذا"],
-  "11-14": ["روز جهانی دیابت"],
-  "11-20": ["روز جهانی کودک"],
-  "12-1": ["روز جهانی ایدز"],
-  "12-3": ["روز جهانی افراد دارای معلولیت"],
-  "12-5": ["روز جهانی داوطلب"],
-  "12-10": ["روز جهانی حقوق بشر"],
-  "12-18": ["روز جهانی مهاجران"],
-};
-
-/* =========================================================
-   مناسبت‌ها
-========================================================= */
-
-function getEvents(
+function getEventsForDay(
+  events: any[],
   month: number,
-  day: number,
-  gregorianMonth: number,
-  gregorianDay: number
+  day: number
 ) {
-  const iran =
-    IRAN_EVENTS[`${month}-${day}`] || [];
+  return events.filter((event) => {
+    const jDate = String(
+      event?.jDate ||
+        event?.date ||
+        ""
+    );
 
-  const international =
-    INTERNATIONAL_EVENTS[
-      `${gregorianMonth}-${gregorianDay}`
-    ] || [];
+    const normalized = normalize(jDate);
 
-  return {
-    iran,
-    international,
-  };
+    const match = normalized.match(
+      /^(?:\d{4}[\/\-])?(\d{1,2})[\/\-](\d{1,2})$/
+    );
+
+    if (match) {
+      return (
+        Number(match[1]) === month &&
+        Number(match[2]) === day
+      );
+    }
+
+    const eventMonth = Number(
+      event?.jMonth ??
+        event?.month ??
+        event?.persianMonth ??
+        0
+    );
+
+    const eventDay = Number(
+      event?.jDay ??
+        event?.day ??
+        event?.persianDay ??
+        0
+    );
+
+    return (
+      eventMonth === month &&
+      eventDay === day
+    );
+  });
 }
 
-/* =========================================================
-   سخنان مستند
-   31 مورد برای روزهای ماه
-========================================================= */
+function getEventText(events: any[]) {
+  return events
+    .map((event) =>
+      String(
+        event?.text ||
+          event?.title ||
+          event?.name ||
+          event?.description ||
+          ""
+      ).trim()
+    )
+    .filter(Boolean)
+    .slice(0, 5);
+}
 
-const DAILY_QUOTES: DailyContent[] = [
+/*
+ * برای هر روز ماه یک محتوای متفاوت.
+ * روزهای 1 تا 31 هر کدام متن مخصوص خودشان را دارند.
+ */
+const DAILY_CONTENT = [
   {
     quote:
-      "بنی آدم اعضای یکدیگرند که در آفرینش ز یک گوهرند",
+      "تو نیکی می‌کن و در دجله انداز، که ایزد در بیابانت دهد باز",
     author: "سعدی",
-    source: "گلستان، دیباچه",
+    source: "گلستان",
     thought:
-      "امروز با رفتارم چه اثری بر حال دیگران می‌گذارم؟",
+      "امروز کدام کار خیر را می‌توانم بدون انتظار جبران انجام دهم؟",
   },
   {
     quote:
-      "تو نیکی می‌کن و در دجله انداز",
+      "بنی آدم اعضای یکدیگرند",
     author: "سعدی",
-    source: "گلستان سعدی",
+    source: "گلستان",
     thought:
-      "اگر انتظار تشکر نداشته باشم، چه کار خوبی انجام می‌دهم؟",
+      "در رفتار امروز من، سهم همدلی با دیگران چقدر است؟",
   },
   {
     quote:
-      "مشک آن است که خود ببوید، نه آن که عطار بگوید",
+      "نابرده رنج گنج میسر نمی‌شود",
     author: "سعدی",
-    source: "گلستان، باب هشتم",
+    source: "گلستان",
     thought:
-      "آیا کیفیت کارم خودش معرف من هست؟",
+      "برای رسیدن به هدفم، امروز چه گام کوچکی باید بردارم؟",
+  },
+  {
+    quote:
+      "هر که ناموخت از گذشت روزگار، نیز ناموزد ز هیچ آموزگار",
+    author: "مولانا",
+    source: "مثنوی معنوی",
+    thought:
+      "از تجربه دیروز چه درسی می‌توانم برای امروز بگیرم؟",
+  },
+  {
+    quote:
+      "این قافله عمر عجب می‌گذرد",
+    author: "خیام",
+    source: "رباعیات",
+    thought:
+      "اگر امروز تکرارشدنی نباشد، چگونه آن را بهتر زندگی می‌کنم؟",
   },
   {
     quote:
@@ -673,71 +368,183 @@ const DAILY_QUOTES: DailyContent[] = [
     author: "فردوسی",
     source: "شاهنامه",
     thought:
-      "امروز چه چیزی می‌توانم یاد بگیرم؟",
+      "کدام دانشی می‌تواند امروز توانایی من را بیشتر کند؟",
   },
   {
     quote:
       "ز گهواره تا گور دانش بجوی",
-    author: "حکمت مشهور",
-    source: "ضرب‌المثل فارسی",
+    author: "حدیث مشهور",
+    source: "نقل مشهور",
     thought:
-      "کدام دانشی را مدت‌هاست به تعویق انداخته‌ام؟",
+      "امروز چه چیز تازه‌ای می‌توانم یاد بگیرم؟",
   },
   {
     quote:
-      "هر که ناموخت از گذشت روزگار نیز ناموزد ز هیچ آموزگار",
+      "کار نیکو کردن از پر کردن است",
+    author: "ضرب‌المثل فارسی",
+    source: "ضرب‌المثل",
+    thought:
+      "کدام مهارت با تمرین بیشتر در من بهتر می‌شود؟",
+  },
+  {
+    quote:
+      "رهرو آن نیست که گه تند و گهی خسته رود",
+    author: "سعدی",
+    source: "غزل سعدی",
+    thought:
+      "آیا در مسیر هدفم پیوستگی دارم یا فقط گاهی تلاش می‌کنم؟",
+  },
+  {
+    quote:
+      "مشک آن است که خود ببوید، نه آنکه عطار بگوید",
+    author: "ضرب‌المثل فارسی",
+    source: "ضرب‌المثل",
+    thought:
+      "آیا کیفیت کارم بدون تعریف دیگران هم دیده می‌شود؟",
+  },
+  {
+    quote:
+      "قطره قطره جمع گردد وانگهی دریا شود",
+    author: "ضرب‌المثل فارسی",
+    source: "ضرب‌المثل",
+    thought:
+      "کدام قدم کوچک امروز در آینده نتیجه بزرگی می‌سازد؟",
+  },
+  {
+    quote:
+      "توانا بود هر که دانا بود",
     author: "فردوسی",
     source: "شاهنامه",
     thought:
-      "از تجربه دیروز چه درسی برای امروز دارم؟",
+      "چه دانشی را باید از حالت اطلاعات به مهارت تبدیل کنم؟",
   },
   {
     quote:
-      "این قافله عمر عجب می‌گذرد",
+      "خوشا آنان که دائم در نمازند",
     author: "حافظ",
     source: "غزل حافظ",
     thought:
-      "اگر امروز تکرار نشود، دوست دارم چگونه از آن یاد کنم؟",
+      "چگونه می‌توانم حضور ذهن و آرامش بیشتری در کار امروز داشته باشم؟",
   },
   {
     quote:
-      "وقت را غنیمت دان آن قدر که بتوانی",
-    author: "سعدی",
-    source: "گلستان سعدی",
+      "دوش دیدم که ملائک در میخانه زدند",
+    author: "حافظ",
+    source: "غزل حافظ",
     thought:
-      "کدام کار مهم را نباید به فردا بسپارم؟",
+      "آیا برای دیدن فرصت‌های تازه، ذهنم را از پیش‌داوری‌ها آزاد کرده‌ام؟",
+  },
+  {
+    quote:
+      "هر که دلارام دید از دلش آرام رفت",
+    author: "حافظ",
+    source: "غزل حافظ",
+    thought:
+      "چه چیزی واقعاً به زندگی من معنا و آرامش می‌دهد؟",
   },
   {
     quote:
       "بنی آدم اعضای یک پیکرند",
     author: "سعدی",
-    source: "گلستان، دیباچه",
+    source: "گلستان",
     thought:
-      "امروز چگونه می‌توانم بخشی از یک مشکل جمعی را حل کنم؟",
+      "امروز چگونه می‌توانم به موفقیت یک همکار کمک کنم؟",
+  },
+  {
+    quote:
+      "به جهان خرم از آنم که جهان خرم از اوست",
+    author: "سعدی",
+    source: "غزل سعدی",
+    thought:
+      "نگاه من به محیط اطرافم چگونه بر حال خودم اثر می‌گذارد؟",
+  },
+  {
+    quote:
+      "هر که در این بزم مقرب‌تر است، جام بلا بیشترش می‌دهند",
+    author: "حافظ",
+    source: "غزل حافظ",
+    thought:
+      "در برابر مسئولیت‌های دشوار، چقدر تاب‌آوری دارم؟",
   },
   {
     quote:
       "تو پای به راه در نه و هیچ مپرس",
-    author: "عطار",
+    author: "عطار نیشابوری",
     source: "منطق‌الطیر",
     thought:
-      "شروع نکردن کدام کار، بزرگ‌ترین مانع من است؟",
+      "برای شروع کاری که به تعویق انداخته‌ام، اولین قدم چیست؟",
   },
   {
     quote:
       "این نیز بگذرد",
-    author: "حکمت فارسی",
-    source: "حکمت و ادبیات فارسی",
+    author: "ضرب‌المثل فارسی",
+    source: "ضرب‌المثل",
     thought:
-      "در یک شرایط سخت، چه چیزی موقتی است؟",
+      "آیا در روزهای سخت، موقتی بودن شرایط را به یاد دارم؟",
+  },
+  {
+    quote:
+      "از محبت خارها گل می‌شود",
+    author: "مولانا",
+    source: "مثنوی معنوی",
+    thought:
+      "امروز کجا می‌توانم با مهربانی، نتیجه بهتری بسازم؟",
+  },
+  {
+    quote:
+      "هر کسی از ظن خود شد یار من",
+    author: "مولانا",
+    source: "مثنوی معنوی",
+    thought:
+      "آیا پیش از قضاوت درباره دیگران، دیدگاه آنان را می‌شنوم؟",
+  },
+  {
+    quote:
+      "آب کم جو، تشنگی آور به دست",
+    author: "مولانا",
+    source: "مثنوی معنوی",
+    thought:
+      "میزان اشتیاق من برای یادگیری و رشد چقدر است؟",
+  },
+  {
+    quote:
+      "دشمن دانا که غم جان بود بهتر از آن دوست که نادان بود",
+    author: "نظامی گنجوی",
+    source: "مخزن‌الاسرار",
+    thought:
+      "آیا از بازخورد صادقانه، حتی اگر سخت باشد، استفاده می‌کنم؟",
+  },
+  {
+    quote:
+      "جهان یادگار است و ما رفتنی",
+    author: "فردوسی",
+    source: "شاهنامه",
+    thought:
+      "دوست دارم چه اثری از کار امروز من باقی بماند؟",
   },
   {
     quote:
       "چو دخلت نیست، خرج آهسته‌تر کن",
     author: "سعدی",
-    source: "گلستان سعدی",
+    source: "گلستان",
     thought:
-      "امروز کجا می‌توانم ساده‌تر و هوشمندانه‌تر عمل کنم؟",
+      "امروز کدام منبع یا زمان را می‌توانم هوشمندانه‌تر مدیریت کنم؟",
+  },
+  {
+    quote:
+      "هر که را اسرار حق آموختند، مهر کردند و دهانش دوختند",
+    author: "مولانا",
+    source: "مثنوی معنوی",
+    thought:
+      "آیا در گفتار و نگهداری اطلاعات، به اندازه کافی مسئولیت‌پذیرم؟",
+  },
+  {
+    quote:
+      "جهد کن تا پیرهن از عیب پاک",
+    author: "مولانا",
+    source: "مثنوی معنوی",
+    thought:
+      "کدام عادت کوچک را امروز باید اصلاح کنم؟",
   },
   {
     quote:
@@ -749,263 +556,107 @@ const DAILY_QUOTES: DailyContent[] = [
   },
   {
     quote:
-      "صلاح کار کجا و من خراب کجا",
+      "هر که را خوابگه آخر مشتی خاک است",
     author: "حافظ",
-    source: "غزلیات حافظ",
+    source: "غزل حافظ",
     thought:
-      "آیا قبل از قضاوت، همه جوانب را می‌بینم؟",
+      "چه چیزی در زندگی من ارزش واقعی و ماندگار دارد؟",
   },
   {
     quote:
-      "هر که دلارام دید از دلش آرام رفت",
-    author: "حافظ",
-    source: "غزلیات حافظ",
-    thought:
-      "چه چیزی واقعاً به زندگی من آرامش می‌دهد؟",
-  },
-  {
-    quote:
-      "کار نیکو کردن از پر کردن است",
-    author: "ضرب‌المثل فارسی",
-    source: "ضرب‌المثل مشهور فارسی",
-    thought:
-      "کدام مهارت با تمرین مداوم بهتر می‌شود؟",
-  },
-  {
-    quote:
-      "رهرو آن است که آهسته و پیوسته رود",
-    author: "ضرب‌المثل فارسی",
-    source: "ضرب‌المثل مشهور فارسی",
-    thought:
-      "امروز کوچک‌ترین قدم مفید من چیست؟",
-  },
-  {
-    quote:
-      "جهان یادگار است و ما رفتنی",
+      "بزرگی سراسر به گفتار نیست",
     author: "فردوسی",
     source: "شاهنامه",
     thought:
-      "چه اثری دوست دارم از من باقی بماند؟",
-  },
-  {
-    quote:
-      "به جهان خرم از آنم که جهان خرم از اوست",
-    author: "حافظ",
-    source: "غزلیات حافظ",
-    thought:
-      "آیا شادی خودم را به شادی دیگران گره می‌زنم؟",
-  },
-  {
-    quote:
-      "خوشا شیراز و وضع بی‌مثالش",
-    author: "حافظ",
-    source: "غزلیات حافظ",
-    thought:
-      "چه چیز ساده‌ای امروز می‌تواند حال مرا بهتر کند؟",
-  },
-  {
-    quote:
-      "تو خود حجاب خودی حافظ از میان برخیز",
-    author: "حافظ",
-    source: "غزلیات حافظ",
-    thought:
-      "کدام محدودیت را خودم برای خودم ساخته‌ام؟",
-  },
-  {
-    quote:
-      "هر کسی کو دور ماند از اصل خویش",
-    author: "مولانا",
-    source: "مثنوی معنوی، دفتر اول",
-    thought:
-      "چه چیزی مرا از ارزش‌های اصلی‌ام دور می‌کند؟",
-  },
-  {
-    quote:
-      "این جهان کوه است و فعل ما ندا",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "رفتار من چه بازتابی در اطرافم ایجاد می‌کند؟",
-  },
-  {
-    quote:
-      "آب کم جو، تشنگی آور به دست",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "آیا برای خواسته‌هایم اشتیاق واقعی دارم؟",
-  },
-  {
-    quote:
-      "از محبت تلخ‌ها شیرین شود",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "امروز محبت را کجا می‌توانم بیشتر نشان دهم؟",
-  },
-  {
-    quote:
-      "تو برای وصل کردن آمدی",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "امروز کدام فاصله را می‌توانم کمتر کنم؟",
-  },
-  {
-    quote:
-      "هر نفس نو می‌شود دنیا و ما",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "اگر امروز را شروعی تازه بدانم، چه چیزی را تغییر می‌دهم؟",
-  },
-  {
-    quote:
-      "به راه بادیه رفتن به از نشستن باطل",
-    author: "سعدی",
-    source: "غزلیات سعدی",
-    thought:
-      "حرکت ناقص بهتر است یا انتظار برای شرایط کامل؟",
-  },
-  {
-    quote:
-      "نابرده رنج گنج میسر نمی‌شود",
-    author: "سعدی",
-    source: "گلستان سعدی",
-    thought:
-      "برای رسیدن به هدفم حاضر به تحمل کدام سختی هستم؟",
-  },
-  {
-    quote:
-      "هر که عیب دگران پیش تو آورد و شمرد",
-    author: "سعدی",
-    source: "گلستان سعدی",
-    thought:
-      "آیا به جای عیب‌جویی، دنبال راه‌حل می‌گردم؟",
-  },
-  {
-    quote:
-      "دلا معاش چنان کن که گر بلغزد پای",
-    author: "حافظ",
-    source: "غزلیات حافظ",
-    thought:
-      "چه چیزی در زندگی من نیازمند تعادل بیشتری است؟",
-  },
-  {
-    quote:
-      "آسایش دو گیتی تفسیر این دو حرف است",
-    author: "حافظ",
-    source: "غزلیات حافظ",
-    thought:
-      "امروز چه چیزی را می‌توانم با آرامش بیشتری انجام دهم؟",
+      "آیا رفتار امروز من با ارزش‌هایی که می‌گویم هماهنگ است؟",
   },
 ];
 
-/* =========================================================
-   محتوای روزانه
-========================================================= */
-
-function getDailyContent(
-  day: number
-): DailyContent {
-  return DAILY_QUOTES[
-    (day - 1) % DAILY_QUOTES.length
+function getDailyContent(day: number) {
+  return DAILY_CONTENT[
+    (day - 1) % DAILY_CONTENT.length
   ];
 }
 
-/* =========================================================
-   ساخت HTML
-========================================================= */
-
-function buildHtml(params: {
-  background: string;
-  title: string;
-  greeting: string;
-  solar: string;
-  solarLong: string;
-  gregorian: string;
-  islamic: string;
+function createInfographicHtml(data: {
   weekday: string;
+  persianDate: string;
+  hijriDate: string;
+  gregorianDate: string;
   time: string;
+  progress: string;
+  remaining: string;
+  weeksRemaining: string;
   moon: string;
-  animal: string;
   zodiac: string;
-  progress: Progress;
-  iranEvents: string[];
-  internationalEvents: string[];
-  content: DailyContent;
-  season: Season;
+  animal: string;
+  events: string[];
+  thought: string;
+  quote: string;
+  author: string;
+  source: string;
 }) {
-  const {
-    background,
-    title,
-    greeting,
-    solar,
-    solarLong,
-    gregorian,
-    islamic,
-    weekday,
-    time,
-    moon,
-    animal,
-    zodiac,
-    progress,
-    iranEvents,
-    internationalEvents,
-    content,
-    season,
-  } = params;
+  const progressValue = Math.min(
+    100,
+    Math.max(0, Number(data.progress))
+  );
 
-  const seasonName =
-    season === "spring"
-      ? "بهار"
-      : season === "summer"
-      ? "تابستان"
-      : season === "autumn"
-      ? "پاییز"
-      : "زمستان";
-
-  const iranHtml =
-    iranEvents.length > 0
-      ? iranEvents
-          .map(
-            (event) =>
-              `<div class="event-line">
-                <span class="event-dot"></span>
-                <span>${escapeHtml(
-                  normalizePersian(event)
-                )}</span>
-              </div>`
-          )
-          .join("")
-      : `<div class="empty-event">مناسبت شاخصی ثبت نشده است</div>`;
-
-  const internationalHtml =
-    internationalEvents.length > 0
-      ? internationalEvents
-          .map(
-            (event) =>
-              `<div class="event-line">
-                <span class="event-dot"></span>
-                <span>${escapeHtml(
-                  normalizePersian(event)
-                )}</span>
-              </div>`
-          )
-          .join("")
-      : `<div class="empty-event">مناسبت بین‌المللی شاخصی ثبت نشده است</div>`;
+  const eventsHtml = data.events.length
+    ? data.events
+        .map(
+          (event) => `
+            <div class="event-row">
+              <div class="event-icon">✓</div>
+              <div class="event-text">
+                ${escapeHtml(event)}
+              </div>
+            </div>
+          `
+        )
+        .join("")
+    : `
+        <div class="event-row">
+          <div class="event-icon">•</div>
+          <div class="event-text">
+            مناسبتی برای امروز ثبت نشده است.
+          </div>
+        </div>
+      `;
 
   return `
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fa" dir="rtl">
+
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport"
-      content="width=${WIDTH}, initial-scale=1.0" />
+
+<meta charset="utf-8">
+
+<meta
+  name="viewport"
+  content="width=${WIDTH}, height=${HEIGHT}"
+>
 
 <style>
 
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
+@font-face {
+  font-family: Vazirmatn;
+
+  src:
+    url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Regular.ttf")
+    format("truetype");
+
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: Vazirmatn;
+
+  src:
+    url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Bold.ttf")
+    format("truetype");
+
+  font-weight: 700;
+}
 
 * {
   box-sizing: border-box;
@@ -1015,627 +666,862 @@ html,
 body {
   margin: 0;
   padding: 0;
+
   width: ${WIDTH}px;
   height: ${HEIGHT}px;
+
   overflow: hidden;
 }
 
 body {
+
   font-family:
-    "Vazirmatn",
-    Tahoma,
+    Vazirmatn,
     Arial,
     sans-serif;
 
-  color: #ffffff;
+  color: #102f45;
 
   background:
     linear-gradient(
       180deg,
-      rgba(3, 12, 20, 0.30) 0%,
-      rgba(4, 15, 20, 0.05) 22%,
-      rgba(2, 10, 15, 0.12) 45%,
-      rgba(1, 9, 14, 0.82) 100%
-    ),
-    url("${background}") center center / cover no-repeat;
-
-  position: relative;
-}
-
-/* ======================================================
-   لایه‌های زیباسازی
-====================================================== */
-
-body::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-
-  background:
-    radial-gradient(
-      circle at 82% 12%,
-      rgba(255, 214, 94, 0.30),
-      transparent 22%
-    ),
-    radial-gradient(
-      circle at 12% 36%,
-      rgba(76, 201, 240, 0.22),
-      transparent 25%
-    ),
-    linear-gradient(
-      115deg,
-      rgba(0,0,0,0.25),
-      transparent 35%,
-      rgba(0,0,0,0.30)
+      #fffdf5 0%,
+      #f6fbff 45%,
+      #ffffff 100%
     );
-
-  pointer-events: none;
 }
 
-body::after {
-  content: "";
-  position: absolute;
-  inset: 0;
+.page {
 
-  background:
-    linear-gradient(
-      90deg,
-      rgba(255,255,255,0.08) 1px,
-      transparent 1px
-    );
+  width: ${WIDTH}px;
+  height: ${HEIGHT}px;
 
-  background-size: 64px 64px;
-
-  opacity: 0.035;
-  pointer-events: none;
-}
-
-/* ======================================================
-   پوستر
-====================================================== */
-
-.poster {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  padding: 54px 62px 52px;
+  padding:
+    0
+    24px
+    18px;
 
   display: flex;
   flex-direction: column;
 
-  z-index: 2;
+  overflow: hidden;
 }
 
-/* ======================================================
-   نوار بالایی
-====================================================== */
-
-.top {
-  position: relative;
-  text-align: right;
-  margin-bottom: 24px;
-}
-
-.top-accent {
-  width: 92px;
-  height: 7px;
-  border-radius: 20px;
-
-  background:
-    linear-gradient(
-      90deg,
-      #ffd166,
-      #06d6a0,
-      #4cc9f0
-    );
-
-  margin-bottom: 18px;
-
-  box-shadow:
-    0 0 22px rgba(255,209,102,0.45);
-}
-
-.title {
-  font-size: 39px;
-  line-height: 1.35;
-  font-weight: 900;
-
-  text-shadow:
-    0 4px 16px rgba(0,0,0,0.75);
-
-  letter-spacing: -0.7px;
-}
-
-.greeting {
-  margin-top: 9px;
-
-  font-size: 31px;
-  line-height: 1.35;
-
-  font-weight: 700;
-
-  color: #fff4c2;
-
-  text-shadow:
-    0 3px 12px rgba(0,0,0,0.85);
-}
-
-/* ======================================================
-   تاریخ اصلی
-====================================================== */
+/* =========================
+   TOP
+========================= */
 
 .hero {
+
+  height: 218px;
+
+  margin:
+    0
+    -24px
+    14px;
+
   position: relative;
 
-  margin-top: 12px;
+  overflow: hidden;
 
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
 
-  padding: 22px 0 24px;
+  align-items: center;
+  justify-content: center;
+
+  padding:
+    28px
+    38px
+    30px;
+
+  background:
+
+    radial-gradient(
+      circle at 18% 22%,
+      rgba(255,255,255,.96) 0 7%,
+      transparent 20%
+    ),
+
+    radial-gradient(
+      circle at 50% 55%,
+      rgba(255,226,119,.98) 0 6%,
+      rgba(255,194,67,.48) 15%,
+      transparent 34%
+    ),
+
+    linear-gradient(
+      180deg,
+      #8fd4ff 0%,
+      #d9f2ff 48%,
+      #fff2c8 72%,
+      #d6efd8 100%
+    );
+}
+
+.hero::before {
+
+  content: "";
+
+  position: absolute;
+
+  inset:
+    80px
+    -60px
+    0;
+
+  background:
+
+    linear-gradient(
+      155deg,
+      transparent 0 48%,
+      #5b9274 49% 61%,
+      transparent 62%
+    ),
+
+    linear-gradient(
+      25deg,
+      transparent 0 52%,
+      #7db08a 53% 66%,
+      transparent 67%
+    );
+
+  opacity: .9;
+}
+
+.hero::after {
+
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  height: 66px;
+
+  background:
+
+    radial-gradient(
+      ellipse at 20% 100%,
+      #3e765d 0 23%,
+      transparent 24%
+    ),
+
+    radial-gradient(
+      ellipse at 65% 100%,
+      #56866b 0 28%,
+      transparent 29%
+    ),
+
+    linear-gradient(
+      180deg,
+      transparent,
+      rgba(255,255,255,.7)
+    );
+}
+
+.hero-title {
+
+  position: relative;
+
+  z-index: 3;
+
+  text-align: center;
+
+  direction: rtl;
+
+  color: #063f6e;
+
+  text-shadow:
+    0 3px 12px
+    rgba(255,255,255,.95);
+}
+
+.hero-title-main {
+
+  font-size: 44px;
+
+  line-height: 1.35;
+
+  font-weight: 700;
+}
+
+.hero-title-sub {
+
+  margin-top: 8px;
+
+  color: #b45b00;
+
+  font-size: 34px;
+
+  line-height: 1.35;
+
+  font-weight: 700;
+}
+
+/* =========================
+   DATE
+========================= */
+
+.date-panel {
+
+  min-height: 238px;
+
+  padding:
+    20px
+    28px;
+
+  position: relative;
+
+  border: none;
 
   border-top:
-    1px solid rgba(255,255,255,0.28);
+    5px solid
+    #28a9d6;
 
   border-bottom:
-    1px solid rgba(255,255,255,0.25);
+    4px solid
+    #b8df73;
+
+  border-radius: 0;
+
+  background:
+    rgba(255,255,255,.35);
+
+  box-shadow: none;
 }
 
-.hero-season {
-  font-size: 20px;
-  font-weight: 600;
+.date-panel::before {
 
-  color: rgba(255,255,255,0.86);
+  content: "";
 
-  margin-bottom: 4px;
+  position: absolute;
+
+  top: 18px;
+
+  right: 24px;
+  left: 24px;
+
+  height: 3px;
+
+  border-radius: 10px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #1689cf,
+      #8bd5ed
+    );
+
+  opacity: .55;
 }
 
-.hero-date {
-  font-size: 78px;
-  line-height: 1.05;
-  font-weight: 900;
+.date-weekday {
 
-  letter-spacing: -2px;
+  margin-top: 22px;
 
-  text-shadow:
-    0 5px 20px rgba(0,0,0,0.90);
-}
+  color: #547183;
 
-.hero-long {
-  margin-top: 7px;
+  font-size: 30px;
 
-  font-size: 29px;
-  font-weight: 800;
-
-  text-shadow:
-    0 3px 13px rgba(0,0,0,0.8);
-}
-
-.time-row {
-  margin-top: 13px;
-
-  display: flex;
-  align-items: center;
-  gap: 12px;
-
-  font-size: 27px;
   font-weight: 700;
 
-  color: #f9fbff;
+  text-align: right;
 }
 
-.time-icon {
-  font-size: 31px;
+.date-main {
+
+  margin-top: 4px;
+
+  color: #0d4a78;
+
+  font-size: 64px;
+
+  line-height: 1.2;
+
+  font-weight: 700;
+
+  text-align: right;
 }
 
-/* ======================================================
-   اطلاعات اصلی
-====================================================== */
-
-.info-zone {
-  margin-top: 25px;
-
-  display: grid;
-
-  grid-template-columns:
-    1fr 1fr;
-
-  column-gap: 42px;
-  row-gap: 0;
-
-  border-bottom:
-    1px solid rgba(255,255,255,0.22);
-}
-
-.info-item {
-  min-height: 78px;
+.date-grid {
 
   display: flex;
-  align-items: center;
+
+  flex-direction: row-reverse;
 
   gap: 14px;
 
-  border-bottom:
-    1px solid rgba(255,255,255,0.14);
+  margin-top: 18px;
 }
 
-.info-icon {
-  font-size: 28px;
-  width: 42px;
+.date-chip {
 
-  text-align: center;
-}
-
-.info-text {
   flex: 1;
+
+  padding:
+    13px
+    16px;
+
+  border-radius: 18px;
+
+  background:
+    rgba(255,255,255,.72);
+
+  border:
+    1px solid
+    #d8eaf5;
+
+  text-align: right;
 }
 
-.info-label {
-  font-size: 17px;
+.date-chip-label {
 
-  color:
-    rgba(255,255,255,0.72);
+  color: #7c8e9a;
 
-  font-weight: 500;
+  font-size: 18px;
 
   margin-bottom: 3px;
 }
 
-.info-value {
-  font-size: 23px;
+.date-chip-value {
 
-  font-weight: 800;
+  color: #29485d;
 
-  text-shadow:
-    0 2px 9px rgba(0,0,0,0.8);
+  font-size: 24px;
+
+  font-weight: 700;
 }
 
-/* ======================================================
-   نوار پیشرفت سال
-====================================================== */
+.clock {
 
-.progress-zone {
-  margin-top: 26px;
-}
+  position: absolute;
 
-.progress-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  top: 24px;
+  left: 28px;
 
-  font-size: 21px;
-  font-weight: 800;
-}
+  padding:
+    11px
+    18px;
 
-.progress-percent {
-  font-size: 30px;
-  color: #ffe08a;
+  border-radius: 18px;
 
-  text-shadow:
-    0 2px 10px rgba(0,0,0,0.8);
-}
-
-.progress-track {
-  position: relative;
-
-  height: 13px;
-
-  margin-top: 13px;
-
-  border-radius: 30px;
-
-  background:
-    rgba(255,255,255,0.20);
-
-  overflow: hidden;
-
-  box-shadow:
-    inset 0 1px 5px rgba(0,0,0,0.35);
-}
-
-.progress-fill {
-  height: 100%;
-
-  width: ${Math.max(
-    2,
-    progress.percent
-  )}%;
-
-  border-radius: 30px;
+  color: #fff;
 
   background:
     linear-gradient(
-      90deg,
-      #00d4ff,
-      #06d6a0,
-      #ffd166
+      135deg,
+      #0d4d76,
+      #1d82b0
     );
-
-  box-shadow:
-    0 0 18px rgba(6,214,160,0.65);
-}
-
-.progress-meta {
-  display: flex;
-  justify-content: space-between;
-
-  margin-top: 8px;
-
-  color:
-    rgba(255,255,255,0.76);
-
-  font-size: 17px;
-}
-
-/* ======================================================
-   مناسبت‌ها
-====================================================== */
-
-.events {
-  margin-top: 28px;
-
-  position: relative;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-
-  font-size: 29px;
-  font-weight: 900;
-
-  margin-bottom: 14px;
-
-  text-shadow:
-    0 3px 12px rgba(0,0,0,0.85);
-}
-
-.section-title::after {
-  content: "";
-
-  height: 3px;
-
-  flex: 1;
-
-  margin-right: 8px;
-
-  background:
-    linear-gradient(
-      90deg,
-      rgba(255,209,102,0.95),
-      transparent
-    );
-}
-
-.events-columns {
-  display: grid;
-
-  grid-template-columns:
-    1fr 1fr;
-
-  gap: 38px;
-}
-
-.event-column {
-  min-height: 105px;
-
-  border-right:
-    4px solid rgba(255,209,102,0.85);
-
-  padding-right: 18px;
-}
-
-.event-column.international {
-  border-right-color:
-    rgba(76,201,240,0.90);
-}
-
-.event-heading {
-  font-size: 20px;
-
-  font-weight: 800;
-
-  margin-bottom: 10px;
-
-  color: #ffe9a6;
-}
-
-.international .event-heading {
-  color: #9fe8ff;
-}
-
-.event-line {
-  display: flex;
-  align-items: flex-start;
-
-  gap: 10px;
-
-  margin-bottom: 8px;
-
-  font-size: 20px;
-
-  line-height: 1.55;
-
-  font-weight: 600;
-
-  text-shadow:
-    0 2px 8px rgba(0,0,0,0.9);
-}
-
-.event-dot {
-  flex: 0 0 auto;
-
-  width: 8px;
-  height: 8px;
-
-  margin-top: 10px;
-
-  border-radius: 50%;
-
-  background: #ffd166;
-
-  box-shadow:
-    0 0 10px rgba(255,209,102,0.9);
-}
-
-.international .event-dot {
-  background: #4cc9f0;
-
-  box-shadow:
-    0 0 10px rgba(76,201,240,0.9);
-}
-
-.empty-event {
-  font-size: 17px;
-
-  color:
-    rgba(255,255,255,0.55);
-}
-
-/* ======================================================
-   نقل قول
-====================================================== */
-
-.quote-zone {
-  margin-top: 27px;
-
-  padding-top: 21px;
-
-  border-top:
-    1px solid rgba(255,255,255,0.25);
-}
-
-.quote-mark {
-  font-family: Georgia, serif;
-
-  font-size: 68px;
-
-  line-height: 0.45;
-
-  color: #ffd166;
-
-  opacity: 0.85;
-}
-
-.quote {
-  margin-top: 8px;
 
   font-size: 27px;
 
-  line-height: 1.65;
+  font-weight: 700;
 
-  font-weight: 800;
-
-  text-shadow:
-    0 3px 13px rgba(0,0,0,0.95);
+  box-shadow:
+    0 8px 18px
+    rgba(13,77,118,.2);
 }
 
-.author {
-  margin-top: 7px;
+/* =========================
+   YEAR
+========================= */
 
-  font-size: 19px;
+.progress-panel {
 
-  color: #ffe49a;
+  margin-top: 11px;
+
+  padding:
+    17px
+    26px;
+
+  border:
+    1.5px solid
+    #b6dfd8;
+
+  border-radius: 0;
+
+  background:
+    rgba(255,255,255,.32);
+
+  box-shadow: none;
+}
+
+.panel-heading {
+
+  display: flex;
+
+  flex-direction: row-reverse;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  margin-bottom: 13px;
+}
+
+.panel-title {
+
+  color: #12685f;
+
+  font-size: 27px;
 
   font-weight: 700;
 }
 
-.source {
-  margin-top: 2px;
+.percent {
 
-  font-size: 15px;
+  color: #174a68;
 
-  color:
-    rgba(255,255,255,0.62);
-}
-
-/* ======================================================
-   جرعه تفکر
-====================================================== */
-
-.thought-zone {
-  margin-top: 19px;
-
-  padding-top: 18px;
-
-  border-top:
-    1px solid rgba(255,255,255,0.18);
-}
-
-.thought-title {
-  font-size: 24px;
-
-  font-weight: 900;
-
-  margin-bottom: 7px;
-}
-
-.thought {
   font-size: 25px;
 
-  line-height: 1.65;
-
   font-weight: 700;
-
-  text-shadow:
-    0 3px 12px rgba(0,0,0,0.9);
 }
 
-/* ======================================================
-   تزئینات تصویری
-====================================================== */
+.progress-track {
 
-.orbit {
-  position: absolute;
+  width: 100%;
 
-  left: 38px;
-  top: 118px;
+  height: 24px;
 
-  width: 88px;
-  height: 88px;
+  padding: 4px;
 
-  border:
-    1px solid rgba(255,255,255,0.22);
+  overflow: hidden;
 
-  border-radius: 50%;
+  border-radius: 20px;
 
-  opacity: 0.55;
+  background: #d9eef1;
 }
 
-.orbit::before {
-  content: "";
+.progress-fill {
 
-  position: absolute;
+  width: ${progressValue}%;
 
-  inset: 15px;
+  height: 16px;
 
-  border:
-    1px solid rgba(255,209,102,0.40);
+  border-radius: 18px;
 
-  border-radius: 50%;
+  background:
+    linear-gradient(
+      90deg,
+      #18a276,
+      #39b993
+    );
 }
 
-.orbit::after {
-  content: "✦";
+.progress-meta {
 
-  position: absolute;
+  display: flex;
 
-  left: 34px;
-  top: 27px;
+  flex-direction: row-reverse;
+
+  justify-content: space-between;
+
+  margin-top: 9px;
+
+  color: #5c7c7a;
+
+  font-size: 20px;
+}
+
+/* =========================
+   STATS
+========================= */
+
+.stats {
+
+  display: flex;
+
+  flex-direction: row-reverse;
+
+  gap: 10px;
+
+  margin-top: 11px;
+}
+
+.stat {
+
+  flex: 1;
+
+  min-height: 108px;
+
+  padding:
+    10px
+    9px;
+
+  border-radius: 0;
+
+  border: none;
+
+  border-top:
+    2px solid
+    #d9e9f2;
+
+  border-bottom:
+    2px solid
+    #d9e9f2;
+
+  background:
+    rgba(255,255,255,.28);
+
+  text-align: center;
+
+  box-shadow: none;
+}
+
+.stat-icon {
+
+  font-size: 37px;
+
+  line-height: 1;
+
+  margin-bottom: 8px;
+}
+
+.stat-label {
+
+  color: #7a728e;
+
+  font-size: 18px;
+
+  margin-bottom: 4px;
+}
+
+.stat-value {
+
+  color: #3c326d;
 
   font-size: 23px;
 
-  color: #ffe08a;
+  font-weight: 700;
+
+  line-height: 1.35;
 }
 
-/* ======================================================
-   عدم نمایش footer
-====================================================== */
+/* =========================
+   EVENTS
+========================= */
+
+.events-panel {
+
+  margin-top: 11px;
+
+  padding:
+    16px
+    24px;
+
+  border-radius: 0;
+
+  border: none;
+
+  border-top:
+    3px solid
+    #f3a51c;
+
+  border-bottom:
+    2px solid
+    #f3d48e;
+
+  background:
+    rgba(255,250,237,.34);
+
+  box-shadow: none;
+
+  direction: rtl;
+
+  text-align: right;
+}
+
+.events-heading {
+
+  display: block;
+
+  margin-bottom: 13px;
+
+  color: #d47700;
+
+  font-size: 30px;
+
+  font-weight: 700;
+
+  text-align: right;
+}
+
+.event-row {
+
+  display: flex;
+
+  flex-direction: row-reverse;
+
+  align-items: flex-start;
+
+  gap: 12px;
+
+  padding: 6px 0;
+
+  border-bottom:
+    1px solid
+    #f3e6cb;
+
+  color: #3b4e5c;
+
+  font-size: 26px;
+
+  line-height: 1.45;
+
+  text-align: right;
+}
+
+.event-row:last-child {
+
+  border-bottom: none;
+}
+
+.event-icon {
+
+  flex:
+    0 0 30px;
+
+  width: 30px;
+
+  height: 30px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #f4a321;
+
+  color: #fff;
+
+  font-size: 16px;
+
+  font-weight: 700;
+}
+
+.event-text {
+
+  flex: 1;
+
+  text-align: right;
+}
+
+/* =========================
+   QUOTE
+========================= */
+
+.quote-panel {
+
+  margin-top: 10px;
+
+  padding:
+    15px
+    24px;
+
+  position: relative;
+
+  overflow: hidden;
+
+  border-radius: 0;
+
+  border: none;
+
+  border-top:
+    3px solid
+    #7666d8;
+
+  border-bottom:
+    2px solid
+    #c9c1f1;
+
+  background:
+    rgba(247,244,255,.34);
+
+  box-shadow: none;
+
+  direction: rtl;
+
+  text-align: right;
+}
+
+.quote-panel::before {
+
+  content: "“";
+
+  position: absolute;
+
+  left: 22px;
+  top: -24px;
+
+  color: #8d82d4;
+
+  font-family: Georgia, serif;
+
+  font-size: 110px;
+
+  opacity: .28;
+}
+
+.quote-heading {
+
+  margin-bottom: 10px;
+
+  color: #5b4ca0;
+
+  font-size: 30px;
+
+  font-weight: 700;
+
+  text-align: right;
+}
+
+.quote {
+
+  position: relative;
+
+  z-index: 2;
+
+  color: #273d56;
+
+  font-size: 28px;
+
+  line-height: 1.45;
+
+  font-weight: 700;
+
+  text-align: right;
+}
+
+.quote-author {
+
+  margin-top: 8px;
+
+  color: #716a84;
+
+  font-size: 18px;
+
+  text-align: right;
+}
+
+/* =========================
+   THOUGHT
+========================= */
+
+.thought-panel {
+
+  margin-top: 10px;
+
+  padding:
+    15px
+    24px;
+
+  position: relative;
+
+  overflow: hidden;
+
+  border-radius: 0;
+
+  border: none;
+
+  border-top:
+    3px solid
+    #10a6a6;
+
+  border-bottom:
+    2px solid
+    #9be0e0;
+
+  background:
+    rgba(239,255,255,.34);
+
+  box-shadow: none;
+
+  direction: rtl;
+
+  text-align: right;
+}
+
+.thought-heading {
+
+  margin-bottom: 9px;
+
+  color: #087d80;
+
+  font-size: 30px;
+
+  font-weight: 700;
+
+  text-align: right;
+}
+
+.thought {
+
+  color: #163f57;
+
+  font-size: 28px;
+
+  line-height: 1.45;
+
+  font-weight: 700;
+
+  text-align: right;
+}
+
+.thought::after {
+
+  content: "✦";
+
+  display: block;
+
+  margin-top: 6px;
+
+  color: #24a99d;
+
+  font-size: 25px;
+
+  text-align: center;
+}
+
+/* =========================
+   FOOTER
+========================= */
 
 .footer {
-  display: none;
+
+  margin-top: auto;
+
+  height: 6px;
+
+  padding: 0;
+
+  margin-top: 4px;
+}
+
+.footer-line {
+
+  width: 150px;
+
+  height: 3px;
+
+  margin:
+    0
+    auto
+    10px;
+
+  border-radius: 5px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #e8a32b,
+      #1b7197
+    );
 }
 
 </style>
@@ -1643,211 +1529,198 @@ body::after {
 
 <body>
 
-<div class="poster">
-
-  <div class="orbit"></div>
-
-  <header class="top">
-
-    <div class="top-accent"></div>
-
-    <div class="title">
-      ${escapeHtml(title)}
-    </div>
-
-    <div class="greeting">
-      ${escapeHtml(greeting)} ☀️
-    </div>
-
-  </header>
+<div class="page">
 
   <section class="hero">
 
-    <div class="hero-season">
-      فصل ${escapeHtml(seasonName)}
-    </div>
+    <div class="hero-title">
 
-    <div class="hero-date">
-      ${faDigits(solar)}
-    </div>
+      <div class="hero-title-main">
+        تقویم روزانه گروه صدای کارکنان ثبت احوال
+      </div>
 
-    <div class="hero-long">
-      ${escapeHtml(solarLong)}
-    </div>
+      <div class="hero-title-sub">
+        روزت پر از اتفاقات خوب ☀️
+      </div>
 
-    <div class="time-row">
-      <span class="time-icon">🕰️</span>
-      <span>${escapeHtml(weekday)}</span>
-      <span>•</span>
-      <span>${faDigits(time)}</span>
     </div>
 
   </section>
 
-  <section class="info-zone">
+  <section class="date-panel">
 
-    <div class="info-item">
-      <div class="info-icon">🌙</div>
-      <div class="info-text">
-        <div class="info-label">تقویم قمری</div>
-        <div class="info-value">
-          ${escapeHtml(islamic)}
-        </div>
-      </div>
+    <div class="clock">
+      ⏰ ${escapeHtml(data.time)}
     </div>
 
-    <div class="info-item">
-      <div class="info-icon">🌍</div>
-      <div class="info-text">
-        <div class="info-label">تقویم میلادی</div>
-        <div class="info-value">
-          ${escapeHtml(gregorian)}
-        </div>
-      </div>
+    <div class="date-weekday">
+      ${escapeHtml(data.weekday)}
     </div>
 
-    <div class="info-item">
-      <div class="info-icon">🌗</div>
-      <div class="info-text">
-        <div class="info-label">وضعیت ماه</div>
-        <div class="info-value">
-          ${escapeHtml(moon)}
-        </div>
-      </div>
+    <div class="date-main">
+      ${escapeHtml(data.persianDate)}
     </div>
 
-    <div class="info-item">
-      <div class="info-icon">🐴</div>
-      <div class="info-text">
-        <div class="info-label">نماد سال</div>
-        <div class="info-value">
-          ${escapeHtml(animal)}
-        </div>
-      </div>
-    </div>
+    <div class="date-grid">
 
-    <div class="info-item">
-      <div class="info-icon">♎</div>
-      <div class="info-text">
-        <div class="info-label">برج</div>
-        <div class="info-value">
-          ${escapeHtml(zodiac)}
-        </div>
-      </div>
-    </div>
+      <div class="date-chip">
 
-    <div class="info-item">
-      <div class="info-icon">📅</div>
-      <div class="info-text">
-        <div class="info-label">روز سال</div>
-        <div class="info-value">
-          ${faDigits(progress.dayOfYear)}
-          از
-          ${faDigits(progress.totalDays)}
+        <div class="date-chip-label">
+          میلادی
         </div>
+
+        <div class="date-chip-value">
+          ${escapeHtml(data.gregorianDate)}
+        </div>
+
       </div>
+
+      <div class="date-chip">
+
+        <div class="date-chip-label">
+          قمری
+        </div>
+
+        <div class="date-chip-value">
+          ${escapeHtml(data.hijriDate)}
+        </div>
+
+      </div>
+
     </div>
 
   </section>
 
-  <section class="progress-zone">
+  <section class="progress-panel">
 
-    <div class="progress-head">
+    <div class="panel-heading">
 
-      <span>
-        📊 پیشرفت سال ${faDigits(progress.percent)}٪
-      </span>
+      <div class="panel-title">
+        📊 چشم‌انداز سال
+      </div>
 
-      <span class="progress-percent">
-        ${faDigits(progress.percent)}٪
-      </span>
+      <div class="percent">
+        ${escapeHtml(data.progress)}٪
+      </div>
 
     </div>
 
     <div class="progress-track">
+
       <div class="progress-fill"></div>
+
     </div>
 
     <div class="progress-meta">
 
       <span>
-        روز ${faDigits(progress.dayOfYear)}
-      </span>
-
-      <span>
-        ${faDigits(progress.remaining)}
+        ${escapeHtml(data.remaining)}
         روز باقی‌مانده
       </span>
 
-    </div>
-
-  </section>
-
-  <section class="events">
-
-    <div class="section-title">
-      🗓️ رویدادها و مناسبت‌ها
-    </div>
-
-    <div class="events-columns">
-
-      <div class="event-column">
-
-        <div class="event-heading">
-          🇮🇷 ایران
-        </div>
-
-        ${iranHtml}
-
-      </div>
-
-      <div class="event-column international">
-
-        <div class="event-heading">
-          🌐 جهان
-        </div>
-
-        ${internationalHtml}
-
-      </div>
+      <span>
+        حدود
+        ${escapeHtml(data.weeksRemaining)}
+        هفته
+      </span>
 
     </div>
 
   </section>
 
-  <section class="quote-zone">
+  <section class="stats">
 
-    <div class="quote-mark">“</div>
+    <div class="stat">
+
+      <div class="stat-icon">
+        🌙
+      </div>
+
+      <div class="stat-label">
+        وضعیت ماه
+      </div>
+
+      <div class="stat-value">
+        ${escapeHtml(data.moon)}
+      </div>
+
+    </div>
+
+    <div class="stat">
+
+      <div class="stat-icon">
+        ♎
+      </div>
+
+      <div class="stat-label">
+        برج
+      </div>
+
+      <div class="stat-value">
+        ${escapeHtml(data.zodiac)}
+      </div>
+
+    </div>
+
+    <div class="stat">
+
+      <div class="stat-icon">
+        🐎
+      </div>
+
+      <div class="stat-label">
+        نماد سال
+      </div>
+
+      <div class="stat-value">
+        ${escapeHtml(data.animal)}
+      </div>
+
+    </div>
+
+  </section>
+
+  <section class="events-panel">
+
+    <div class="events-heading">
+      📌 رویدادها و مناسبت‌ها
+    </div>
+
+    ${eventsHtml}
+
+  </section>
+
+  <section class="quote-panel">
+
+    <div class="quote-heading">
+      🪶 سخن بزرگان
+    </div>
 
     <div class="quote">
-      ${escapeHtml(
-        normalizePersian(content.quote)
-      )}
+      «${escapeHtml(data.quote)}»
     </div>
 
-    <div class="author">
-      — ${escapeHtml(content.author)}
-    </div>
-
-    <div class="source">
-      منبع: ${escapeHtml(content.source)}
+    <div class="quote-author">
+      — ${escapeHtml(data.author)}
+      ·
+      ${escapeHtml(data.source)}
     </div>
 
   </section>
 
-  <section class="thought-zone">
+  <section class="thought-panel">
 
-    <div class="thought-title">
-      💭 جرعه‌ای تفکر
+    <div class="thought-heading">
+      💡 جرعه‌ای تفکر
     </div>
 
     <div class="thought">
-      ${escapeHtml(
-        normalizePersian(content.thought)
-      )}
+      «${escapeHtml(data.thought)}»
     </div>
 
   </section>
+
+  <footer class="footer"></footer>
 
 </div>
 
@@ -1856,98 +1729,212 @@ body::after {
 `;
 }
 
-/* =========================================================
-   ارسال عکس به بله
-========================================================= */
-
-async function sendPhoto(
-  env: Env,
-  imageBytes: Uint8Array
+async function createInfographic(
+  env: CloudflareEnv,
+  data: Parameters<
+    typeof createInfographicHtml
+  >[0]
 ) {
-  const form =
-    new FormData();
+  if (!env.BROWSER) {
+    throw new Error(
+      "اتصال BROWSER در Cloudflare تنظیم نشده است."
+    );
+  }
 
-  const safeImageBytes = new Uint8Array(imageBytes);
+  const html =
+    createInfographicHtml(data);
 
-const blob = new Blob(
-  [safeImageBytes],
-  { type: "image/png" }
-);
+  const response =
+    await env.BROWSER.quickAction(
+      "screenshot",
+      {
+        html,
+
+        viewport: {
+          width: WIDTH,
+          height: HEIGHT,
+          deviceScaleFactor: 1,
+        },
+
+        screenshotOptions: {
+          fullPage: false,
+          type: "png",
+        },
+
+        gotoOptions: {
+          waitUntil: "networkidle0",
+          timeout: 30000,
+        },
+      }
+    );
+
+  if (!response.ok) {
+
+    const errorText =
+      await response
+        .text()
+        .catch(() => "");
+
+    throw new Error(
+      `خطا در تولید تصویر توسط Browser Run: ${response.status} ${errorText}`
+    );
+  }
+
+  return new Uint8Array(
+    await response.arrayBuffer()
+  );
+}
+
+async function sendPhotoToBale(
+  token: string,
+  chatId: string,
+  png: Uint8Array
+) {
+
+  const form = new FormData();
 
   form.append(
     "chat_id",
-    env.BALE_GROUP_ID
+    chatId
   );
 
   form.append(
     "photo",
-    blob,
-    "calendar-daily.png"
+    new Blob(
+      [
+        new Uint8Array(png)
+      ],
+      {
+        type: "image/png",
+      }
+    ),
+    "calendar.png"
   );
-
-  /*
-   * عمداً caption نداریم.
-   * بنابراین هیچ نوشته‌ای زیر تصویر
-   * در بله نمایش داده نمی‌شود.
-   */
 
   const response =
     await fetch(
-      `${BALE_API}${env.BALE_SMART_TOKEN}/sendPhoto`,
+      `https://tapi.bale.ai/bot${token}/sendPhoto`,
       {
         method: "POST",
         body: form,
       }
     );
 
-  const text =
-    await response.text();
-
-  let data: any;
-
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = {
-      ok: false,
-      raw: text,
-    };
-  }
+  const result =
+    await response
+      .json()
+      .catch(() => ({}));
 
   return {
-    status: response.status,
-    data,
+    response,
+    result,
   };
 }
 
-/* =========================================================
-   GET
-========================================================= */
+/*
+ * وضعیت ارسال تقویم از تنظیمات Supabase خوانده می‌شود.
+ * اگر تنظیمات در دسترس نباشد،
+ * رفتار پیش‌فرض فعال بودن است.
+ */
 
-export async function GET(
-  request: Request
+async function isCalendarEnabled(
+  env: CloudflareEnv
 ) {
+
   try {
+
+    const url =
+      env.NEXT_PUBLIC_SUPABASE_URL;
+
+    const serviceKey =
+      env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !serviceKey) {
+      return true;
+    }
+
+    const response =
+      await fetch(
+        `${url}/rest/v1/settings?select=key,value&key=eq.schedule_calendar&limit=1`,
+        {
+          headers: {
+            apikey: serviceKey,
+
+            Authorization:
+              `Bearer ${serviceKey}`,
+          },
+        }
+      );
+
+    if (!response.ok) {
+      return true;
+    }
+
+    const rows =
+      await response.json();
+
+    if (
+      !Array.isArray(rows) ||
+      rows.length === 0
+    ) {
+      return true;
+    }
+
+    return rows[0]?.value !== "false";
+
+  } catch {
+
+    return true;
+
+  }
+}
+
+export async function GET() {
+
+  try {
+
     const { env } =
       await getCloudflareContext({
         async: true,
       });
 
-    const cloudflareEnv =
-      env as unknown as Env;
+    const enabled =
+      await isCalendarEnabled(env);
 
-    if (
-      !cloudflareEnv.BALE_SMART_TOKEN ||
-      !cloudflareEnv.BALE_GROUP_ID
-    ) {
+    if (!enabled) {
+
+      return NextResponse.json({
+        ok: true,
+        cancelled: true,
+        sent: false,
+        message:
+          "ارسال تقویم لغو شده است.",
+      });
+
+    }
+
+    const token =
+      env?.BALE_SMART_TOKEN;
+
+    const chatId =
+      String(
+        env?.BALE_GROUP_ID || ""
+      );
+
+    if (!token || !chatId) {
+
       return NextResponse.json(
         {
           ok: false,
+
           error:
             "BALE_SMART_TOKEN یا BALE_GROUP_ID تنظیم نشده است.",
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
+
     }
 
     const now =
@@ -1956,321 +1943,181 @@ export async function GET(
     const tehran =
       getTehranParts();
 
-    const jalali =
-      gregorianToJalali(
-        tehran.year,
-        tehran.month,
+    const persian =
+      getPersianDate(now);
+
+    const gregorian =
+      `${tehran.year}-` +
+      `${String(
+        tehran.month
+      ).padStart(2, "0")}-` +
+      `${String(
         tehran.day
-      );
+      ).padStart(2, "0")}`;
 
     const weekday =
-      WEEKDAYS[tehran.weekday] ||
-      tehran.weekday;
+      getWeekday(now);
+
+    const hijri =
+      await getHijriDate(
+        `${String(
+          tehran.day
+        ).padStart(2, "0")}-` +
+        `${String(
+          tehran.month
+        ).padStart(2, "0")}-` +
+        `${tehran.year}`
+      );
+
+    const allEvents =
+      await getEvents(
+        persian.year
+      );
+
+    const todayEvents =
+      getEventsForDay(
+        allEvents,
+        persian.month,
+        persian.day
+      );
 
     const progress =
       getYearProgress(
-        jalali.year,
-        jalali.month,
-        jalali.day
-      );
-
-    const dateForMoon =
-      new Date(
-        Date.UTC(
-          tehran.year,
-          tehran.month - 1,
-          tehran.day
-        )
-      );
-
-    const islamic =
-      getIslamicDate(
-        dateForMoon
-      );
-
-    const moon =
-      getMoonPhase(
-        now
-      );
-
-    const animal =
-      getIranianAnimal(
-        jalali.year
-      );
-
-    const zodiac =
-      getZodiac(
-        jalali.month,
-        jalali.day
-      );
-
-    const season =
-      getSeason(
-        jalali.month
-      );
-
-    const background =
-      getSeasonBackground(
-        season,
-        progress.dayOfYear
-      );
-
-    const gregorianMonth =
-      tehran.month;
-
-    const gregorianDay =
-      tehran.day;
-
-    const events =
-      getEvents(
-        jalali.month,
-        jalali.day,
-        gregorianMonth,
-        gregorianDay
+        persian.month,
+        persian.day,
+        persian.year
       );
 
     const content =
       getDailyContent(
-        jalali.day
+        persian.day
       );
 
-    const solar =
-      `${jalali.year}/${jalali.month}/${jalali.day}`;
-
-    const solarLong =
-      `${jalali.day} ${PERSIAN_MONTHS[jalali.month]} ${jalali.year}`;
-
-    const gregorian =
-      `${gregorianDay} ${GREGORIAN_MONTHS[gregorianMonth]} ${tehran.year}`;
-
-    const islamicText =
-      `${islamic.day} ${ISLAMIC_MONTHS[islamic.month]} ${islamic.year}`;
+    const hijriText =
+      hijri
+        ? `${hijri.day} ${hijri.month} ${hijri.year}`
+        : "نامشخص";
 
     const time =
-      `${String(tehran.hour).padStart(2, "0")}:${String(
-        tehran.minute
-      ).padStart(2, "0")}`;
+      `${tehran.hour}:` +
+      `${tehran.minute}:` +
+      `${tehran.second}`;
 
-    const title =
-      "تقویم روزانه گروه صدای کارکنان ثبت احوال";
-
-    const greeting =
-      "روزت پر از اتفاقات خوب";
-
-    const html =
-      buildHtml({
-        background,
-        title,
-        greeting,
-        solar,
-        solarLong,
-        gregorian,
-        islamic: islamicText,
-        weekday,
-        time,
-        moon,
-        animal,
-        zodiac,
-        progress,
-        iranEvents: events.iran,
-        internationalEvents:
-          events.international,
-        content,
-        season,
-      });
-
-    if (!cloudflareEnv.BROWSER) {
-      return NextResponse.json(
+    const infographic =
+      await createInfographic(
+        env,
         {
-          ok: false,
-          error:
-            "BROWSER binding پیدا نشد.",
-        },
-        { status: 500 }
-      );
-    }
+          weekday,
 
-    const screenshot =
-      await cloudflareEnv.BROWSER.quickAction(
-        "screenshot",
-        {
-          html,
+          persianDate:
+            `${fa(persian.year)}/` +
+            `${fa(
+              String(
+                persian.month
+              ).padStart(2, "0")
+            )}/` +
+            `${fa(
+              String(
+                persian.day
+              ).padStart(2, "0")
+            )}`,
 
-          screenshotOptions: {
-            type: "png",
-            fullPage: true,
-            omitBackground: false,
-          },
+          hijriDate:
+            hijriText,
 
-          viewport: {
-            width: WIDTH,
-            height: 900,
-            deviceScaleFactor: 1,
-          },
+          gregorianDate:
+            gregorian,
 
-          waitForTimeout: 1800,
+          time,
+
+          progress:
+            progress.percent,
+
+          remaining:
+            fa(progress.remaining),
+
+          weeksRemaining:
+            fa(
+              progress.weeksRemaining
+            ),
+
+          moon:
+            getMoonPhase(now),
+
+          zodiac:
+            getPersianZodiac(
+              persian.month
+            ),
+
+          animal:
+            getAnimal(
+              persian.year
+            ),
+
+          events:
+            getEventText(
+              todayEvents
+            ),
+
+          thought:
+            content.thought,
+
+          quote:
+            content.quote,
+
+          author:
+            content.author,
+
+          source:
+            content.source,
         }
       );
 
-    const imageBytes =
-      new Uint8Array(
-        await screenshot.arrayBuffer()
-      );
-
-    const bale =
-      await sendPhoto(
-        cloudflareEnv,
-        imageBytes
+    const sent =
+      await sendPhotoToBale(
+        token,
+        chatId,
+        infographic
       );
 
     return NextResponse.json({
-      ok: true,
+
+      ok:
+        sent.response.ok &&
+        sent.result?.ok === true,
+
       cancelled: false,
-      sent: Boolean(
-        bale.data?.ok
-      ),
+
+      sent:
+        sent.response.ok,
 
       bale_status:
-        bale.status,
+        sent.response.status,
 
-      bale: bale.data,
+      bale:
+        sent.result,
 
-      date: {
-        solar,
-        solar_persian:
-          faDigits(solar),
-        solar_long:
-          solarLong,
-        weekday,
-        time:
-          faDigits(time),
-        gregorian,
-        islamic:
-          islamicText,
-      },
-
-      content: {
-        quote:
-          content.quote,
-        author:
-          content.author,
-        source:
-          content.source,
-        thought:
-          content.thought,
-        day:
-          jalali.day,
-        day_persian:
-          faDigits(jalali.day),
-      },
-
-      season: {
-        name:
-          season === "spring"
-            ? "بهار"
-            : season === "summer"
-            ? "تابستان"
-            : season === "autumn"
-            ? "پاییز"
-            : "زمستان",
-        background,
-        background_index:
-          (progress.dayOfYear - 1) %
-          SEASONAL_BACKGROUNDS[season]
-            .length,
-      },
-
-      image: {
-        format: "png",
-        bytes:
-          imageBytes.byteLength,
-        width: WIDTH,
-        height: HEIGHT,
-      },
-
-      design: {
-        version:
-          "nature-seasonal-infographic-v4",
-
-        title:
-          title,
-
-        title_only_at_top:
-          true,
-
-        top_left_duplicate:
-          false,
-
-        bottom_duplicate:
-          false,
-
-        bale_caption:
-          false,
-
-        nature_background:
-          true,
-
-        seasonal_background:
-          true,
-
-        season:
-          season,
-
-        mountains:
-          true,
-
-        forest:
-          true,
-
-        sky:
-          true,
-
-        colorful:
-          true,
-
-        dynamic_layout:
-          true,
-
-        card_style:
-          false,
-
-        large_text:
-          true,
-
-        high_readability:
-          true,
-
-        mobile_friendly:
-          true,
-
-        iran_events:
-          true,
-
-        international_events:
-          true,
-
-        unique_daily_content:
-          true,
-
-        unique_content_days:
-          31,
-      },
     });
 
-  } catch (error: any) {
+  } catch (error) {
+
     console.error(
-      "DAILY CALENDAR ERROR:",
+      "[calendar] error:",
       error
     );
 
     return NextResponse.json(
       {
         ok: false,
+
         error:
-          error?.message ||
-          String(error),
+          error instanceof Error
+            ? error.message
+            : "خطای ناشناخته",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
-}
+    }
