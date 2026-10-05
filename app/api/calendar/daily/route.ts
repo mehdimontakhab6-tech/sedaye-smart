@@ -1221,9 +1221,9 @@ export async function GET() {
       bale_status: baleResponse.status,
       bale: baleData,
       date: {
-        solar: `${persianYear}/${persianMonth}/${persianDay}`,
-        weekday,
-      },
+  solar: `${persianYear}/${persianMonth}/${persianDay}`,
+  weekday: getWeekday(date),
+},
       design: {
         title_position: "top-only",
         duplicate_bottom_title: false,
