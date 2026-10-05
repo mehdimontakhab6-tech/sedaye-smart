@@ -1434,7 +1434,7 @@ body {
     <div class="footer-info">
 
       <div class="footer-left">
-        ${faDigits(progress.dayOfYear)} / ${faDigits(progress.totalDays)}
+      ${faDigits(progress.dayOfYear)} / ${faDigits(progress.dayOfYear + progress.remaining)}
       </div>
 
       <div class="footer-right">
