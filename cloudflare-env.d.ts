@@ -8,4 +8,5 @@ interface CloudflareEnv {
   NEXT_PUBLIC_SUPABASE_URL: string;
 
   AI: Ai;
+  BROWSER: BrowserRun;
 }
