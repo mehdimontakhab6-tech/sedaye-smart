@@ -6,11 +6,7 @@ export const dynamic = "force-dynamic";
 const TEHRAN_TZ = "Asia/Tehran";
 
 const WIDTH = 1024;
-const HEIGHT = 1500;
-
-/* =========================================================
-   ۳۱ سخن بزرگان متفاوت
-   ========================================================= */
+const HEIGHT = 1700;
 
 const DAILY_QUOTES: string[] = [
   "موفقیت نتیجه تلاش‌های کوچک و پیوسته است.",
@@ -46,10 +42,6 @@ const DAILY_QUOTES: string[] = [
   "آدمی با استمرار، کارهای دشوار را ممکن می‌کند.",
 ];
 
-/* =========================================================
-   ۳۱ جرعه‌ای تفکر متفاوت
-   ========================================================= */
-
 const DAILY_THOUGHTS: string[] = [
   "امروز چه کار کوچکی می‌توانم انجام دهم که فردایم را بهتر کند؟",
   "گاهی یک تصمیم ساده می‌تواند مسیر یک زندگی را تغییر دهد.",
@@ -84,10 +76,6 @@ const DAILY_THOUGHTS: string[] = [
   "زندگی کوتاه‌تر از آن است که تمام آن را صرف نگرانی از قضاوت دیگران کنیم.",
 ];
 
-/* =========================================================
-   ابزارهای عمومی
-   ========================================================= */
-
 function normalizePersian(value: unknown): string {
   return String(value ?? "")
     .replace(/ي/g, "ی")
@@ -114,33 +102,51 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#039;");
 }
 
-/* =========================================================
-   تاریخ تهران
-   ========================================================= */
-
+/**
+ * مهم:
+ * از en-US-u-ca-persian استفاده می‌کنیم تا سال/ماه/روز
+ * به شکل عدد لاتین برگردد و Number() مقدار NaN ندهد.
+ */
 function getPersianDate(date: Date) {
-  const formatter = new Intl.DateTimeFormat(
-    "fa-IR-u-ca-persian",
-    {
-      timeZone: TEHRAN_TZ,
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-    },
-  );
+  const formatter = new Intl.DateTimeFormat("en-US-u-ca-persian", {
+    timeZone: TEHRAN_TZ,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
 
   const parts = formatter.formatToParts(date);
 
+  const yearText =
+    parts.find((part) => part.type === "year")?.value ?? "0";
+
+  const monthText =
+    parts.find((part) => part.type === "month")?.value ?? "0";
+
+  const dayText =
+    parts.find((part) => part.type === "day")?.value ?? "0";
+
+  const year = Number.parseInt(yearText, 10);
+  const month = Number.parseInt(monthText, 10);
+  const day = Number.parseInt(dayText, 10);
+
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day) ||
+    year <= 0 ||
+    month <= 0 ||
+    day <= 0
+  ) {
+    throw new Error(
+      `Invalid Persian date: year=${yearText}, month=${monthText}, day=${dayText}`,
+    );
+  }
+
   return {
-    year: Number(
-      parts.find((part) => part.type === "year")?.value ?? 0,
-    ),
-    month: Number(
-      parts.find((part) => part.type === "month")?.value ?? 0,
-    ),
-    day: Number(
-      parts.find((part) => part.type === "day")?.value ?? 0,
-    ),
+    year,
+    month,
+    day,
   };
 }
 
@@ -197,14 +203,7 @@ function getPersianDateText(
   return `${toPersianDigits(day)} ${getMonthName(month)} ${toPersianDigits(year)}`;
 }
 
-/* =========================================================
-   روز سال
-   ========================================================= */
-
-function getDayOfYear(
-  month: number,
-  day: number,
-): number {
+function getDayOfYear(month: number, day: number): number {
   const monthLengths = [
     31,
     31,
@@ -230,23 +229,12 @@ function getDayOfYear(
 }
 
 function getYearDays(year: number): number {
-  /*
-   * سال‌های کبیسه تقویم جلالی را با فاصله تقریبی
-   * دو نوروز محاسبه می‌کنیم.
-   */
-
   try {
-    const start = new Date(
-      Date.UTC(year + 621, 2, 20),
-    );
-
-    const next = new Date(
-      Date.UTC(year + 622, 2, 20),
-    );
+    const start = new Date(Date.UTC(year + 621, 2, 20));
+    const next = new Date(Date.UTC(year + 622, 2, 20));
 
     const days = Math.round(
-      (next.getTime() - start.getTime()) /
-        86400000,
+      (next.getTime() - start.getTime()) / 86400000,
     );
 
     return days === 366 ? 366 : 365;
@@ -254,10 +242,6 @@ function getYearDays(year: number): number {
     return 365;
   }
 }
-
-/* =========================================================
-   سال حیوانی
-   ========================================================= */
 
 function getAnimalYear(year: number): string {
   const animals = [
@@ -275,156 +259,79 @@ function getAnimalYear(year: number): string {
     "خوک",
   ];
 
-  const index =
-    ((year - 1399) % 12 + 12) % 12;
+  const index = ((year - 1399) % 12 + 12) % 12;
 
   return animals[index];
 }
 
-/* =========================================================
-   برج
-   ========================================================= */
-
-function getZodiac(
-  month: number,
-  day: number,
-): string {
-  if (
-    (month === 1 && day >= 1) ||
-    (month === 2 && day <= 19)
-  ) {
+function getZodiac(month: number, day: number): string {
+  if ((month === 1 && day >= 1) || (month === 2 && day <= 19)) {
     return "حمل ♈";
   }
 
-  if (
-    (month === 2 && day >= 20) ||
-    (month === 3 && day <= 20)
-  ) {
+  if ((month === 2 && day >= 20) || (month === 3 && day <= 20)) {
     return "ثور ♉";
   }
 
-  if (
-    (month === 3 && day >= 21) ||
-    (month === 4 && day <= 20)
-  ) {
+  if ((month === 3 && day >= 21) || (month === 4 && day <= 20)) {
     return "جوزا ♊";
   }
 
-  if (
-    (month === 4 && day >= 21) ||
-    (month === 5 && day <= 20)
-  ) {
+  if ((month === 4 && day >= 21) || (month === 5 && day <= 20)) {
     return "سرطان ♋";
   }
 
-  if (
-    (month === 5 && day >= 21) ||
-    (month === 6 && day <= 21)
-  ) {
+  if ((month === 5 && day >= 21) || (month === 6 && day <= 21)) {
     return "اسد ♌";
   }
 
-  if (
-    (month === 6 && day >= 22) ||
-    (month === 7 && day <= 22)
-  ) {
+  if ((month === 6 && day >= 22) || (month === 7 && day <= 22)) {
     return "سنبله ♍";
   }
 
-  if (
-    (month === 7 && day >= 23) ||
-    (month === 8 && day <= 22)
-  ) {
+  if ((month === 7 && day >= 23) || (month === 8 && day <= 22)) {
     return "میزان ♎";
   }
 
-  if (
-    (month === 8 && day >= 23) ||
-    (month === 9 && day <= 22)
-  ) {
+  if ((month === 8 && day >= 23) || (month === 9 && day <= 22)) {
     return "عقرب ♏";
   }
 
-  if (
-    (month === 9 && day >= 23) ||
-    (month === 10 && day <= 22)
-  ) {
+  if ((month === 9 && day >= 23) || (month === 10 && day <= 22)) {
     return "قوس ♐";
   }
 
-  if (
-    (month === 10 && day >= 23) ||
-    (month === 11 && day <= 21)
-  ) {
+  if ((month === 10 && day >= 23) || (month === 11 && day <= 21)) {
     return "جدی ♑";
   }
 
-  if (
-    (month === 11 && day >= 22) ||
-    (month === 12 && day <= 21)
-  ) {
+  if ((month === 11 && day >= 22) || (month === 12 && day <= 21)) {
     return "دلو ♒";
   }
 
   return "حوت ♓";
 }
 
-/* =========================================================
-   وضعیت ماه
-   ========================================================= */
-
 function getMoonPhase(): string {
   const cycle = 29.530588;
-
-  const knownNewMoon =
-    Date.UTC(2024, 0, 11);
-
+  const knownNewMoon = Date.UTC(2024, 0, 11);
   const now = Date.now();
 
-  const days =
-    (now - knownNewMoon) / 86400000;
+  const days = (now - knownNewMoon) / 86400000;
+  const phase = ((days % cycle) + cycle) % cycle;
 
-  const phase =
-    ((days % cycle) + cycle) % cycle;
-
-  if (phase < 1.8) {
-    return "ماه نو 🌑";
-  }
-
-  if (phase < 7.4) {
-    return "هلال افزاینده 🌒";
-  }
-
-  if (phase < 8.8) {
-    return "تربیع اول 🌓";
-  }
-
-  if (phase < 14.8) {
-    return "ماه افزاینده 🌔";
-  }
-
-  if (phase < 16.8) {
-    return "ماه کامل 🌕";
-  }
-
-  if (phase < 22.1) {
-    return "ماه کاهنده 🌖";
-  }
-
-  if (phase < 23.7) {
-    return "تربیع آخر 🌗";
-  }
+  if (phase < 1.8) return "ماه نو 🌑";
+  if (phase < 7.4) return "هلال افزاینده 🌒";
+  if (phase < 8.8) return "تربیع اول 🌓";
+  if (phase < 14.8) return "ماه افزاینده 🌔";
+  if (phase < 16.8) return "ماه کامل 🌕";
+  if (phase < 22.1) return "ماه کاهنده 🌖";
+  if (phase < 23.7) return "تربیع آخر 🌗";
 
   return "هلال کاهنده 🌘";
 }
 
-/* =========================================================
-   محتوای ۳۱ روزه
-   ========================================================= */
-
-function getDailyContent(
-  dayOfMonth: number,
-) {
+function getDailyContent(dayOfMonth: number) {
   const index =
     ((dayOfMonth - 1) % 31 + 31) % 31;
 
@@ -434,39 +341,25 @@ function getDailyContent(
   };
 }
 
-/* =========================================================
-   تاریخ قمری
-   ========================================================= */
-
-async function getHijriDate(
-  date: Date,
-) {
+async function getHijriDate(date: Date) {
   try {
-    const formatter =
-      new Intl.DateTimeFormat("en-US", {
-        timeZone: TEHRAN_TZ,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      });
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: TEHRAN_TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
 
-    const parts =
-      formatter.formatToParts(date);
+    const parts = formatter.formatToParts(date);
 
     const year =
-      parts.find(
-        (part) => part.type === "year",
-      )?.value;
+      parts.find((part) => part.type === "year")?.value;
 
     const month =
-      parts.find(
-        (part) => part.type === "month",
-      )?.value;
+      parts.find((part) => part.type === "month")?.value;
 
     const day =
-      parts.find(
-        (part) => part.type === "day",
-      )?.value;
+      parts.find((part) => part.type === "day")?.value;
 
     if (!year || !month || !day) {
       return null;
@@ -495,20 +388,13 @@ async function getHijriDate(
 
     return {
       day: hijri.day,
-      month:
-        hijri.month?.ar ??
-        hijri.month?.en ??
-        "",
+      month: hijri.month?.ar ?? hijri.month?.en ?? "",
       year: hijri.year,
     };
   } catch {
     return null;
   }
 }
-
-/* =========================================================
-   مناسبت‌ها
-   ========================================================= */
 
 async function getEvents(
   persianYear: number,
@@ -535,10 +421,7 @@ async function getEvents(
 
     if (Array.isArray(data)) {
       candidates.push(...data);
-    } else if (
-      data &&
-      typeof data === "object"
-    ) {
+    } else if (data && typeof data === "object") {
       for (const value of Object.values(data)) {
         if (Array.isArray(value)) {
           candidates.push(...value);
@@ -546,9 +429,7 @@ async function getEvents(
           value &&
           typeof value === "object"
         ) {
-          for (const nested of Object.values(
-            value,
-          )) {
+          for (const nested of Object.values(value)) {
             if (Array.isArray(nested)) {
               candidates.push(...nested);
             }
@@ -569,14 +450,12 @@ async function getEvents(
           "",
       );
 
-      const normalized =
-        normalizePersian(rawDate).replace(
+      const normalized = normalizePersian(rawDate)
+        .replace(
           /[۰-۹]/g,
           (digit) =>
             String(
-              "۰۱۲۳۴۵۶۷۸۹".indexOf(
-                digit,
-              ),
+              "۰۱۲۳۴۵۶۷۸۹".indexOf(digit),
             ),
         );
 
@@ -594,19 +473,13 @@ async function getEvents(
           month === persianMonth &&
           day === persianDay;
       } else {
-        const shortMatch =
-          normalized.match(
-            /(\d{1,2})\D+(\d{1,2})/,
-          );
+        const shortMatch = normalized.match(
+          /(\d{1,2})\D+(\d{1,2})/,
+        );
 
         if (shortMatch) {
-          const month = Number(
-            shortMatch[1],
-          );
-
-          const day = Number(
-            shortMatch[2],
-          );
+          const month = Number(shortMatch[1]);
+          const day = Number(shortMatch[2]);
 
           matched =
             month === persianMonth &&
@@ -623,8 +496,7 @@ async function getEvents(
         item.description;
 
       if (title) {
-        const clean =
-          normalizePersian(title);
+        const clean = normalizePersian(title);
 
         if (
           clean &&
@@ -640,10 +512,6 @@ async function getEvents(
     return [];
   }
 }
-
-/* =========================================================
-   ساخت تصویر
-   ========================================================= */
 
 function buildHtml({
   date,
@@ -673,33 +541,23 @@ function buildHtml({
   totalDays: number;
   remainingDays: number;
 }) {
-  const persianDate =
-    getPersianDateText(
-      persianYear,
-      persianMonth,
-      persianDay,
-    );
+  const persianDate = getPersianDateText(
+    persianYear,
+    persianMonth,
+    persianDay,
+  );
 
-  const weekday =
-    getWeekday(date);
+  const weekday = getWeekday(date);
+  const gregorianDate = getGregorianDate(date);
+  const time = getTime(date);
 
-  const gregorianDate =
-    getGregorianDate(date);
+  const animal = getAnimalYear(persianYear);
+  const zodiac = getZodiac(
+    persianMonth,
+    persianDay,
+  );
 
-  const time =
-    getTime(date);
-
-  const animal =
-    getAnimalYear(persianYear);
-
-  const zodiac =
-    getZodiac(
-      persianMonth,
-      persianDay,
-    );
-
-  const moon =
-    getMoonPhase();
+  const moon = getMoonPhase();
 
   const hijriText = hijri
     ? `${toPersianDigits(hijri.day)} ${hijri.month} ${toPersianDigits(hijri.year)}`
@@ -709,115 +567,79 @@ function buildHtml({
     events.length > 0
       ? events
           .map(
-            (event) => `
-              <div class="event-item">
+            (event) =>
+              `<div class="event-item">
                 <span class="event-dot">●</span>
                 <span>${escapeHtml(event)}</span>
-              </div>
-            `,
+              </div>`,
           )
           .join("")
       : `
-          <div class="event-item">
-            <span class="event-dot">●</span>
-            <span>
-              مناسبت ویژه‌ای برای امروز ثبت نشده است.
-            </span>
-          </div>
-        `;
+        <div class="event-item">
+          <span class="event-dot">●</span>
+          <span>مناسبت ویژه‌ای برای امروز ثبت نشده است.</span>
+        </div>
+      `;
 
-  return `
-<!doctype html>
-
+  return `<!doctype html>
 <html lang="fa" dir="rtl">
-
 <head>
-
 <meta charset="utf-8">
-
-<meta
-  name="viewport"
-  content="width=1024"
-/>
-
-<title>
-تقویم روزانه گروه صدای کارکنان ثبت احوال
-</title>
+<meta name="viewport" content="width=1024">
+<title>تقویم روزانه گروه صدای کارکنان ثبت احوال</title>
 
 <style>
 
-* {
-  box-sizing: border-box;
+*{
+  box-sizing:border-box;
 }
 
 html,
-body {
-  margin: 0;
-  padding: 0;
-
-  width: ${WIDTH}px;
-  height: ${HEIGHT}px;
-
-  direction: rtl;
-
-  font-family:
-    Arial,
-    "Tahoma",
-    sans-serif;
-
-  background: #eef3f6;
+body{
+  margin:0;
+  padding:0;
+  width:${WIDTH}px;
+  min-height:${HEIGHT}px;
+  direction:rtl;
+  font-family:Arial,"Tahoma",sans-serif;
+  background:#eef3f6;
 }
 
-body {
-  overflow: hidden;
+body{
+  overflow:hidden;
 }
 
-.canvas {
-  width: ${WIDTH}px;
-  min-height: ${HEIGHT}px;
-
-  padding:
-    34px
-    42px
-    34px;
-
-  direction: rtl;
+.canvas{
+  width:${WIDTH}px;
+  min-height:${HEIGHT}px;
+  padding:38px 42px 40px;
+  direction:rtl;
 
   background:
     linear-gradient(
       180deg,
       #edf6fb 0%,
-      #ffffff 40%,
+      #ffffff 38%,
       #f5f7f9 100%
     );
 
-  color: #17212b;
+  color:#17212b;
 }
 
-/* =====================================================
-   عنوان اصلی
-   فقط یک عنوان در بالای تصویر
-   هیچ عنوانی در پایین تصویر وجود ندارد
-   ===================================================== */
+.hero{
+  position:relative;
+  width:100%;
+  height:225px;
+  margin-bottom:24px;
 
-.hero {
-  position: relative;
+  border-radius:30px;
+  overflow:hidden;
 
-  width: 100%;
-  height: 220px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
 
-  margin-bottom: 22px;
-
-  border-radius: 30px;
-
-  overflow: hidden;
-
-  display: flex;
-
-  align-items: center;
-  justify-content: center;
-
-  padding: 35px;
+  padding:35px;
 
   background:
     radial-gradient(
@@ -833,16 +655,13 @@ body {
     );
 
   box-shadow:
-    0 12px 30px
-    rgba(30,55,75,.16);
+    0 12px 30px rgba(30,55,75,.16);
 }
 
-.hero::after {
-  content: "";
-
-  position: absolute;
-
-  inset: 0;
+.hero::after{
+  content:"";
+  position:absolute;
+  inset:0;
 
   background:
     linear-gradient(
@@ -852,173 +671,156 @@ body {
     );
 }
 
-.hero-title {
-  position: relative;
+.hero-title{
+  position:relative;
+  z-index:2;
 
-  z-index: 2;
+  width:100%;
 
-  width: 100%;
+  text-align:center;
 
-  text-align: center;
+  color:#fff;
 
-  color: #ffffff;
+  font-size:42px;
+  line-height:1.55;
 
-  font-size: 35px;
-
-  line-height: 1.55;
-
-  font-weight: 900;
+  font-weight:900;
 
   text-shadow:
-    0 3px 12px
-    rgba(0,0,0,.28);
+    0 3px 12px rgba(0,0,0,.28);
 }
 
-/* =====================================================
-   تاریخ
-   ===================================================== */
+.date-panel{
+  background:#fff;
 
-.date-panel {
-  background: #ffffff;
+  border-radius:26px;
 
-  border-radius: 26px;
+  padding:26px 30px;
 
-  padding: 23px 28px;
-
-  margin-bottom: 18px;
+  margin-bottom:20px;
 
   box-shadow:
-    0 7px 22px
-    rgba(31,55,73,.08);
+    0 7px 22px rgba(31,55,73,.08);
 
-  direction: rtl;
+  direction:rtl;
 }
 
-.date-main {
-  text-align: center;
+.date-main{
+  text-align:center;
 
-  color: #1f4562;
+  color:#1f4562;
 
-  font-size: 38px;
+  font-size:45px;
+  line-height:1.5;
 
-  line-height: 1.5;
+  font-weight:900;
 
-  font-weight: 900;
-
-  margin-bottom: 4px;
+  margin-bottom:5px;
 }
 
-.weekday {
-  text-align: center;
+.weekday{
+  text-align:center;
 
-  color: #65737e;
+  color:#65737e;
 
-  font-size: 21px;
+  font-size:27px;
 
-  font-weight: 700;
+  font-weight:700;
 
-  margin-bottom: 16px;
+  margin-bottom:19px;
 }
 
-.meta-row {
-  display: flex;
+.meta-row{
+  display:flex;
+  gap:15px;
 
-  gap: 13px;
-
-  direction: rtl;
+  direction:rtl;
 }
 
-.meta-chip {
-  flex: 1;
+.meta-chip{
+  flex:1;
 
-  background: #f2f7fa;
+  background:#f2f7fa;
 
-  border-radius: 17px;
+  border-radius:18px;
 
-  padding: 12px 14px;
+  padding:15px 14px;
 
-  text-align: center;
+  text-align:center;
 
-  color: #334d60;
+  color:#334d60;
 
-  font-size: 17px;
+  font-size:21px;
 
-  font-weight: 700;
+  font-weight:700;
 
-  line-height: 1.7;
+  line-height:1.8;
 }
 
-/* =====================================================
-   پیشرفت سال
-   ===================================================== */
+.progress-panel{
+  background:#fff;
 
-.progress-panel {
-  background: #ffffff;
+  border-radius:26px;
 
-  border-radius: 26px;
+  padding:24px 29px;
 
-  padding: 21px 27px;
-
-  margin-bottom: 18px;
+  margin-bottom:20px;
 
   box-shadow:
-    0 7px 22px
-    rgba(31,55,73,.08);
+    0 7px 22px rgba(31,55,73,.08);
 
-  direction: rtl;
+  direction:rtl;
 }
 
-.panel-title {
-  text-align: right;
+.panel-title{
+  text-align:right;
+  direction:rtl;
 
-  direction: rtl;
+  color:#23445b;
 
-  color: #23445b;
+  font-size:29px;
 
-  font-size: 23px;
+  font-weight:900;
 
-  font-weight: 900;
-
-  margin-bottom: 13px;
+  margin-bottom:15px;
 }
 
-.progress-info {
-  display: flex;
+.progress-info{
+  display:flex;
 
-  justify-content:
-    space-between;
+  justify-content:space-between;
 
-  align-items: center;
+  align-items:center;
 
-  direction: rtl;
+  direction:rtl;
 
-  color: #687680;
+  color:#687680;
 
-  font-size: 16px;
+  font-size:20px;
 
-  margin-bottom: 8px;
+  margin-bottom:10px;
 }
 
-.progress-bar {
-  width: 100%;
+.progress-bar{
+  width:100%;
 
-  height: 18px;
+  height:22px;
 
-  border-radius: 20px;
+  border-radius:20px;
 
-  background: #e7edf1;
+  background:#e7edf1;
 
-  overflow: hidden;
+  overflow:hidden;
 
-  direction: ltr;
+  direction:ltr;
 }
 
-.progress-fill {
-  height: 100%;
+.progress-fill{
+  height:100%;
 
-  width: ${progressPercent}%;
+  width:${progressPercent}%;
 
-  border-radius: 20px;
+  border-radius:20px;
 
   background:
     linear-gradient(
@@ -1028,436 +830,356 @@ body {
     );
 }
 
-.remaining {
-  margin-top: 9px;
+.remaining{
+  margin-top:11px;
 
-  text-align: right;
+  text-align:right;
 
-  direction: rtl;
+  direction:rtl;
 
-  color: #78858e;
+  color:#78858e;
 
-  font-size: 15px;
+  font-size:19px;
 }
 
-/* =====================================================
-   کارت‌های مشخصات
-   ===================================================== */
-
-.stats {
-  display: grid;
+.stats{
+  display:grid;
 
   grid-template-columns:
-    repeat(3, 1fr);
+    repeat(3,1fr);
 
-  gap: 15px;
+  gap:16px;
 
-  margin-bottom: 18px;
+  margin-bottom:20px;
 
-  direction: rtl;
+  direction:rtl;
 }
 
-.stat-card {
-  background: #ffffff;
+.stat-card{
+  background:#fff;
 
-  border-radius: 23px;
+  border-radius:23px;
 
-  padding: 17px 12px;
+  padding:19px 12px;
 
-  min-height: 110px;
+  min-height:125px;
 
-  text-align: center;
+  text-align:center;
 
   box-shadow:
-    0 7px 22px
-    rgba(31,55,73,.08);
+    0 7px 22px rgba(31,55,73,.08);
 }
 
-.stat-icon {
-  font-size: 27px;
+.stat-icon{
+  font-size:32px;
 
-  margin-bottom: 3px;
+  margin-bottom:4px;
 }
 
-.stat-label {
-  color: #7a8790;
+.stat-label{
+  color:#7a8790;
 
-  font-size: 15px;
+  font-size:19px;
 
-  margin-bottom: 4px;
+  margin-bottom:5px;
 }
 
-.stat-value {
-  color: #274d67;
+.stat-value{
+  color:#274d67;
 
-  font-size: 18px;
+  font-size:22px;
 
-  font-weight: 900;
+  font-weight:900;
 }
 
-/* =====================================================
-   پنل‌های محتوا
-   همه راست‌چین
-   ===================================================== */
+.content-panel{
+  background:#fff;
 
-.content-panel {
-  background: #ffffff;
+  border-radius:26px;
 
-  border-radius: 26px;
+  padding:24px 29px;
 
-  padding: 21px 27px;
-
-  margin-bottom: 17px;
+  margin-bottom:19px;
 
   box-shadow:
-    0 7px 22px
-    rgba(31,55,73,.08);
+    0 7px 22px rgba(31,55,73,.08);
 
-  direction: rtl;
+  direction:rtl;
 
-  text-align: right;
+  text-align:right;
 }
 
-.content-title {
-  display: flex;
+.content-title{
+  display:flex;
 
-  align-items: center;
+  align-items:center;
 
-  justify-content:
-    flex-start;
+  justify-content:flex-start;
 
-  gap: 9px;
+  gap:10px;
 
-  width: 100%;
+  width:100%;
 
-  direction: rtl;
+  direction:rtl;
 
-  text-align: right;
+  text-align:right;
 
-  color: #23445b;
+  color:#23445b;
 
-  font-size: 23px;
+  font-size:29px;
 
-  font-weight: 900;
+  font-weight:900;
 
-  margin-bottom: 12px;
+  margin-bottom:14px;
 }
 
-.event-item {
-  display: flex;
+.event-item{
+  display:flex;
 
-  align-items: flex-start;
+  align-items:flex-start;
 
-  justify-content:
-    flex-start;
+  justify-content:flex-start;
 
-  gap: 9px;
+  gap:11px;
 
-  direction: rtl;
+  direction:rtl;
 
-  text-align: right;
+  text-align:right;
 
-  color: #43525e;
+  color:#43525e;
 
-  font-size: 17px;
+  font-size:22px;
 
-  line-height: 1.8;
+  line-height:1.85;
 
-  margin-bottom: 6px;
+  margin-bottom:8px;
 }
 
-.event-dot {
-  color: #4a91ad;
+.event-dot{
+  color:#4a91ad;
 
-  font-size: 12px;
+  font-size:14px;
 
-  margin-top: 6px;
+  margin-top:7px;
 
-  flex-shrink: 0;
+  flex-shrink:0;
 }
 
 .quote-text,
-.thought-text {
-  width: 100%;
+.thought-text{
+  width:100%;
 
-  direction: rtl;
+  direction:rtl;
 
-  text-align: right;
+  text-align:right;
 
-  color: #354a57;
+  color:#354a57;
 
-  font-size: 19px;
+  font-size:24px;
 
-  line-height: 1.95;
+  line-height:2;
 
-  font-weight: 600;
+  font-weight:600;
 }
 
-.quote-text::before {
-  content: "«";
+.quote-text::before{
+  content:"«";
 
-  color: #70a8bb;
+  color:#70a8bb;
 
-  font-size: 29px;
+  font-size:36px;
 
-  font-weight: 900;
+  font-weight:900;
 
-  margin-left: 4px;
+  margin-left:5px;
 }
 
-.quote-text::after {
-  content: "»";
+.quote-text::after{
+  content:"»";
 
-  color: #70a8bb;
+  color:#70a8bb;
 
-  font-size: 29px;
+  font-size:36px;
 
-  font-weight: 900;
+  font-weight:900;
 
-  margin-right: 4px;
+  margin-right:5px;
 }
 
-/* =====================================================
-   فضای پایین
-   عمداً بدون هیچ متن یا عنوان
-   ===================================================== */
-
-.bottom-space {
-  height: 8px;
+.bottom-space{
+  height:10px;
 }
 
 </style>
-
 </head>
 
 <body>
 
 <div class="canvas">
 
-  <!--
-    عنوان اصلی فقط همین‌جا قرار دارد.
-    عنوان اضافی بالا سمت چپ حذف شده است.
-  -->
+<section class="hero">
+  <div class="hero-title">
+    تقویم روزانه گروه صدای کارکنان ثبت احوال
+  </div>
+</section>
 
-  <section class="hero">
+<section class="date-panel">
 
-    <div class="hero-title">
-      تقویم روزانه گروه صدای کارکنان ثبت احوال
+  <div class="date-main">
+    ${escapeHtml(persianDate)}
+  </div>
+
+  <div class="weekday">
+    ${escapeHtml(weekday)}
+  </div>
+
+  <div class="meta-row">
+
+    <div class="meta-chip">
+      📅 میلادی<br>
+      ${escapeHtml(gregorianDate)}
     </div>
 
-  </section>
-
-  <!-- =================================================
-       تاریخ
-       ================================================= -->
-
-  <section class="date-panel">
-
-    <div class="date-main">
-      ${escapeHtml(persianDate)}
+    <div class="meta-chip">
+      🌙 قمری<br>
+      ${escapeHtml(hijriText)}
     </div>
 
-    <div class="weekday">
-      ${escapeHtml(weekday)}
+    <div class="meta-chip">
+      🕐 ساعت<br>
+      ${escapeHtml(time)}
     </div>
 
-    <div class="meta-row">
+  </div>
 
-      <div class="meta-chip">
-        📅 میلادی
-        <br>
-        ${escapeHtml(gregorianDate)}
-      </div>
+</section>
 
-      <div class="meta-chip">
-        🌙 قمری
-        <br>
-        ${escapeHtml(hijriText)}
-      </div>
+<section class="progress-panel">
 
-      <div class="meta-chip">
-        🕐 ساعت
-        <br>
-        ${escapeHtml(time)}
-      </div>
+  <div class="panel-title">
+    📊 پیشرفت سال
+  </div>
 
+  <div class="progress-info">
+
+    <span>
+      روز ${toPersianDigits(dayOfYear)}
+      از ${toPersianDigits(totalDays)}
+    </span>
+
+    <span>
+      ${toPersianDigits(progressPercent)}٪
+    </span>
+
+  </div>
+
+  <div class="progress-bar">
+    <div class="progress-fill"></div>
+  </div>
+
+  <div class="remaining">
+    ${toPersianDigits(remainingDays)}
+    روز تا پایان سال باقی مانده است.
+  </div>
+
+</section>
+
+<section class="stats">
+
+  <div class="stat-card">
+
+    <div class="stat-icon">
+      🌙
     </div>
 
-  </section>
-
-  <!-- =================================================
-       پیشرفت سال
-       ================================================= -->
-
-  <section class="progress-panel">
-
-    <div class="panel-title">
-      📊 پیشرفت سال
+    <div class="stat-label">
+      وضعیت ماه
     </div>
 
-    <div class="progress-info">
-
-      <span>
-        روز
-        ${toPersianDigits(dayOfYear)}
-        از
-        ${toPersianDigits(totalDays)}
-      </span>
-
-      <span>
-        ${toPersianDigits(progressPercent)}٪
-      </span>
-
+    <div class="stat-value">
+      ${escapeHtml(moon)}
     </div>
 
-    <div class="progress-bar">
+  </div>
 
-      <div class="progress-fill"></div>
+  <div class="stat-card">
 
+    <div class="stat-icon">
+      ♈
     </div>
 
-    <div class="remaining">
-
-      ${toPersianDigits(remainingDays)}
-      روز تا پایان سال باقی مانده است.
-
+    <div class="stat-label">
+      برج
     </div>
 
-  </section>
-
-  <!-- =================================================
-       مشخصات روز
-       ================================================= -->
-
-  <section class="stats">
-
-    <div class="stat-card">
-
-      <div class="stat-icon">
-        🌙
-      </div>
-
-      <div class="stat-label">
-        وضعیت ماه
-      </div>
-
-      <div class="stat-value">
-        ${escapeHtml(moon)}
-      </div>
-
+    <div class="stat-value">
+      ${escapeHtml(zodiac)}
     </div>
 
-    <div class="stat-card">
+  </div>
 
-      <div class="stat-icon">
-        ♈
-      </div>
+  <div class="stat-card">
 
-      <div class="stat-label">
-        برج
-      </div>
-
-      <div class="stat-value">
-        ${escapeHtml(zodiac)}
-      </div>
-
+    <div class="stat-icon">
+      🐾
     </div>
 
-    <div class="stat-card">
-
-      <div class="stat-icon">
-        🐾
-      </div>
-
-      <div class="stat-label">
-        سال حیوانی
-      </div>
-
-      <div class="stat-value">
-        ${escapeHtml(animal)}
-      </div>
-
+    <div class="stat-label">
+      سال حیوانی
     </div>
 
-  </section>
-
-  <!-- =================================================
-       رویدادها و مناسبت‌ها
-       راست‌چین
-       ================================================= -->
-
-  <section class="content-panel">
-
-    <div class="content-title">
-      📌
-      <span>
-        رویدادها و مناسبت‌ها
-      </span>
+    <div class="stat-value">
+      ${escapeHtml(animal)}
     </div>
 
-    ${eventHtml}
+  </div>
 
-  </section>
+</section>
 
-  <!-- =================================================
-       سخن بزرگان
-       راست‌چین
-       ================================================= -->
+<section class="content-panel">
 
-  <section class="content-panel">
+  <div class="content-title">
+    📌
+    <span>رویدادها و مناسبت‌ها</span>
+  </div>
 
-    <div class="content-title">
-      💬
-      <span>
-        سخن بزرگان
-      </span>
-    </div>
+  ${eventHtml}
 
-    <div class="quote-text">
-      ${escapeHtml(content.quote)}
-    </div>
+</section>
 
-  </section>
+<section class="content-panel">
 
-  <!-- =================================================
-       جرعه‌ای تفکر
-       راست‌چین
-       ================================================= -->
+  <div class="content-title">
+    💬
+    <span>سخن بزرگان</span>
+  </div>
 
-  <section class="content-panel">
+  <div class="quote-text">
+    ${escapeHtml(content.quote)}
+  </div>
 
-    <div class="content-title">
-      💭
-      <span>
-        جرعه‌ای تفکر
-      </span>
-    </div>
+</section>
 
-    <div class="thought-text">
-      ${escapeHtml(content.thought)}
-    </div>
+<section class="content-panel">
 
-  </section>
+  <div class="content-title">
+    💭
+    <span>جرعه‌ای تفکر</span>
+  </div>
 
-  <!--
-    مهم:
-    این قسمت عمداً هیچ نوشته‌ای ندارد.
-    عنوان یا نام گروه در پایین تصویر نمایش داده نمی‌شود.
-  -->
+  <div class="thought-text">
+    ${escapeHtml(content.thought)}
+  </div>
 
-  <div class="bottom-space"></div>
+</section>
+
+<div class="bottom-space"></div>
 
 </div>
 
 </body>
-
-</html>
-`;
+</html>`;
 }
-
-/* =========================================================
-   GET
-   ========================================================= */
 
 export async function GET() {
   try {
@@ -1490,68 +1212,43 @@ export async function GET() {
         Math.max(
           0,
           Math.round(
-            (dayOfYear / totalDays) *
-              100,
+            (dayOfYear / totalDays) * 100,
           ),
         ),
       );
 
-    /*
-     * این قسمت بسیار مهم است:
-     * محتوا حتماً قبل از buildHtml ساخته می‌شود.
-     * بنابراین خطای content.quote رخ نمی‌دهد.
-     */
-
     const content =
-      getDailyContent(
-        persianDay,
-      );
+      getDailyContent(persianDay);
 
-    const [
+    const [hijri, events] =
+      await Promise.all([
+        getHijriDate(date),
+
+        getEvents(
+          persianYear,
+          persianMonth,
+          persianDay,
+        ),
+      ]);
+
+    const html = buildHtml({
+      date,
+
+      persianYear,
+      persianMonth,
+      persianDay,
+
       hijri,
       events,
-    ] = await Promise.all([
-      getHijriDate(date),
+      content,
 
-      getEvents(
-        persianYear,
-        persianMonth,
-        persianDay,
-      ),
-    ]);
+      progressPercent,
+      dayOfYear,
+      totalDays,
+      remainingDays,
+    });
 
-    const html =
-      buildHtml({
-        date,
-
-        persianYear,
-
-        persianMonth,
-
-        persianDay,
-
-        hijri,
-
-        events,
-
-        content,
-
-        progressPercent,
-
-        dayOfYear,
-
-        totalDays,
-
-        remainingDays,
-      });
-
-    /* =====================================================
-       Cloudflare Browser
-       ===================================================== */
-
-    const {
-      env,
-    } =
+    const { env } =
       await getCloudflareContext({
         async: true,
       });
@@ -1560,29 +1257,35 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: false,
-
           error:
             "Cloudflare Browser binding BROWSER is not configured.",
         },
-
-        {
-          status: 500,
-        },
+        { status: 500 },
       );
     }
 
+    /*
+     * Cloudflare Browser Run
+     *
+     * خروجی Screenshot یک Response است.
+     * بنابراین مستقیماً arrayBuffer می‌گیریم.
+     */
     const screenshot =
       await env.BROWSER.quickAction(
         "screenshot",
         {
           html,
 
-          options: {
+          screenshotOptions: {
             type: "png",
-
             fullPage: true,
-
             omitBackground: false,
+          },
+
+          viewport: {
+            width: WIDTH,
+            height: 900,
+            deviceScaleFactor: 1,
           },
         },
       );
@@ -1591,41 +1294,42 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: false,
-
           error:
             "Screenshot generation failed.",
         },
-
-        {
-          status: 500,
-        },
+        { status: 500 },
       );
     }
 
     let imageBuffer: ArrayBuffer;
 
-    if (
-      screenshot instanceof
-      ArrayBuffer
-    ) {
+    if (screenshot instanceof Response) {
       imageBuffer =
-        screenshot;
+        await screenshot.arrayBuffer();
     } else if (
-      screenshot?.body instanceof
-      ArrayBuffer
+      screenshot instanceof ArrayBuffer
     ) {
-      imageBuffer =
-        screenshot.body;
+      imageBuffer = screenshot;
     } else {
       imageBuffer =
         await new Response(
-          screenshot,
+          screenshot as any,
         ).arrayBuffer();
     }
 
-    /* =====================================================
-       ارسال به بله
-       ===================================================== */
+    if (
+      !imageBuffer ||
+      imageBuffer.byteLength === 0
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Screenshot returned an empty file.",
+        },
+        { status: 500 },
+      );
+    }
 
     const token =
       env.BALE_SMART_TOKEN;
@@ -1637,14 +1341,10 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: false,
-
           error:
             "BALE_SMART_TOKEN is missing.",
         },
-
-        {
-          status: 500,
-        },
+        { status: 500 },
       );
     }
 
@@ -1652,17 +1352,17 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: false,
-
           error:
             "BALE_GROUP_ID is missing.",
         },
-
-        {
-          status: 500,
-        },
+        { status: 500 },
       );
     }
 
+    /*
+     * فایل PNG را به‌صورت واقعی به FormData
+     * اضافه می‌کنیم.
+     */
     const form =
       new FormData();
 
@@ -1670,11 +1370,6 @@ export async function GET() {
       "chat_id",
       String(groupId),
     );
-
-    /*
-     * این کپشن خارج از خود تصویر است.
-     * داخل تصویر، پایین هیچ نوشته‌ای وجود ندارد.
-     */
 
     form.append(
       "caption",
@@ -1700,7 +1395,6 @@ export async function GET() {
         `https://tapi.bale.ai/bot${token}/sendPhoto`,
         {
           method: "POST",
-
           body: form,
         },
       );
@@ -1712,23 +1406,23 @@ export async function GET() {
 
     try {
       baleData =
-        JSON.parse(
-          baleText,
-        );
+        JSON.parse(baleText);
     } catch {
       baleData = {
         raw: baleText,
       };
     }
 
+    const sent =
+      baleResponse.ok &&
+      baleData?.ok === true;
+
     return NextResponse.json({
       ok: true,
 
       cancelled: false,
 
-      sent:
-        baleResponse.ok &&
-        baleData?.ok !== false,
+      sent,
 
       bale_status:
         baleResponse.status,
@@ -1738,6 +1432,9 @@ export async function GET() {
       date: {
         solar:
           `${persianYear}/${persianMonth}/${persianDay}`,
+
+        solar_persian:
+          `${toPersianDigits(persianYear)}/${toPersianDigits(persianMonth)}/${toPersianDigits(persianDay)}`,
 
         weekday:
           getWeekday(date),
@@ -1755,6 +1452,24 @@ export async function GET() {
 
         day:
           persianDay,
+
+        day_persian:
+          toPersianDigits(
+            persianDay,
+          ),
+      },
+
+      image: {
+        format: "png",
+
+        bytes:
+          imageBuffer.byteLength,
+
+        width:
+          WIDTH,
+
+        height:
+          HEIGHT,
       },
 
       design: {
@@ -1771,6 +1486,9 @@ export async function GET() {
           false,
 
         right_aligned_sections:
+          true,
+
+        larger_text:
           true,
 
         unique_daily_content:
@@ -1794,10 +1512,7 @@ export async function GET() {
           error?.message ??
           String(error),
       },
-
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
-  }
+}
