@@ -12,9 +12,7 @@ function fa(value: number | string) {
 }
 
 function normalize(value: string) {
-  return value.replace(/[۰-۹]/g, (d) =>
-    String(digits.indexOf(d))
-  );
+  return value.replace(/[۰-۹]/g, (d) => String(digits.indexOf(d)));
 }
 
 function escapeHtml(value: string) {
@@ -54,15 +52,12 @@ function getTehranParts() {
 }
 
 function getPersianDate(date: Date) {
-  const parts = new Intl.DateTimeFormat(
-    "fa-IR-u-ca-persian",
-    {
-      timeZone: TIME_ZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }
-  ).formatToParts(date);
+  const parts = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
 
   const get = (type: string) =>
     parts.find((p) => p.type === type)?.value || "";
@@ -92,13 +87,8 @@ function getPersianDayOfYear(month: number, day: number) {
 }
 
 function isPersianLeapYear(year: number) {
-  const start = new Date(
-    `${year}-03-20T12:00:00+03:30`
-  );
-
-  const next = new Date(
-    `${year + 1}-03-20T12:00:00+03:30`
-  );
+  const start = new Date(`${year}-03-20T12:00:00+03:30`);
+  const next = new Date(`${year + 1}-03-20T12:00:00+03:30`);
 
   const diff = Math.round(
     (next.getTime() - start.getTime()) / 86400000
@@ -107,36 +97,17 @@ function isPersianLeapYear(year: number) {
   return diff >= 366;
 }
 
-function getYearProgress(
-  month: number,
-  day: number,
-  year: number
-) {
-  const dayOfYear = getPersianDayOfYear(
-    month,
-    day
-  );
-
-  const totalDays = isPersianLeapYear(year)
-    ? 366
-    : 365;
+function getYearProgress(month: number, day: number, year: number) {
+  const dayOfYear = getPersianDayOfYear(month, day);
+  const totalDays = isPersianLeapYear(year) ? 366 : 365;
 
   return {
     dayOfYear,
     totalDays,
-    percent: (
-      (dayOfYear / totalDays) *
-      100
-    ).toFixed(1),
-    remaining: Math.max(
-      0,
-      totalDays - dayOfYear
-    ),
+    percent: ((dayOfYear / totalDays) * 100).toFixed(1),
+    remaining: Math.max(0, totalDays - dayOfYear),
     weeksRemaining: Math.ceil(
-      Math.max(
-        0,
-        totalDays - dayOfYear
-      ) / 7
+      Math.max(0, totalDays - dayOfYear) / 7
     ),
   };
 }
@@ -176,86 +147,47 @@ function getAnimal(year: number) {
     "خوک",
   ];
 
-  return animals[
-    ((year - 4) % 12 + 12) % 12
-  ];
+  return animals[((year - 4) % 12 + 12) % 12];
 }
 
 function getMoonPhase(date: Date) {
-  const knownNewMoon = Date.UTC(
-    2000,
-    0,
-    6,
-    18,
-    14
-  );
-
+  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
   const synodicMonth = 29.530588853;
 
   let age =
-    ((date.getTime() - knownNewMoon) /
-      86400000) %
+    ((date.getTime() - knownNewMoon) / 86400000) %
     synodicMonth;
 
-  if (age < 0) {
-    age += synodicMonth;
-  }
+  if (age < 0) age += synodicMonth;
 
-  if (age < 1.85)
-    return "ماه نو 🌑";
-
-  if (age < 7.38)
-    return "هلال افزاینده 🌒";
-
-  if (age < 9.22)
-    return "ربع اول 🌓";
-
-  if (age < 14.77)
-    return "تربیع افزاینده 🌔";
-
-  if (age < 16.61)
-    return "ماه کامل 🌕";
-
-  if (age < 22.15)
-    return "تربیع کاهنده 🌖";
-
-  if (age < 23.99)
-    return "ربع آخر 🌗";
+  if (age < 1.85) return "ماه نو 🌑";
+  if (age < 7.38) return "هلال افزاینده 🌒";
+  if (age < 9.22) return "ربع اول 🌓";
+  if (age < 14.77) return "تربیع افزاینده 🌔";
+  if (age < 16.61) return "ماه کامل 🌕";
+  if (age < 22.15) return "تربیع کاهنده 🌖";
+  if (age < 23.99) return "ربع آخر 🌗";
 
   return "هلال کاهنده 🌘";
 }
 
-async function getHijriDate(
-  gregorian: string
-) {
+async function getHijriDate(gregorian: string) {
   try {
     const response = await fetch(
       `https://api.aladhan.com/v1/gToH?date=${gregorian}`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-      }
+      { headers: { Accept: "application/json" } }
     );
 
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return null;
 
     const json = await response.json();
-
     const hijri = json?.data?.hijri;
 
-    if (!hijri) {
-      return null;
-    }
+    if (!hijri) return null;
 
     return {
       day: hijri.day,
-      month:
-        hijri.month?.ar ||
-        hijri.month?.en ||
-        "",
+      month: hijri.month?.ar || hijri.month?.en || "",
       year: hijri.year,
     };
   } catch {
@@ -263,52 +195,32 @@ async function getHijriDate(
   }
 }
 
-async function getEvents(
-  persianYear: number
-) {
+async function getEvents(persianYear: number) {
   try {
     const response = await fetch(
       `https://hmarzban.github.io/pipe2time.ir/api/${persianYear}/events.json`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-      }
+      { headers: { Accept: "application/json" } }
     );
 
-    if (!response.ok) {
-      return [];
-    }
+    if (!response.ok) return [];
 
     const data = await response.json();
 
-    if (Array.isArray(data)) {
-      return data;
-    }
+    if (Array.isArray(data)) return data;
 
     const events: any[] = [];
-
-    const yearData =
-      data?.[String(persianYear)];
+    const yearData = data?.[String(persianYear)];
 
     if (Array.isArray(yearData)) {
       for (const monthData of yearData) {
-        if (
-          Array.isArray(
-            monthData?.events
-          )
-        ) {
-          events.push(
-            ...monthData.events
-          );
+        if (Array.isArray(monthData?.events)) {
+          events.push(...monthData.events);
         }
       }
     }
 
     if (Array.isArray(data?.events)) {
-      events.push(
-        ...data.events
-      );
+      events.push(...data.events);
     }
 
     return events;
@@ -329,8 +241,7 @@ function getEventsForDay(
       ""
     );
 
-    const normalized =
-      normalize(jDate);
+    const normalized = normalize(jDate);
 
     const match = normalized.match(
       /^(?:\d{4}[\/\-])?(\d{1,2})[\/\-](\d{1,2})$/
@@ -345,157 +256,103 @@ function getEventsForDay(
 
     const eventMonth = Number(
       event?.jMonth ??
-        event?.month ??
-        event?.persianMonth ??
-        0
+      event?.month ??
+      event?.persianMonth ??
+      0
     );
 
     const eventDay = Number(
       event?.jDay ??
-        event?.day ??
-        event?.persianDay ??
-        0
+      event?.day ??
+      event?.persianDay ??
+      0
     );
 
-    return (
-      eventMonth === month &&
-      eventDay === day
-    );
+    return eventMonth === month && eventDay === day;
   });
 }
 
-function getEventText(
-  events: any[]
-) {
+function getEventText(events: any[]) {
   return events
     .map((event) =>
       String(
         event?.text ||
-          event?.title ||
-          event?.name ||
-          event?.description ||
-          ""
+        event?.title ||
+        event?.name ||
+        event?.description ||
+        ""
       ).trim()
     )
     .filter(Boolean)
     .slice(0, 5);
 }
 
-/*
- * محتوای تأملی.
- *
- * فعلاً از نسبت دادن نقل‌قول‌های
- * غیرمستند به افراد مشهور
- * خودداری شده است.
- */
-
 const DAILY_CONTENT = [
   {
-    thought:
-      "امروز فقط یک قدم کوچک بردار؛ مسیرهای بزرگ از قدم‌های کوچک ساخته می‌شوند.",
-    quote:
-      "پیشرفت، نتیجه قدم‌های کوچک و پیوسته است.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "مسائل پیچیده همیشه با راه‌حل‌های پیچیده حل نمی‌شوند.",
+    quote: "پیشرفت، نتیجه قدم‌های کوچک و پیوسته است.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "قبل از پاسخ دادن، کمی بیشتر گوش بده؛ شاید نکته اصلی همان‌جا باشد.",
-    quote:
-      "هر پاسخ خوب، از یک پرسش خوب آغاز می‌شود.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "قبل از پاسخ دادن، کمی بیشتر گوش بده؛ شاید نکته اصلی همان‌جا باشد.",
+    quote: "هر پاسخ خوب، از یک پرسش خوب آغاز می‌شود.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "گاهی بهترین راه‌حل، نگاه کردن به مسئله از زاویه‌ای تازه است.",
-    quote:
-      "تغییر از جایی آغاز می‌شود که مسئله را درست ببینیم.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "گاهی بهترین راه‌حل، نگاه کردن به مسئله از زاویه‌ای تازه است.",
+    quote: "تغییر از جایی آغاز می‌شود که مسئله را درست ببینیم.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "امروز یک کار را بهتر از دیروز انجام بده؛ همین کافی است.",
-    quote:
-      "بهتر شدن، همیشه با یک تغییر کوچک آغاز می‌شود.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "امروز یک کار را بهتر از دیروز انجام بده؛ همین کافی است.",
+    quote: "بهتر شدن، همیشه با یک تغییر کوچک آغاز می‌شود.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "آرامش یعنی بدانیم همه چیز را نمی‌توانیم کنترل کنیم، اما واکنش خود را می‌توانیم.",
-    quote:
-      "مسئولیت‌پذیری از انتخاب واکنش درست آغاز می‌شود.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "آرامش یعنی بدانیم همه چیز را نمی‌توانیم کنترل کنیم، اما واکنش خود را می‌توانیم.",
+    quote: "مسئولیت‌پذیری از انتخاب واکنش درست آغاز می‌شود.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "هر گفت‌وگوی خوب می‌تواند آغاز یک تغییر خوب باشد.",
-    quote:
-      "گفت‌وگو، راهی برای نزدیک‌تر شدن اندیشه‌هاست.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "هر گفت‌وگوی خوب می‌تواند آغاز یک تغییر خوب باشد.",
+    quote: "گفت‌وگو، راهی برای نزدیک‌تر شدن اندیشه‌هاست.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "اگر چیزی ارزشمند است، برای بهتر شدنش زمان بگذار.",
-    quote:
-      "کیفیت، نتیجه توجه مداوم به جزئیات است.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "اگر چیزی ارزشمند است، برای بهتر شدنش زمان بگذار.",
+    quote: "کیفیت، نتیجه توجه مداوم به جزئیات است.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "پیشرفت همیشه بزرگ و چشمگیر نیست؛ گاهی فقط یک انتخاب درست است.",
-    quote:
-      "یک انتخاب درست می‌تواند آغاز یک مسیر تازه باشد.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "پیشرفت همیشه بزرگ و چشمگیر نیست؛ گاهی فقط یک انتخاب درست است.",
+    quote: "یک انتخاب درست می‌تواند آغاز یک مسیر تازه باشد.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "امروز از خودت بپرس: چه چیزی را می‌توانم ساده‌تر انجام دهم؟",
-    quote:
-      "ساده‌سازی، بخشی از هنر حل مسئله است.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "امروز از خودت بپرس: چه چیزی را می‌توانم ساده‌تر انجام دهم؟",
+    quote: "ساده‌سازی، بخشی از هنر حل مسئله است.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
   {
-    thought:
-      "گاهی لازم نیست سریع‌تر حرکت کنیم؛ لازم است درست‌تر حرکت کنیم.",
-    quote:
-      "سرعت بدون جهت، پیشرفت نیست.",
-    author:
-      "محتوای تأملی گروه",
-    source:
-      "صدای کارکنان ثبت احوال",
+    thought: "گاهی لازم نیست سریع‌تر حرکت کنیم؛ لازم است درست‌تر حرکت کنیم.",
+    quote: "سرعت بدون جهت، پیشرفت نیست.",
+    author: "محتوای تأملی گروه",
+    source: "صدای کارکنان ثبت احوال",
   },
 ];
 
 function getDailyContent(day: number) {
   return DAILY_CONTENT[
-    (day - 1) %
-      DAILY_CONTENT.length
+    (day - 1) % DAILY_CONTENT.length
   ];
 }
 
@@ -519,49 +376,36 @@ function createInfographicHtml(data: {
 }) {
   const progressValue = Math.min(
     100,
-    Math.max(
-      0,
-      Number(data.progress)
-    )
+    Math.max(0, Number(data.progress))
   );
 
-  const eventsHtml =
-    data.events.length
-      ? data.events
-          .map(
-            (event) => `
-              <div class="event-row">
-                <div class="event-icon">✓</div>
-                <div class="event-text">
-                  ${escapeHtml(event)}
-                </div>
-              </div>
-            `
-          )
-          .join("")
-      : `
-          <div class="event-row">
-            <div class="event-icon">•</div>
-            <div class="event-text">
-              مناسبتی برای امروز ثبت نشده است.
+  const eventsHtml = data.events.length
+    ? data.events
+        .map(
+          (event) => `
+            <div class="event-row">
+              <div class="event-icon">✓</div>
+              <div class="event-text">${escapeHtml(event)}</div>
             </div>
+          `
+        )
+        .join("")
+    : `
+        <div class="event-row">
+          <div class="event-icon">•</div>
+          <div class="event-text">
+            مناسبتی برای امروز ثبت نشده است.
           </div>
-        `;
+        </div>
+      `;
 
   return `
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-
 <meta charset="utf-8">
-
-<meta
-  name="viewport"
-  content="width=${WIDTH}, height=${HEIGHT}"
->
-
+<meta name="viewport" content="width=${WIDTH}, height=${HEIGHT}">
 <style>
-
 @font-face {
   font-family: Vazirmatn;
   src: url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Regular.ttf")
@@ -590,488 +434,270 @@ body {
 }
 
 body {
-  font-family:
-    Vazirmatn,
-    Arial,
-    sans-serif;
-
+  font-family: Vazirmatn, Arial, sans-serif;
+  color: #173653;
   background:
-    radial-gradient(
-      circle at 90% 5%,
-      rgba(43, 125, 190, 0.16),
-      transparent 26%
-    ),
-    radial-gradient(
-      circle at 5% 35%,
-      rgba(245, 171, 49, 0.12),
-      transparent 24%
-    ),
-    linear-gradient(
-      180deg,
-      #f2f7fb 0%,
-      #ffffff 46%,
-      #f4f8fb 100%
-    );
-
-  color: #182a3a;
+    linear-gradient(180deg, #eef8ff 0%, #ffffff 34%, #f6fbff 100%);
 }
 
 .page {
   width: ${WIDTH}px;
   height: ${HEIGHT}px;
-
-  padding:
-    34px
-    42px
-    30px;
-
-  position: relative;
-
+  padding: 0 26px 24px;
   display: flex;
   flex-direction: column;
-
   overflow: hidden;
 }
 
-/* HERO */
-
 .hero {
-  height: 258px;
-
-  border-radius: 38px;
-
-  padding:
-    34px
-    42px;
-
+  height: 255px;
+  margin: 0 -26px 18px;
   position: relative;
   overflow: hidden;
-
-  color: white;
-
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 38px 45px;
   background:
-    linear-gradient(
-      135deg,
-      #0b3558 0%,
-      #145b8d 55%,
-      #2387b8 100%
-    );
-
-  box-shadow:
-    0 20px 45px
-    rgba(16, 63, 93, 0.20);
-
-  margin-bottom: 18px;
+    radial-gradient(circle at 50% 55%, rgba(255,231,147,.96) 0 5%, rgba(255,205,95,.55) 12%, transparent 30%),
+    linear-gradient(180deg, #a9ddff 0%, #f8f0d2 52%, #d9ecf6 72%, #a8cbd8 100%);
+  border-radius: 0 0 48% 48% / 0 0 28% 28%;
 }
 
 .hero::before {
   content: "";
-
   position: absolute;
-
-  width: 300px;
-  height: 300px;
-
-  border-radius: 50%;
-
-  top: -145px;
-  left: -90px;
-
+  inset: 70px -80px 0;
   background:
-    rgba(255,255,255,0.07);
+    linear-gradient(150deg, transparent 0 45%, rgba(57,91,125,.88) 46% 54%, transparent 55%),
+    linear-gradient(25deg, transparent 0 51%, rgba(75,116,145,.78) 52% 60%, transparent 61%);
+  opacity: .9;
 }
 
 .hero::after {
   content: "";
-
   position: absolute;
-
-  width: 240px;
-  height: 240px;
-
-  border-radius: 50%;
-
-  bottom: -160px;
-  right: -45px;
-
-  background:
-    rgba(255,190,55,0.16);
-}
-
-.hero-content {
-  position: relative;
-  z-index: 2;
-}
-
-.brand {
-  font-size: 24px;
-  font-weight: 700;
-
-  opacity: 0.88;
-
-  margin-bottom: 8px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 76px;
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,.92));
 }
 
 .hero-title {
-  font-size: 38px;
-  line-height: 1.25;
-
+  position: relative;
+  z-index: 2;
+  color: #083e70;
+  font-size: 43px;
+  line-height: 1.35;
   font-weight: 700;
-
-  margin-bottom: 12px;
+  text-align: center;
+  text-shadow: 0 3px 12px rgba(255,255,255,.9);
 }
-
-.hero-subtitle {
-  font-size: 23px;
-
-  color: #ffe6a9;
-
-  font-weight: 700;
-}
-
-.sun {
-  position: absolute;
-
-  left: 38px;
-  top: 35px;
-
-  width: 88px;
-  height: 88px;
-
-  border-radius: 50%;
-
-  background:
-    radial-gradient(
-      circle,
-      #fff8d7 0%,
-      #ffd66a 55%,
-      #f2a62a 100%
-    );
-
-  box-shadow:
-    0 0 50px
-    rgba(255,207,86,0.34);
-}
-
-/* MAIN DATE */
 
 .date-panel {
-  margin-top: 16px;
-
-  min-height: 198px;
-
-  background: rgba(
-    255,
-    255,
-    255,
-    0.96
-  );
-
-  border: 1px solid #e1ebf2;
-
-  border-radius: 30px;
-
-  padding: 24px 30px;
-
-  box-shadow:
-    0 13px 35px
-    rgba(25,55,80,0.07);
-
+  min-height: 265px;
+  padding: 24px 32px;
   position: relative;
+  border: 1.5px solid #72b9e8;
+  border-radius: 30px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.98), rgba(238,248,255,.96));
+  box-shadow: 0 12px 28px rgba(39,105,150,.08);
+}
+
+.date-panel::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  left: 24px;
+  height: 3px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #1689cf, #8bd5ed);
+  opacity: .55;
 }
 
 .date-weekday {
-  color: #6b7d8b;
-
-  font-size: 22px;
-
+  margin-top: 22px;
+  color: #547183;
+  font-size: 25px;
   font-weight: 700;
-
-  margin-bottom: 4px;
+  text-align: right;
 }
 
 .date-main {
-  color: #0d4771;
-
-  font-size: 46px;
-
-  font-weight: 700;
-
-  letter-spacing: -1px;
-
+  margin-top: 4px;
+  color: #0d4a78;
+  font-size: 51px;
   line-height: 1.25;
-
-  margin-bottom: 14px;
+  font-weight: 700;
+  text-align: right;
 }
 
 .date-grid {
   display: flex;
-
-  gap: 12px;
+  flex-direction: row-reverse;
+  gap: 14px;
+  margin-top: 18px;
 }
 
 .date-chip {
   flex: 1;
-
-  background: #f4f8fb;
-
-  border-radius: 16px;
-
-  padding: 11px 14px;
-
-  border: 1px solid #e2ebf1;
+  padding: 13px 16px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.72);
+  border: 1px solid #d8eaf5;
+  text-align: right;
 }
 
 .date-chip-label {
-  color: #82919c;
-
-  font-size: 14px;
-
+  color: #7c8e9a;
+  font-size: 17px;
   margin-bottom: 3px;
 }
 
 .date-chip-value {
-  color: #314656;
-
-  font-size: 18px;
-
+  color: #29485d;
+  font-size: 22px;
   font-weight: 700;
 }
 
 .clock {
   position: absolute;
-
-  left: 27px;
-  top: 25px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #0d4d76,
-      #1c7fa9
-    );
-
-  color: white;
-
+  top: 24px;
+  left: 28px;
+  padding: 11px 18px;
   border-radius: 18px;
-
-  padding:
-    10px
-    17px;
-
-  font-size: 19px;
-
+  color: #fff;
+  background: linear-gradient(135deg, #0d4d76, #1d82b0);
+  font-size: 22px;
   font-weight: 700;
-
-  box-shadow:
-    0 7px 17px
-    rgba(13,77,118,0.18);
+  box-shadow: 0 8px 18px rgba(13,77,118,.2);
 }
-
-/* YEAR PROGRESS */
 
 .progress-panel {
   margin-top: 16px;
-
-  background: #ffffff;
-
-  border-radius: 30px;
-
-  padding: 21px 28px;
-
-  border: 1px solid #e2ebf1;
-
-  box-shadow:
-    0 12px 32px
-    rgba(25,55,80,0.06);
+  padding: 22px 28px;
+  border: 1.5px solid #b6dfd8;
+  border-radius: 28px;
+  background: linear-gradient(135deg, #eefcf8, #f8ffff);
+  box-shadow: 0 10px 25px rgba(42,137,119,.07);
 }
 
 .panel-heading {
   display: flex;
-
+  flex-direction: row-reverse;
   justify-content: space-between;
-
   align-items: center;
-
   margin-bottom: 13px;
 }
 
 .panel-title {
-  font-size: 23px;
-
-  color: #164e75;
-
+  color: #12685f;
+  font-size: 28px;
   font-weight: 700;
 }
 
 .percent {
-  font-size: 20px;
-
-  color: #e29a1d;
-
+  color: #174a68;
+  font-size: 25px;
   font-weight: 700;
 }
 
 .progress-track {
-  height: 25px;
-
   width: 100%;
-
-  background: #e9eff4;
-
-  border-radius: 20px;
-
+  height: 27px;
   padding: 4px;
-
   overflow: hidden;
+  border-radius: 20px;
+  background: #d9eef1;
 }
 
 .progress-fill {
   width: ${progressValue}%;
-
-  height: 17px;
-
-  border-radius: 15px;
-
-  background:
-    linear-gradient(
-      90deg,
-      #f0a52a,
-      #f7c75d,
-      #eaa12c
-    );
-
-  box-shadow:
-    0 3px 9px
-    rgba(235,165,42,0.25);
+  height: 19px;
+  border-radius: 18px;
+  background: linear-gradient(90deg, #18a276, #39b993);
 }
 
 .progress-meta {
   display: flex;
-
+  flex-direction: row-reverse;
   justify-content: space-between;
-
   margin-top: 9px;
-
-  font-size: 16px;
-
-  color: #738390;
+  color: #5c7c7a;
+  font-size: 19px;
 }
-
-/* STATS */
 
 .stats {
   display: flex;
-
-  gap: 13px;
-
+  flex-direction: row-reverse;
+  gap: 14px;
   margin-top: 16px;
 }
 
 .stat {
   flex: 1;
-
-  min-height: 112px;
-
-  background: #ffffff;
-
+  min-height: 125px;
+  padding: 15px 13px;
   border-radius: 25px;
-
-  border: 1px solid #e1eaf0;
-
-  padding:
-    17px
-    13px;
-
+  border: 1.5px solid #d4cef7;
+  background: linear-gradient(135deg, #f9f7ff, #ffffff);
   text-align: center;
-
-  box-shadow:
-    0 10px 25px
-    rgba(25,55,80,0.055);
+  box-shadow: 0 9px 22px rgba(76,64,145,.06);
 }
 
 .stat-icon {
-  font-size: 29px;
-
+  font-size: 34px;
   line-height: 1;
-
-  margin-bottom: 7px;
+  margin-bottom: 8px;
 }
 
 .stat-label {
-  font-size: 14px;
-
-  color: #83919c;
-
+  color: #7a728e;
+  font-size: 17px;
   margin-bottom: 4px;
 }
 
 .stat-value {
-  font-size: 18px;
-
-  color: #274355;
-
+  color: #3c326d;
+  font-size: 21px;
   font-weight: 700;
-
   line-height: 1.35;
 }
 
-/* EVENTS */
-
 .events-panel {
   margin-top: 16px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #ffffff,
-      #f8fbfd
-    );
-
-  border-radius: 30px;
-
-  border: 1px solid #e0e9ef;
-
-  padding: 20px 27px;
-
-  box-shadow:
-    0 10px 28px
-    rgba(25,55,80,0.055);
+  padding: 21px 28px;
+  border-radius: 29px;
+  border: 1.5px solid #f3c36b;
+  background: linear-gradient(135deg, #fff8ea, #fffdf8);
+  box-shadow: 0 10px 25px rgba(217,141,23,.07);
+  direction: rtl;
+  text-align: right;
 }
 
 .events-heading {
-  display: flex;
-
-  align-items: center;
-
-  gap: 10px;
-
-  font-size: 23px;
-
-  font-weight: 700;
-
-  color: #164e75;
-
+  display: block;
   margin-bottom: 13px;
+  color: #d47700;
+  font-size: 29px;
+  font-weight: 700;
+  text-align: right;
 }
 
 .event-row {
   display: flex;
-
+  flex-direction: row-reverse;
   align-items: flex-start;
-
-  gap: 11px;
-
-  padding: 8px 0;
-
-  border-bottom:
-    1px solid #edf1f4;
-
-  font-size: 17px;
-
-  color: #3e5362;
-
-  line-height: 1.45;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f3e6cb;
+  color: #3b4e5c;
+  font-size: 21px;
+  line-height: 1.55;
+  text-align: right;
 }
 
 .event-row:last-child {
@@ -1079,244 +705,138 @@ body {
 }
 
 .event-icon {
-  flex: 0 0 27px;
-
-  width: 27px;
-  height: 27px;
-
-  border-radius: 50%;
-
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
   display: flex;
-
   align-items: center;
-
   justify-content: center;
-
-  background: #e8f4f8;
-
-  color: #1681a5;
-
-  font-size: 14px;
-
+  border-radius: 50%;
+  background: #f4a321;
+  color: #fff;
+  font-size: 16px;
   font-weight: 700;
 }
 
 .event-text {
   flex: 1;
+  text-align: right;
 }
-
-/* QUOTE */
 
 .quote-panel {
   margin-top: 16px;
-
-  border-radius: 30px;
-
-  padding:
-    21px
-    28px;
-
+  padding: 23px 30px;
   position: relative;
-
   overflow: hidden;
-
-  background:
-    linear-gradient(
-      135deg,
-      #fff9ec,
-      #fffdf7
-    );
-
-  border: 1px solid #f0dfb6;
-
-  box-shadow:
-    0 10px 27px
-    rgba(184,133,42,0.07);
+  border-radius: 29px;
+  border: 1.5px solid #aaa0e9;
+  background: linear-gradient(135deg, #f5f2ff, #fcfbff);
+  box-shadow: 0 10px 25px rgba(91,77,160,.07);
+  direction: rtl;
+  text-align: right;
 }
 
-.quote-mark {
+.quote-panel::before {
+  content: "“";
   position: absolute;
-
   left: 22px;
-  top: -9px;
-
-  font-size: 92px;
-
-  line-height: 1;
-
-  color: #edc66d;
-
-  opacity: 0.45;
-
+  top: -24px;
+  color: #8d82d4;
   font-family: Georgia, serif;
+  font-size: 110px;
+  opacity: .28;
 }
 
 .quote-heading {
-  color: #a87312;
-
-  font-size: 20px;
-
+  margin-bottom: 10px;
+  color: #5b4ca0;
+  font-size: 29px;
   font-weight: 700;
-
-  margin-bottom: 9px;
+  text-align: right;
 }
 
 .quote {
   position: relative;
-
   z-index: 2;
-
-  color: #39434b;
-
-  font-size: 21px;
-
+  color: #273d56;
+  font-size: 27px;
+  line-height: 1.6;
   font-weight: 700;
-
-  line-height: 1.55;
-
-  margin-bottom: 8px;
+  text-align: right;
 }
 
 .quote-author {
-  color: #7d858b;
-
-  font-size: 15px;
+  margin-top: 8px;
+  color: #716a84;
+  font-size: 18px;
+  text-align: right;
 }
-
-/* THOUGHT */
 
 .thought-panel {
   margin-top: 16px;
-
-  border-radius: 30px;
-
-  padding:
-    20px
-    28px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #0d466b,
-      #176e91
-    );
-
-  color: white;
-
-  box-shadow:
-    0 14px 32px
-    rgba(16,77,108,0.18);
-
+  padding: 22px 30px;
   position: relative;
-
   overflow: hidden;
-}
-
-.thought-panel::after {
-  content: "✦";
-
-  position: absolute;
-
-  left: 25px;
-  bottom: -25px;
-
-  font-size: 125px;
-
-  color:
-    rgba(255,255,255,0.07);
+  border-radius: 29px;
+  border: 1.5px solid #6bd0d0;
+  background: linear-gradient(135deg, #eefcfc, #f9ffff);
+  box-shadow: 0 10px 25px rgba(28,145,146,.07);
+  direction: rtl;
+  text-align: right;
 }
 
 .thought-heading {
-  font-size: 20px;
-
-  color: #ffe4a1;
-
+  margin-bottom: 9px;
+  color: #087d80;
+  font-size: 29px;
   font-weight: 700;
-
-  margin-bottom: 8px;
+  text-align: right;
 }
 
 .thought {
-  font-size: 20px;
-
-  line-height: 1.55;
-
+  color: #163f57;
+  font-size: 27px;
+  line-height: 1.6;
   font-weight: 700;
-
-  position: relative;
-
-  z-index: 2;
+  text-align: right;
 }
 
-/* FOOTER */
+.thought::after {
+  content: "✦";
+  display: block;
+  margin-top: 6px;
+  color: #24a99d;
+  font-size: 25px;
+  text-align: center;
+}
 
 .footer {
   margin-top: auto;
-
-  padding-top: 17px;
-
-  text-align: center;
-
-  color: #527083;
-
-  font-size: 19px;
-
+  padding-top: 14px;
+  color: #315f7b;
+  font-size: 21px;
   font-weight: 700;
-
-  letter-spacing: 0.2px;
+  text-align: center;
 }
 
 .footer-line {
-  width: 110px;
-
+  width: 150px;
   height: 3px;
-
+  margin: 0 auto 10px;
   border-radius: 5px;
-
-  background:
-    linear-gradient(
-      90deg,
-      #e8a32b,
-      #1b7197
-    );
-
-  margin:
-    0 auto
-    10px;
+  background: linear-gradient(90deg, #e8a32b, #1b7197);
 }
-
 </style>
 </head>
 
 <body>
-
 <div class="page">
 
-  <!-- HERO -->
-
   <section class="hero">
-
-    <div class="sun"></div>
-
-    <div class="hero-content">
-
-      <div class="brand">
-        صدای کارکنان ثبت احوال
-      </div>
-
-      <div class="hero-title">
-        تقویم روزانه گروه
-      </div>
-
-      <div class="hero-subtitle">
-        ☀️ روزت پر از اتفاقات خوب
-      </div>
-
+    <div class="hero-title">
+      تقویم روزانه گروه صدای کارکنان ثبت احوال
     </div>
-
   </section>
-
-  <!-- DATE -->
 
   <section class="date-panel">
 
@@ -1335,20 +855,14 @@ body {
     <div class="date-grid">
 
       <div class="date-chip">
-        <div class="date-chip-label">
-          میلادی
-        </div>
-
+        <div class="date-chip-label">میلادی</div>
         <div class="date-chip-value">
           ${escapeHtml(data.gregorianDate)}
         </div>
       </div>
 
       <div class="date-chip">
-        <div class="date-chip-label">
-          قمری
-        </div>
-
+        <div class="date-chip-label">قمری</div>
         <div class="date-chip-value">
           ${escapeHtml(data.hijriDate)}
         </div>
@@ -1358,12 +872,9 @@ body {
 
   </section>
 
-  <!-- YEAR PROGRESS -->
-
   <section class="progress-panel">
 
     <div class="panel-heading">
-
       <div class="panel-title">
         📊 چشم‌انداز سال
       </div>
@@ -1371,108 +882,66 @@ body {
       <div class="percent">
         ${escapeHtml(data.progress)}٪
       </div>
-
     </div>
 
     <div class="progress-track">
-
       <div class="progress-fill"></div>
-
     </div>
 
     <div class="progress-meta">
-
       <span>
-        ${escapeHtml(data.remaining)}
-        روز باقی‌مانده
+        ${escapeHtml(data.remaining)} روز باقی‌مانده
       </span>
 
       <span>
-        حدود
-        ${escapeHtml(data.weeksRemaining)}
-        هفته
+        حدود ${escapeHtml(data.weeksRemaining)} هفته
       </span>
-
     </div>
 
   </section>
-
-  <!-- STATS -->
 
   <section class="stats">
 
     <div class="stat">
-
-      <div class="stat-icon">
-        🌙
-      </div>
-
-      <div class="stat-label">
-        وضعیت ماه
-      </div>
-
+      <div class="stat-icon">🌙</div>
+      <div class="stat-label">وضعیت ماه</div>
       <div class="stat-value">
         ${escapeHtml(data.moon)}
       </div>
-
     </div>
 
     <div class="stat">
-
-      <div class="stat-icon">
-        ♈
-      </div>
-
-      <div class="stat-label">
-        برج
-      </div>
-
+      <div class="stat-icon">♎</div>
+      <div class="stat-label">برج</div>
       <div class="stat-value">
         ${escapeHtml(data.zodiac)}
       </div>
-
     </div>
 
     <div class="stat">
-
-      <div class="stat-icon">
-        🐎
-      </div>
-
-      <div class="stat-label">
-        نماد سال
-      </div>
-
+      <div class="stat-icon">🐎</div>
+      <div class="stat-label">نماد سال</div>
       <div class="stat-value">
         ${escapeHtml(data.animal)}
       </div>
-
     </div>
 
   </section>
 
-  <!-- EVENTS -->
-
   <section class="events-panel">
 
     <div class="events-heading">
-      📌 مناسبت‌های امروز
+      📌 رویدادها و مناسبت‌ها
     </div>
 
     ${eventsHtml}
 
   </section>
 
-  <!-- QUOTE -->
-
   <section class="quote-panel">
 
-    <div class="quote-mark">
-      “
-    </div>
-
     <div class="quote-heading">
-      💬 سخن امروز
+      🪶 سخن بزرگان
     </div>
 
     <div class="quote">
@@ -1480,18 +949,15 @@ body {
     </div>
 
     <div class="quote-author">
-      — ${escapeHtml(data.author)}
-      · ${escapeHtml(data.source)}
+      — ${escapeHtml(data.author)} · ${escapeHtml(data.source)}
     </div>
 
   </section>
 
-  <!-- THOUGHT -->
-
   <section class="thought-panel">
 
     <div class="thought-heading">
-      💭 جرعه‌ای تفکر
+      💡 جرعه‌ای تفکر
     </div>
 
     <div class="thought">
@@ -1500,18 +966,12 @@ body {
 
   </section>
 
-  <!-- FOOTER -->
-
   <footer class="footer">
-
     <div class="footer-line"></div>
-
     هم‌صدایی برای تحول و بهبود
-
   </footer>
 
 </div>
-
 </body>
 </html>
 `;
@@ -1519,24 +979,7 @@ body {
 
 async function createInfographic(
   env: CloudflareEnv,
-  data: {
-    weekday: string;
-    persianDate: string;
-    hijriDate: string;
-    gregorianDate: string;
-    time: string;
-    progress: string;
-    remaining: string;
-    weeksRemaining: string;
-    moon: string;
-    zodiac: string;
-    animal: string;
-    events: string[];
-    thought: string;
-    quote: string;
-    author: string;
-    source: string;
-  }
+  data: Parameters<typeof createInfographicHtml>[0]
 ) {
   if (!env.BROWSER) {
     throw new Error(
@@ -1544,47 +987,37 @@ async function createInfographic(
     );
   }
 
-  const html =
-    createInfographicHtml(data);
+  const html = createInfographicHtml(data);
 
-  const response =
-    await env.BROWSER.quickAction(
-      "screenshot",
-      {
-        html,
-
-        viewport: {
-          width: WIDTH,
-          height: HEIGHT,
-          deviceScaleFactor: 1,
-        },
-
-        screenshotOptions: {
-          fullPage: false,
-          type: "png",
-        },
-
-        gotoOptions: {
-          waitUntil: "networkidle0",
-          timeout: 30000,
-        },
-      }
-    );
+  const response = await env.BROWSER.quickAction(
+    "screenshot",
+    {
+      html,
+      viewport: {
+        width: WIDTH,
+        height: HEIGHT,
+        deviceScaleFactor: 1,
+      },
+      screenshotOptions: {
+        fullPage: false,
+        type: "png",
+      },
+      gotoOptions: {
+        waitUntil: "networkidle0",
+        timeout: 30000,
+      },
+    }
+  );
 
   if (!response.ok) {
-    const errorText =
-      await response
-        .text()
-        .catch(() => "");
+    const errorText = await response.text().catch(() => "");
 
     throw new Error(
       `خطا در تولید تصویر توسط Browser Run: ${response.status} ${errorText}`
     );
   }
 
-  return new Uint8Array(
-    await response.arrayBuffer()
-  );
+  return new Uint8Array(await response.arrayBuffer());
 }
 
 async function sendPhotoToBale(
@@ -1595,40 +1028,26 @@ async function sendPhotoToBale(
 ) {
   const form = new FormData();
 
-  form.append(
-    "chat_id",
-    chatId
-  );
-
-  form.append(
-    "caption",
-    caption
-  );
+  form.append("chat_id", chatId);
+  form.append("caption", caption);
 
   form.append(
     "photo",
-    new Blob(
-      [new Uint8Array(png)],
-      {
-        type: "image/png",
-      }
-    ),
+    new Blob([new Uint8Array(png)], {
+      type: "image/png",
+    }),
     "calendar.png"
   );
 
-  const response =
-    await fetch(
-      `https://tapi.bale.ai/bot${token}/sendPhoto`,
-      {
-        method: "POST",
-        body: form,
-      }
-    );
+  const response = await fetch(
+    `https://tapi.bale.ai/bot${token}/sendPhoto`,
+    {
+      method: "POST",
+      body: form,
+    }
+  );
 
-  const result =
-    await response
-      .json()
-      .catch(() => ({}));
+  const result = await response.json().catch(() => ({}));
 
   return {
     response,
@@ -1636,42 +1055,64 @@ async function sendPhotoToBale(
   };
 }
 
-async function isCalendarEnabled(
-  env: CloudflareEnv
-) {
-  return true;
+/*
+ * وضعیت ارسال تقویم از تنظیمات Supabase خوانده می‌شود.
+ * اگر تنظیمات در دسترس نباشد، رفتار پیش‌فرض فعال بودن است.
+ */
+async function isCalendarEnabled(env: CloudflareEnv) {
+  try {
+    const url = env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !serviceKey) {
+      return true;
+    }
+
+    const response = await fetch(
+      `${url}/rest/v1/settings?select=key,value&key=eq.schedule_calendar&limit=1`,
+      {
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return true;
+    }
+
+    const rows = await response.json();
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return true;
+    }
+
+    return rows[0]?.value !== "false";
+  } catch {
+    return true;
+  }
 }
 
 export async function GET() {
   try {
-    const { env } =
-      await getCloudflareContext({
-        async: true,
-      });
+    const { env } = await getCloudflareContext({
+      async: true,
+    });
 
-    /*
-     * حفظ قابلیت لغو ارسال تقویم
-     */
-    const enabled =
-      await isCalendarEnabled(env);
+    const enabled = await isCalendarEnabled(env);
 
     if (!enabled) {
       return NextResponse.json({
         ok: true,
         cancelled: true,
         sent: false,
-        message:
-          "ارسال تقویم لغو شده است.",
+        message: "ارسال تقویم لغو شده است.",
       });
     }
 
-    const token =
-      env?.BALE_SMART_TOKEN;
-
-    const chatId =
-      String(
-        env?.BALE_GROUP_ID || ""
-      );
+    const token = env?.BALE_SMART_TOKEN;
+    const chatId = String(env?.BALE_GROUP_ID || "");
 
     if (!token || !chatId) {
       return NextResponse.json(
@@ -1680,155 +1121,106 @@ export async function GET() {
           error:
             "BALE_SMART_TOKEN یا BALE_GROUP_ID تنظیم نشده است.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
-    const now =
-      new Date();
+    const now = new Date();
 
-    const tehran =
-      getTehranParts();
-
-    const persian =
-      getPersianDate(now);
+    const tehran = getTehranParts();
+    const persian = getPersianDate(now);
 
     const gregorian =
       `${tehran.year}-` +
-      `${String(
-        tehran.month
-      ).padStart(2, "0")}-` +
-      `${String(
-        tehran.day
-      ).padStart(2, "0")}`;
+      `${String(tehran.month).padStart(2, "0")}-` +
+      `${String(tehran.day).padStart(2, "0")}`;
 
-    const weekday =
-      getWeekday(now);
+    const weekday = getWeekday(now);
 
-    const hijri =
-      await getHijriDate(
-        `${String(
-          tehran.day
-        ).padStart(2, "0")}-` +
-        `${String(
-          tehran.month
-        ).padStart(2, "0")}-` +
-        `${tehran.year}`
-      );
+    const hijri = await getHijriDate(
+      `${String(tehran.day).padStart(2, "0")}-` +
+      `${String(tehran.month).padStart(2, "0")}-` +
+      `${tehran.year}`
+    );
 
-    const allEvents =
-      await getEvents(
-        persian.year
-      );
+    const allEvents = await getEvents(persian.year);
 
-    const todayEvents =
-      getEventsForDay(
-        allEvents,
-        persian.month,
-        persian.day
-      );
+    const todayEvents = getEventsForDay(
+      allEvents,
+      persian.month,
+      persian.day
+    );
 
-    const progress =
-      getYearProgress(
-        persian.month,
-        persian.day,
-        persian.year
-      );
+    const progress = getYearProgress(
+      persian.month,
+      persian.day,
+      persian.year
+    );
 
-    const content =
-      getDailyContent(
-        progress.dayOfYear
-      );
+    const content = getDailyContent(progress.dayOfYear);
 
-    const hijriText =
-      hijri
-        ? `${hijri.day} ${hijri.month} ${hijri.year}`
-        : "نامشخص";
+    const hijriText = hijri
+      ? `${hijri.day} ${hijri.month} ${hijri.year}`
+      : "نامشخص";
 
     const time =
       `${tehran.hour}:` +
       `${tehran.minute}:` +
       `${tehran.second}`;
 
-    const infographic =
-      await createInfographic(
-        env,
-        {
-          weekday,
+    const infographic = await createInfographic(
+      env,
+      {
+        weekday,
 
-          persianDate:
-            `${fa(persian.year)}/` +
-            `${fa(
-              String(
-                persian.month
-              ).padStart(2, "0")
-            )}/` +
-            `${fa(
-              String(
-                persian.day
-              ).padStart(2, "0")
-            )}`,
+        persianDate:
+          `${fa(persian.year)}/` +
+          `${fa(String(persian.month).padStart(2, "0"))}/` +
+          `${fa(String(persian.day).padStart(2, "0"))}`,
 
-          hijriDate:
-            hijriText,
+        hijriDate: hijriText,
+        gregorianDate: gregorian,
 
-          gregorianDate:
-            gregorian,
+        time,
 
-          time,
+        progress: progress.percent,
 
-          progress:
-            progress.percent,
+        remaining: fa(progress.remaining),
 
-          remaining:
-            fa(progress.remaining),
+        weeksRemaining: fa(
+          progress.weeksRemaining
+        ),
 
-          weeksRemaining:
-            fa(
-              progress.weeksRemaining
-            ),
+        moon: getMoonPhase(now),
 
-          moon:
-            getMoonPhase(now),
+        zodiac: getPersianZodiac(
+          persian.month
+        ),
 
-          zodiac:
-            getPersianZodiac(
-              persian.month
-            ),
+        animal: getAnimal(
+          persian.year
+        ),
 
-          animal:
-            getAnimal(
-              persian.year
-            ),
+        events: getEventText(
+          todayEvents
+        ),
 
-          events:
-            getEventText(
-              todayEvents
-            ),
+        thought: content.thought,
 
-          thought:
-            content.thought,
+        quote: content.quote,
 
-          quote:
-            content.quote,
+        author: content.author,
 
-          author:
-            content.author,
+        source: content.source,
+      }
+    );
 
-          source:
-            content.source,
-        }
-      );
-
-    const sent =
-      await sendPhotoToBale(
-        token,
-        chatId,
-        infographic,
-        "تقویم روزانه گروه صدای کارکنان ثبت احوال"
-      );
+    const sent = await sendPhotoToBale(
+      token,
+      chatId,
+      infographic,
+      "تقویم روزانه گروه صدای کارکنان ثبت احوال"
+    );
 
     return NextResponse.json({
       ok:
@@ -1837,14 +1229,12 @@ export async function GET() {
 
       cancelled: false,
 
-      sent:
-        sent.response.ok,
+      sent: sent.response.ok,
 
       bale_status:
         sent.response.status,
 
-      bale:
-        sent.result,
+      bale: sent.result,
     });
 
   } catch (error) {
@@ -1863,9 +1253,7 @@ export async function GET() {
             ? error.message
             : "خطای ناشناخته",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
-}
+  }
