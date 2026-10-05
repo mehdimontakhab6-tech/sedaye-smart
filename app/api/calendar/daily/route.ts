@@ -1869,11 +1869,12 @@ async function sendPhoto(
   const form =
     new FormData();
 
-  const blob =
-    new Blob(
-      [imageBytes],
-      { type: "image/png" }
-    );
+  const safeImageBytes = new Uint8Array(imageBytes);
+
+const blob = new Blob(
+  [safeImageBytes],
+  { type: "image/png" }
+);
 
   form.append(
     "chat_id",
