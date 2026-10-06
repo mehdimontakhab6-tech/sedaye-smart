@@ -908,7 +908,7 @@ body {
    ===================================== */
 
 .header {
-  flex: 0 0 112px;
+  flex: 0 0 132px;
 
   padding: 12px 18px 10px;
 
@@ -932,7 +932,7 @@ body {
 
   color: #071f17;
 
-  font-size: 42px;
+  font-size: 46px;
 
   line-height: 1.15;
 
@@ -1205,7 +1205,9 @@ body {
 .events {
   flex: 0 0 222px;
 
-  padding: 12px 19px 10px;
+  height: 222px;
+
+  padding: 15px 19px 12px;
 
   overflow: hidden;
 }
@@ -1213,7 +1215,7 @@ body {
 .section-title {
   color: #071f17;
 
-  font-size: 25px;
+  font-size: 29px;
 
   line-height: 1.2;
 
@@ -1221,7 +1223,7 @@ body {
 
   text-align: right;
 
-  margin-bottom: 4px;
+  margin-bottom: 7px;
 }
 
 .event-item {
@@ -1233,15 +1235,15 @@ body {
 
   align-items: flex-start;
 
-  gap: 7px;
+  gap: 8px;
 
-  padding: 2px 0;
+  padding: 3px 0;
 
   color: #23463a;
 
-  font-size: 18px;
+  font-size: 21px;
 
-  line-height: 1.28;
+  line-height: 1.32;
 
   font-weight: 800;
 
@@ -1251,7 +1253,7 @@ body {
 .event-dot {
   flex: 0 0 auto;
 
-  font-size: 18px;
+  font-size: 21px;
 
   line-height: 1.25;
 }
@@ -1271,7 +1273,7 @@ body {
 
   color: #668077;
 
-  font-size: 12px;
+  font-size: 13px;
 
   font-weight: 800;
 
@@ -1283,9 +1285,11 @@ body {
    ===================================== */
 
 .quote {
-  flex: 0 0 168px;
+  flex: 0 0 222px;
 
-  padding: 12px 19px 11px;
+  height: 222px;
+
+  padding: 15px 19px 12px;
 
   overflow: hidden;
 }
@@ -1293,33 +1297,33 @@ body {
 .quote-title {
   color: #071f17;
 
-  font-size: 25px;
+  font-size: 29px;
 
   line-height: 1.2;
 
   font-weight: 900;
 
-  margin-bottom: 5px;
+  margin-bottom: 9px;
 }
 
 .quote-text {
   color: #23483b;
 
-  font-size: 21px;
+  font-size: 25px;
 
-  line-height: 1.35;
+  line-height: 1.45;
 
   font-weight: 800;
 }
 
 .quote-author {
-  margin-top: 6px;
+  margin-top: 9px;
 
   color: #5a736a;
 
-  font-size: 15px;
+  font-size: 18px;
 
-  line-height: 1.25;
+  line-height: 1.35;
 
   font-weight: 800;
 }
@@ -1329,9 +1333,11 @@ body {
    ===================================== */
 
 .thought {
-  flex: 0 0 130px;
+  flex: 0 0 222px;
 
-  padding: 11px 19px 10px;
+  height: 222px;
+
+  padding: 15px 19px 12px;
 
   overflow: hidden;
 }
@@ -1339,21 +1345,21 @@ body {
 .thought-title {
   color: #071f17;
 
-  font-size: 25px;
+  font-size: 29px;
 
   line-height: 1.2;
 
   font-weight: 900;
 
-  margin-bottom: 5px;
+  margin-bottom: 9px;
 }
 
 .thought-text {
   color: #23483b;
 
-  font-size: 20px;
+  font-size: 25px;
 
-  line-height: 1.35;
+  line-height: 1.45;
 
   font-weight: 800;
 }
@@ -1377,7 +1383,7 @@ body {
 
   color: #ffffff;
 
-  font-size: 29px;
+  font-size: 36px;
 
   line-height: 1.2;
 
@@ -2012,4 +2018,4 @@ export async function GET() {
       }
     );
   }
-}
+    }
