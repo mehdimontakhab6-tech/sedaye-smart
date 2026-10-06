@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 const TIME_ZONE = "Asia/Tehran";
 const WIDTH = 1024;
-const HEIGHT = 1536;
+const HEIGHT = 1500;
 
 const digits = "۰۱۲۳۴۵۶۷۸۹";
 
@@ -136,7 +136,7 @@ function getPersianZodiac(month: number) {
 }
 
 /*
- * تقویم حیوانی سال‌های ایرانی
+ * سال حیوانی ایرانی
  *
  * ۱۴۰۰ = گاو
  * ۱۴۰۱ = ببر
@@ -187,9 +187,9 @@ function getAnimalEmoji(animal: string) {
 }
 
 function getSeason(month: number) {
-  if (month >= 1 && month <= 3) return "spring";
-  if (month >= 4 && month <= 6) return "summer";
-  if (month >= 7 && month <= 9) return "autumn";
+  if (month <= 3) return "spring";
+  if (month <= 6) return "summer";
+  if (month <= 9) return "autumn";
   return "winter";
 }
 
@@ -198,61 +198,60 @@ function getSeasonData(month: number) {
 
   if (season === "spring") {
     return {
-      title: "بهار",
-      sky1: "#73c9ef",
-      sky2: "#dff6ff",
-      sun: "#ffd45a",
-      mountain: "#789f76",
-      mountainDark: "#4c7858",
-      forest: "#327653",
-      ground: "#8bbf72",
-      flower: "#f5a6b8",
+      sky1: "#79ccef",
+      sky2: "#e5f8ff",
+      sun: "#ffd95a",
+      mountain: "#789d78",
+      mountainDark: "#4b7557",
+      forest: "#347652",
+      ground: "#86bd73",
     };
   }
 
   if (season === "summer") {
     return {
-      title: "تابستان",
-      sky1: "#35a9e8",
-      sky2: "#d7f3ff",
-      sun: "#ffd447",
-      mountain: "#648f72",
-      mountainDark: "#3d694f",
-      forest: "#246947",
+      sky1: "#39abe8",
+      sky2: "#ddf7ff",
+      sun: "#ffd747",
+      mountain: "#648d70",
+      mountainDark: "#3d684e",
+      forest: "#266a47",
       ground: "#5c9a55",
-      flower: "#f3d65c",
     };
   }
 
   if (season === "autumn") {
     return {
-      title: "پاییز",
-      sky1: "#79b9d1",
-      sky2: "#f8e4bd",
+      sky1: "#82bdd4",
+      sky2: "#fae7c6",
       sun: "#f6bd45",
-      mountain: "#85735b",
+      mountain: "#84725a",
       mountainDark: "#5e594b",
       forest: "#a76535",
-      ground: "#a87943",
-      flower: "#d98639",
+      ground: "#a77943",
     };
   }
 
   return {
-    title: "زمستان",
-    sky1: "#79b5d8",
-    sky2: "#e9f5fc",
-    sun: "#f8d56d",
-    mountain: "#8297a4",
-    mountainDark: "#607481",
+    sky1: "#7bb7d9",
+    sky2: "#edf7fc",
+    sun: "#f8d66e",
+    mountain: "#8499a6",
+    mountainDark: "#607581",
     forest: "#45695f",
     ground: "#e7f1f5",
-    flower: "#ffffff",
   };
 }
 
 function getMoonPhase(date: Date) {
-  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
+  const knownNewMoon = Date.UTC(
+    2000,
+    0,
+    6,
+    18,
+    14
+  );
+
   const synodicMonth = 29.530588853;
 
   let age =
@@ -393,6 +392,170 @@ function getEventsForDay(
   });
 }
 
+/*
+ * مناسبت‌های بین‌المللی
+ *
+ * این فهرست در کنار مناسبت‌های ایرانی نمایش داده می‌شود.
+ */
+function getInternationalEvents(
+  month: number,
+  day: number
+) {
+  const events: string[] = [];
+
+  const fixed: Record<
+    string,
+    string[]
+  > = {
+    "1-1": [
+      "روز جهانی صلح",
+      "روز جهانی خانواده"
+    ],
+    "2-4": [
+      "روز جهانی سرطان"
+    ],
+    "2-6": [
+      "روز جهانی مبارزه با ناقص‌سازی زنان"
+    ],
+    "2-11": [
+      "روز جهانی زنان و دختران در علم"
+    ],
+    "2-13": [
+      "روز جهانی رادیو"
+    ],
+    "2-20": [
+      "روز جهانی عدالت اجتماعی"
+    ],
+    "3-3": [
+      "روز جهانی حیات وحش"
+    ],
+    "3-8": [
+      "روز جهانی زن"
+    ],
+    "3-20": [
+      "روز جهانی شادی"
+    ],
+    "3-21": [
+      "روز جهانی شعر",
+      "روز جهانی جنگل‌ها"
+    ],
+    "3-22": [
+      "روز جهانی آب"
+    ],
+    "3-23": [
+      "روز جهانی هواشناسی"
+    ],
+    "3-24": [
+      "روز جهانی مبارزه با سل"
+    ],
+    "4-2": [
+      "روز جهانی آگاهی از اوتیسم"
+    ],
+    "4-7": [
+      "روز جهانی بهداشت"
+    ],
+    "4-22": [
+      "روز زمین"
+    ],
+    "5-3": [
+      "روز جهانی آزادی مطبوعات"
+    ],
+    "5-15": [
+      "روز جهانی خانواده"
+    ],
+    "5-17": [
+      "روز جهانی ارتباطات و جامعه اطلاعاتی"
+    ],
+    "6-5": [
+      "روز جهانی محیط زیست"
+    ],
+    "6-8": [
+      "روز جهانی اقیانوس‌ها"
+    ],
+    "6-12": [
+      "روز جهانی مبارزه با کار کودکان"
+    ],
+    "6-14": [
+      "روز جهانی اهدای خون"
+    ],
+    "7-30": [
+      "روز جهانی مبارزه با قاچاق انسان"
+    ],
+    "8-9": [
+      "روز جهانی مردمان بومی"
+    ],
+    "8-12": [
+      "روز جهانی جوانان"
+    ],
+    "9-8": [
+      "روز جهانی سوادآموزی"
+    ],
+    "9-16": [
+      "روز جهانی حفاظت از لایه اوزون"
+    ],
+    "9-21": [
+      "روز جهانی صلح"
+    ],
+    "9-27": [
+      "روز جهانی گردشگری"
+    ],
+    "10-1": [
+      "روز جهانی سالمندان",
+      "روز جهانی قهوه"
+    ],
+    "10-4": [
+      "روز جهانی حیوانات"
+    ],
+    "10-5": [
+      "روز جهانی معلم"
+    ],
+    "10-6": [
+      "روز جهانی فلج مغزی"
+    ],
+    "10-10": [
+      "روز جهانی بهداشت روان"
+    ],
+    "10-16": [
+      "روز جهانی غذا"
+    ],
+    "10-24": [
+      "روز سازمان ملل متحد"
+    ],
+    "11-10": [
+      "روز جهانی علم در خدمت صلح و توسعه"
+    ],
+    "11-14": [
+      "روز جهانی دیابت"
+    ],
+    "11-19": [
+      "روز جهانی مردان"
+    ],
+    "12-1": [
+      "روز جهانی ایدز"
+    ],
+    "12-3": [
+      "روز جهانی افراد دارای معلولیت"
+    ],
+    "12-5": [
+      "روز جهانی داوطلب"
+    ],
+    "12-10": [
+      "روز جهانی حقوق بشر"
+    ],
+    "12-18": [
+      "روز جهانی مهاجران"
+    ],
+  };
+
+  const key = `${month}-${day}`;
+
+  if (fixed[key]) {
+    events.push(...fixed[key]);
+  }
+
+  return events;
+}
+
 function getEventText(events: any[]) {
   return events
     .map((event) =>
@@ -405,30 +568,22 @@ function getEventText(events: any[]) {
       ).trim()
     )
     .filter(Boolean)
-    .slice(0, 6);
+    .slice(0, 5);
 }
 
 /*
- * محتوای روزانه
+ * سخن بزرگان
  *
- * عمداً از حوزه‌های مختلف استفاده شده:
- * دانش، ادبیات، علم، مدیریت، ورزش، فناوری،
+ * از حوزه‌های مختلف:
+ * علم، فناوری، مدیریت، ورزش،
  * کارآفرینی، فرهنگ و اندیشه.
- *
- * نقل‌قول‌های خیلی کوتاه نگه داشته شده‌اند.
  */
 const DAILY_CONTENT = [
   {
-    quote: "دانش، آغاز خرد است.",
-    author: "سقراط",
-    source: "حکمت منسوب",
-    thought: "امروز چه چیزی می‌توانم یاد بگیرم که فردای من را بهتر کند؟",
-  },
-  {
-    quote: "موفقیت، مجموع تلاش‌های کوچک روزانه است.",
-    author: "رابرت کولیر",
+    quote: "بهترین راه پیش‌بینی آینده، ساختن آن است.",
+    author: "پیتر دراکر",
     source: "نقل مشهور",
-    thought: "کدام کار کوچک امروز می‌تواند در آینده نتیجه بزرگی بسازد؟",
+    thought: "امروز چه کاری می‌توانم برای ساختن آینده بهتر انجام دهم؟",
   },
   {
     quote: "هرگز تسلیم نشو.",
@@ -443,12 +598,6 @@ const DAILY_CONTENT = [
     thought: "برای آینده‌ای که می‌خواهم، امروز چه کاری باید انجام دهم؟",
   },
   {
-    quote: "زندگی آن چیزی است که برای ما اتفاق می‌افتد.",
-    author: "جان لنون",
-    source: "نقل مشهور",
-    thought: "چقدر از امروز را آگاهانه زندگی می‌کنم؟",
-  },
-  {
     quote: "آنچه مهم است، این است که هرگز از پرسیدن دست نکشیم.",
     author: "آلبرت اینشتین",
     source: "نقل مشهور",
@@ -461,46 +610,10 @@ const DAILY_CONTENT = [
     thought: "چه چیزی را می‌توانم در کار امروز ساده‌تر و بهتر کنم؟",
   },
   {
-    quote: "اگر می‌توانی چیزی را تصور کنی، می‌توانی برای آن تلاش کنی.",
-    author: "والت دیزنی",
-    source: "نقل مشهور",
-    thought: "کدام ایده را باید از ذهنم به یک اقدام واقعی تبدیل کنم؟",
-  },
-  {
-    quote: "موفقیت، رفتن از شکستی به شکست دیگر بدون از دست دادن اشتیاق است.",
-    author: "وینستون چرچیل",
-    source: "نقل مشهور",
-    thought: "از آخرین اشتباه خود چه درسی گرفته‌ام؟",
-  },
-  {
     quote: "دانستن کافی نیست؛ باید به کار بست.",
     author: "یوهان ولفگانگ گوته",
     source: "نقل مشهور",
     thought: "کدام دانسته من امروز باید به عمل تبدیل شود؟",
-  },
-  {
-    quote: "خلاقیت، هوشِ در حال خوشگذرانی است.",
-    author: "آلبرت اینشتین",
-    source: "نقل مشهور",
-    thought: "آیا برای پیدا کردن راه تازه، به خودم فرصت فکر کردن می‌دهم؟",
-  },
-  {
-    quote: "کیفیت یعنی درست انجام دادن کار، وقتی کسی نگاه نمی‌کند.",
-    author: "هنری فورد",
-    source: "نقل مشهور",
-    thought: "آیا کیفیت کار من به حضور یا نظارت دیگران وابسته است؟",
-  },
-  {
-    quote: "بهترین راه پیش‌بینی آینده، ساختن آن است.",
-    author: "پیتر دراکر",
-    source: "نقل مشهور",
-    thought: "من امروز کدام بخش از آینده خودم را می‌سازم؟",
-  },
-  {
-    quote: "اگر چیزی را نمی‌توانی توضیح دهی، به اندازه کافی آن را نفهمیده‌ای.",
-    author: "آلبرت اینشتین",
-    source: "نقل منسوب",
-    thought: "کدام موضوع را باید عمیق‌تر و ساده‌تر بفهمم؟",
   },
   {
     quote: "راه هزار کیلومتری با یک قدم آغاز می‌شود.",
@@ -509,34 +622,16 @@ const DAILY_CONTENT = [
     thought: "اولین قدم واقعی من برای هدف امروز چیست؟",
   },
   {
-    quote: "آنچه انجام می‌دهی، تو را می‌سازد.",
-    author: "ارسطو",
-    source: "حکمت منسوب",
-    thought: "عادت‌های امروز من چه شخصیتی برای فردایم می‌سازند؟",
-  },
-  {
     quote: "باور کن که می‌توانی، نیمی از راه را رفته‌ای.",
     author: "تئودور روزولت",
     source: "نقل مشهور",
     thought: "کدام تردید را امروز باید کنار بگذارم؟",
   },
   {
-    quote: "هیچ‌کس با استعداد به دنیا نمی‌آید؛ مهارت ساخته می‌شود.",
-    author: "نقل آموزشی",
-    source: "حکمت معاصر",
-    thought: "کدام مهارت را باید با تمرین مداوم بهتر کنم؟",
-  },
-  {
     quote: "اگر می‌خواهی جهان را تغییر دهی، از خودت شروع کن.",
     author: "مهاتما گاندی",
     source: "نقل مشهور",
     thought: "امروز کدام تغییر کوچک را از خودم شروع می‌کنم؟",
-  },
-  {
-    quote: "ورزش، جشن توانایی‌های بدن است.",
-    author: "نقل معاصر",
-    source: "حکمت ورزشی",
-    thought: "چگونه می‌توانم امروز بیشتر مراقب انرژی و توان خود باشم؟",
   },
   {
     quote: "رقابت اصلی با دیروزِ خودت است.",
@@ -551,46 +646,16 @@ const DAILY_CONTENT = [
     thought: "برای یک هدف بزرگ، قدم کوچک امروز من چیست؟",
   },
   {
-    quote: "اشتباه کردن پایان راه نیست؛ بخشی از یادگیری است.",
-    author: "نقل آموزشی",
-    source: "حکمت معاصر",
-    thought: "از یک اشتباه گذشته چگونه می‌توانم فرصت بسازم؟",
-  },
-  {
-    quote: "آینده را نمی‌توان با عادت‌های گذشته ساخت.",
-    author: "پیتر دراکر",
-    source: "نقل مشهور",
-    thought: "کدام عادت قدیمی دیگر برای آینده من مناسب نیست؟",
-  },
-  {
-    quote: "اگر کاری ارزش انجام دادن دارد، ارزش خوب انجام دادن دارد.",
-    author: "نقل مشهور",
-    source: "حکمت کاری",
-    thought: "امروز کدام کار را باید با دقت بیشتری انجام دهم؟",
-  },
-  {
-    quote: "صبوری، هنر امید داشتن است.",
-    author: "لوس دو کلاپیه",
-    source: "حکمت منسوب",
-    thought: "کجا باید به جای عجله، صبر و استمرار داشته باشم؟",
-  },
-  {
-    quote: "یک تیم قوی از افراد متفاوت ساخته می‌شود.",
-    author: "نقل مدیریتی",
-    source: "حکمت معاصر",
-    thought: "امروز چگونه می‌توانم به موفقیت یک همکار کمک کنم؟",
-  },
-  {
     quote: "تغییر تنها ثابت زندگی است.",
     author: "هراکلیتوس",
     source: "حکمت یونان باستان",
-    thought: "آیا به جای مقاومت بیهوده، از تغییر برای رشد استفاده می‌کنم؟",
+    thought: "آیا از تغییر برای رشد خود استفاده می‌کنم؟",
   },
   {
     quote: "آنچه اندازه می‌گیری، می‌توانی بهتر کنی.",
     author: "پیتر دراکر",
     source: "نقل مدیریتی",
-    thought: "کدام نتیجه را باید دقیق‌تر بررسی و اندازه‌گیری کنم؟",
+    thought: "کدام نتیجه را باید دقیق‌تر بررسی کنم؟",
   },
   {
     quote: "هر روز فرصتی تازه برای بهتر شدن است.",
@@ -603,12 +668,6 @@ const DAILY_CONTENT = [
     author: "آلبرت شوایتزر",
     source: "نقل مشهور",
     thought: "امروز چه کمکی می‌توانم بدون انتظار جبران انجام دهم؟",
-  },
-  {
-    quote: "هیچ موفقیتی بدون پشتکار پایدار نمی‌ماند.",
-    author: "حکمت معاصر",
-    source: "نقل انگیزشی",
-    thought: "کدام هدف به استمرار بیشتری از من نیاز دارد؟",
   },
 ];
 
@@ -632,12 +691,12 @@ function createInfographicHtml(data: {
   animal: string;
   animalEmoji: string;
   events: string[];
+  internationalEvents: string[];
   thought: string;
   quote: string;
   author: string;
   source: string;
   season: {
-    title: string;
     sky1: string;
     sky2: string;
     sun: string;
@@ -645,7 +704,6 @@ function createInfographicHtml(data: {
     mountainDark: string;
     forest: string;
     ground: string;
-    flower: string;
   };
 }) {
   const progressValue = Math.min(
@@ -655,13 +713,42 @@ function createInfographicHtml(data: {
 
   const season = data.season;
 
-  const eventsHtml = data.events.length
-    ? data.events
+  const allEvents = [
+    ...data.events.map(
+      (x) => ({
+        text: x,
+        international: false,
+      })
+    ),
+    ...data.internationalEvents.map(
+      (x) => ({
+        text: x,
+        international: true,
+      })
+    ),
+  ];
+
+  const eventsHtml = allEvents.length
+    ? allEvents
+        .slice(0, 8)
         .map(
           (event) => `
             <div class="event-item">
-              <span class="event-dot">✦</span>
-              <span>${escapeHtml(event)}</span>
+              <span class="event-dot">
+                ${event.international ? "🌍" : "✦"}
+              </span>
+
+              <span class="event-text">
+                ${escapeHtml(event.text)}
+              </span>
+
+              ${
+                event.international
+                  ? `<span class="international">
+                       بین‌المللی
+                     </span>`
+                  : ""
+              }
             </div>
           `
         )
@@ -669,13 +756,17 @@ function createInfographicHtml(data: {
     : `
       <div class="event-item">
         <span class="event-dot">✦</span>
-        <span>مناسبتی برای امروز ثبت نشده است.</span>
+        <span class="event-text">
+          مناسبتی برای امروز ثبت نشده است.
+        </span>
       </div>
     `;
 
   return `
 <!doctype html>
+
 <html lang="fa" dir="rtl">
+
 <head>
 
 <meta charset="utf-8">
@@ -727,12 +818,12 @@ body {
     linear-gradient(
       180deg,
       ${season.sky1} 0%,
-      ${season.sky2} 43%,
-      #fdfcf5 72%,
+      ${season.sky2} 42%,
+      #fffef8 73%,
       ${season.ground} 100%
     );
 
-  color: #18384c;
+  color: #000000;
 }
 
 .page {
@@ -744,17 +835,10 @@ body {
   overflow: hidden;
 
   padding:
-    28px
-    38px
-    30px;
-
-  display: flex;
-  flex-direction: column;
+    25px
+    35px
+    25px;
 }
-
-/* ==========================
-   NATURE BACKGROUND
-========================== */
 
 .nature {
   position: absolute;
@@ -769,27 +853,21 @@ body {
 .sun {
   position: absolute;
 
-  top: 68px;
-  left: 95px;
+  top: 65px;
+  left: 90px;
 
-  width: 118px;
-  height: 118px;
+  width: 120px;
+  height: 120px;
 
   border-radius: 50%;
 
   background:
     radial-gradient(
       circle,
-      #fffbd0 0 15%,
-      ${season.sun} 38%,
-      rgba(255,211,82,.32) 67%,
-      transparent 72%
-    );
-
-  filter:
-    drop-shadow(
-      0 0 26px
-      rgba(255,209,75,.7)
+      #fffbd2 0 18%,
+      ${season.sun} 40%,
+      rgba(255,211,82,.3) 68%,
+      transparent 73%
     );
 }
 
@@ -801,9 +879,8 @@ body {
 
   border-radius: 60px;
 
-  background: rgba(255,255,255,.45);
-
-  filter: blur(2px);
+  background:
+    rgba(255,255,255,.48);
 }
 
 .cloud::before,
@@ -816,7 +893,8 @@ body {
 
   border-radius: 50%;
 
-  background: rgba(255,255,255,.48);
+  background:
+    rgba(255,255,255,.5);
 }
 
 .cloud::before {
@@ -835,16 +913,14 @@ body {
 
 .cloud.one {
   top: 100px;
-  right: 75px;
+  right: 70px;
 }
 
 .cloud.two {
-  top: 190px;
-  left: 240px;
+  top: 185px;
+  left: 250px;
 
   transform: scale(.72);
-
-  opacity: .55;
 }
 
 .mountains-back {
@@ -939,63 +1015,38 @@ body {
   opacity: .34;
 }
 
-.forest::after {
-  content: "";
-
-  position: absolute;
-
-  left: 0;
-  right: 0;
-  bottom: 0;
-
-  height: 145px;
-
-  background:
-    linear-gradient(
-      180deg,
-      transparent,
-      rgba(26,86,58,.55)
-    );
-}
-
-/* ==========================
-   MAIN CONTENT
-========================== */
-
 .content {
   position: relative;
 
   z-index: 5;
 
-  height: 100%;
-
   display: flex;
+
   flex-direction: column;
+
+  height: 100%;
 }
 
-/* ==========================
-   HEADER
-========================== */
+/* عنوان */
 
 .header {
-  min-height: 190px;
+  min-height: 160px;
 
   display: flex;
+
   flex-direction: column;
 
   align-items: center;
+
   justify-content: center;
 
   text-align: center;
 
-  padding:
-    10px
-    20px
-    20px;
+  padding: 8px 20px 15px;
 }
 
 .title {
-  color: #063e62;
+  color: #000000;
 
   font-size: 43px;
 
@@ -1004,117 +1055,98 @@ body {
   font-weight: 700;
 
   text-shadow:
-    0 3px 12px
+    0 2px 8px
     rgba(255,255,255,.95);
 }
 
 .greeting {
-  margin-top: 8px;
+  margin-top: 10px;
 
-  color: #a95700;
+  color: #000000;
 
   font-size: 31px;
 
-  font-weight: 700;
-
-  text-shadow:
-    0 2px 9px
-    rgba(255,255,255,.9);
-}
-
-.season {
-  margin-top: 6px;
-
-  color: #316a58;
-
-  font-size: 20px;
+  line-height: 1.4;
 
   font-weight: 700;
-
-  opacity: .92;
 }
 
-/* ==========================
-   DATE AREA
-========================== */
+/* تاریخ */
 
 .date-area {
-  position: relative;
-
-  min-height: 245px;
+  min-height: 225px;
 
   padding:
-    18px
-    30px
-    20px;
+    17px
+    28px
+    18px;
+
+  position: relative;
+
+  text-align: right;
 
   background:
-    linear-gradient(
-      90deg,
-      rgba(255,255,255,.16),
-      rgba(255,255,255,.72),
-      rgba(255,255,255,.16)
-    );
+    rgba(255,255,255,.67);
 
   border-top:
     2px solid
-    rgba(255,255,255,.78);
+    rgba(255,255,255,.95);
 
   border-bottom:
     2px solid
-    rgba(255,255,255,.75);
-
-  text-align: right;
+    rgba(255,255,255,.9);
 }
 
 .clock {
   position: absolute;
 
-  left: 24px;
+  left: 25px;
   top: 20px;
 
   padding:
-    9px
-    16px;
+    8px
+    15px;
 
-  border-radius: 18px;
-
-  color: #ffffff;
+  border-radius: 15px;
 
   background:
-    rgba(9,71,105,.84);
+    rgba(255,255,255,.92);
 
-  font-size: 24px;
+  color: #000000;
+
+  font-size: 25px;
 
   font-weight: 700;
 
-  box-shadow:
-    0 7px 18px
-    rgba(9,71,105,.16);
+  border:
+    2px solid
+    rgba(0,0,0,.18);
 }
 
 .weekday {
-  color: #5e7583;
+  color: #000000;
 
-  font-size: 27px;
+  font-size: 29px;
+
+  line-height: 1.35;
 
   font-weight: 700;
 }
 
 .persian-date {
-  margin-top: 1px;
+  margin-top: 2px;
 
-  color: #0c4b76;
+  color: #000000;
 
-  font-size: 61px;
+  font-size: 62px;
 
-  line-height: 1.2;
+  line-height: 1.18;
 
   font-weight: 700;
 }
 
 .date-lines {
-  margin-top: 14px;
+  margin-top: 12px;
 
   display: flex;
 
@@ -1122,43 +1154,35 @@ body {
 
   gap: 34px;
 
-  color: #486a79;
+  color: #000000;
 
-  font-size: 21px;
+  font-size: 22px;
+
+  line-height: 1.4;
 
   font-weight: 700;
 }
 
-.date-lines span {
-  display: inline-flex;
-
-  align-items: center;
-
-  gap: 8px;
-}
-
-/* ==========================
-   YEAR PROGRESS
-========================== */
+/* پیشرفت سال */
 
 .year-area {
-  margin-top: 12px;
+  margin-top: 10px;
 
   padding:
-    13px
-    26px
-    15px;
+    12px
+    25px
+    13px;
 
   background:
-    rgba(255,255,255,.46);
+    rgba(255,255,255,.72);
 
   border-top:
     2px solid
-    rgba(47,151,130,.38);
+    rgba(0,0,0,.14);
 
   border-bottom:
     2px solid
-    rgba(47,151,130,.25);
+    rgba(0,0,0,.10);
 }
 
 .year-head {
@@ -1171,18 +1195,11 @@ body {
   align-items: center;
 }
 
-.year-title {
-  color: #126b61;
+.year-title,
+.year-percent {
+  color: #000000;
 
   font-size: 25px;
-
-  font-weight: 700;
-}
-
-.year-percent {
-  color: #14536d;
-
-  font-size: 24px;
 
   font-weight: 700;
 }
@@ -1190,31 +1207,27 @@ body {
 .track {
   width: 100%;
 
-  height: 20px;
+  height: 19px;
 
-  margin-top: 10px;
+  margin-top: 9px;
 
   padding: 3px;
 
   border-radius: 20px;
 
   background:
-    rgba(255,255,255,.76);
+    rgba(0,0,0,.12);
 }
 
 .fill {
   width: ${progressValue}%;
 
-  height: 14px;
+  height: 13px;
 
   border-radius: 20px;
 
   background:
-    linear-gradient(
-      90deg,
-      #1b9874,
-      #65c77e
-    );
+    #000000;
 }
 
 .year-meta {
@@ -1226,42 +1239,32 @@ body {
 
   justify-content: space-between;
 
-  color: #587772;
+  color: #000000;
 
-  font-size: 18px;
+  font-size: 19px;
+
+  font-weight: 700;
 }
 
-/* ==========================
-   STATS - INLINE
-========================== */
+/* اطلاعات */
 
 .stats {
-  margin-top: 12px;
+  margin-top: 10px;
 
   display: flex;
 
   flex-direction: row-reverse;
 
-  align-items: stretch;
-
-  justify-content: space-between;
-
-  gap: 0;
-
-  padding:
-    10px
-    0;
-
   background:
-    rgba(255,255,255,.32);
+    rgba(255,255,255,.72);
 
   border-top:
-    1px solid
-    rgba(255,255,255,.8);
+    2px solid
+    rgba(0,0,0,.12);
 
   border-bottom:
-    1px solid
-    rgba(255,255,255,.8);
+    2px solid
+    rgba(0,0,0,.12);
 }
 
 .stat {
@@ -1270,12 +1273,12 @@ body {
   text-align: center;
 
   padding:
-    5px
-    12px;
+    8px
+    8px;
 
   border-left:
-    1px solid
-    rgba(60,111,126,.18);
+    2px solid
+    rgba(0,0,0,.10);
 }
 
 .stat:last-child {
@@ -1283,23 +1286,23 @@ body {
 }
 
 .stat-icon {
-  font-size: 32px;
-
-  line-height: 1;
+  font-size: 31px;
 }
 
 .stat-label {
-  margin-top: 5px;
+  margin-top: 3px;
 
-  color: #667e87;
+  color: #000000;
 
-  font-size: 17px;
+  font-size: 18px;
+
+  font-weight: 700;
 }
 
 .stat-value {
   margin-top: 2px;
 
-  color: #31566c;
+  color: #000000;
 
   font-size: 20px;
 
@@ -1308,118 +1311,153 @@ body {
   font-weight: 700;
 }
 
-/* ==========================
-   EVENTS
-========================== */
+/* مناسبت‌ها */
 
 .events {
-  margin-top: 11px;
+  margin-top: 10px;
 
   padding:
     12px
     24px
-    14px;
+    13px;
 
   background:
-    linear-gradient(
-      90deg,
-      rgba(255,255,255,.22),
-      rgba(255,250,230,.68),
-      rgba(255,255,255,.22)
-    );
+    rgba(255,255,255,.84);
 
   border-top:
-    3px solid
-    rgba(224,148,31,.7);
+    4px solid
+    #000000;
 
   border-bottom:
-    1px solid
-    rgba(224,148,31,.25);
+    2px solid
+    rgba(0,0,0,.15);
+
+  text-align: right;
+
+  direction: rtl;
 }
 
 .section-title {
-  color: #c5740b;
+  color: #000000;
 
-  font-size: 27px;
+  font-size: 29px;
+
+  line-height: 1.35;
 
   font-weight: 700;
 
-  margin-bottom: 7px;
+  text-align: right;
+
+  margin-bottom: 6px;
 }
 
 .event-item {
   display: flex;
 
-  flex-direction: row-reverse;
+  flex-direction: row;
+
+  direction: rtl;
 
   align-items: flex-start;
 
-  gap: 10px;
+  justify-content: flex-start;
+
+  gap: 9px;
 
   padding: 4px 0;
 
-  color: #394f5d;
+  color: #000000;
 
   font-size: 21px;
 
-  line-height: 1.42;
-}
+  line-height: 1.45;
 
-.event-dot {
-  flex: 0 0 auto;
-
-  color: #e39a20;
-
-  font-size: 20px;
-}
-
-/* ==========================
-   QUOTE
-========================== */
-
-.quote {
-  margin-top: 11px;
-
-  padding:
-    13px
-    25px
-    14px;
-
-  background:
-    linear-gradient(
-      90deg,
-      rgba(255,255,255,.2),
-      rgba(246,243,255,.72),
-      rgba(255,255,255,.2)
-    );
-
-  border-top:
-    3px solid
-    rgba(102,89,190,.6);
-
-  border-bottom:
-    1px solid
-    rgba(102,89,190,.24);
+  font-weight: 700;
 
   text-align: right;
 }
 
-.quote-title {
-  color: #5b4e9e;
+.event-dot {
+  flex:
+    0 0 auto;
 
-  font-size: 27px;
+  font-size: 20px;
+}
+
+.event-text {
+  flex:
+    0 1 auto;
+
+  text-align: right;
+}
+
+.international {
+  flex:
+    0 0 auto;
+
+  margin-right: 8px;
+
+  padding:
+    2px
+    7px;
+
+  border:
+    1px solid
+    #000000;
+
+  border-radius: 8px;
+
+  color: #000000;
+
+  font-size: 13px;
 
   font-weight: 700;
 
-  margin-bottom: 7px;
+  white-space: nowrap;
+}
+
+/* سخن بزرگان */
+
+.quote {
+  margin-top: 10px;
+
+  padding:
+    12px
+    24px
+    13px;
+
+  background:
+    rgba(255,255,255,.84);
+
+  border-top:
+    4px solid
+    #000000;
+
+  border-bottom:
+    2px solid
+    rgba(0,0,0,.15);
+
+  text-align: right;
+
+  direction: rtl;
+}
+
+.quote-title {
+  color: #000000;
+
+  font-size: 28px;
+
+  font-weight: 700;
+
+  margin-bottom: 5px;
 }
 
 .quote-text {
-  color: #263f52;
+  color: #000000;
 
   font-size: 24px;
 
-  line-height: 1.48;
+  line-height: 1.45;
 
   font-weight: 700;
 }
@@ -1427,121 +1465,59 @@ body {
 .quote-author {
   margin-top: 5px;
 
-  color: #766e84;
+  color: #000000;
 
   font-size: 17px;
+
+  line-height: 1.4;
+
+  font-weight: 700;
 }
 
-/* ==========================
-   THOUGHT
-========================== */
+/* جرعه تفکر */
 
 .thought {
-  margin-top: 11px;
+  margin-top: 10px;
 
   padding:
-    13px
-    25px
-    15px;
+    12px
+    24px
+    13px;
 
   background:
-    linear-gradient(
-      90deg,
-      rgba(255,255,255,.2),
-      rgba(237,255,254,.72),
-      rgba(255,255,255,.2)
-    );
+    rgba(255,255,255,.84);
 
   border-top:
-    3px solid
-    rgba(16,151,151,.65);
+    4px solid
+    #000000;
 
   border-bottom:
-    1px solid
-    rgba(16,151,151,.25);
+    2px solid
+    rgba(0,0,0,.15);
 
   text-align: right;
+
+  direction: rtl;
 }
 
 .thought-title {
-  color: #087e80;
+  color: #000000;
 
-  font-size: 27px;
+  font-size: 28px;
 
   font-weight: 700;
 
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 }
 
 .thought-text {
-  color: #21495c;
+  color: #000000;
 
-  font-size: 23px;
+  font-size: 22px;
 
-  line-height: 1.48;
+  line-height: 1.45;
 
   font-weight: 700;
-}
-
-/* ==========================
-   BOTTOM NATURE STRIP
-========================== */
-
-.bottom-nature {
-  position: absolute;
-
-  z-index: 2;
-
-  left: 0;
-  right: 0;
-
-  bottom: 0;
-
-  height: 190px;
-
-  background:
-    linear-gradient(
-      180deg,
-      transparent,
-      rgba(255,255,255,.15)
-    );
-}
-
-.bottom-nature::before,
-.bottom-nature::after {
-  content: "";
-
-  position: absolute;
-
-  bottom: -75px;
-
-  border-radius: 50% 50% 0 0;
-}
-
-.bottom-nature::before {
-  left: -8%;
-
-  width: 70%;
-
-  height: 180px;
-
-  background:
-    ${season.forest};
-
-  opacity: .45;
-}
-
-.bottom-nature::after {
-  right: -10%;
-
-  width: 72%;
-
-  height: 160px;
-
-  background:
-    ${season.mountainDark};
-
-  opacity: .27;
 }
 
 </style>
@@ -1578,10 +1554,6 @@ body {
 
       <div class="greeting">
         روزت پر از اتفاقات خوب ☀️
-      </div>
-
-      <div class="season">
-        طبیعت ${escapeHtml(season.title)}
       </div>
 
     </header>
@@ -1631,9 +1603,7 @@ body {
       </div>
 
       <div class="track">
-
         <div class="fill"></div>
-
       </div>
 
       <div class="year-meta">
@@ -1746,18 +1716,19 @@ body {
 
   </div>
 
-  <div class="bottom-nature"></div>
-
 </div>
 
 </body>
+
 </html>
 `;
 }
 
 async function createInfographic(
   env: CloudflareEnv,
-  data: Parameters<typeof createInfographicHtml>[0]
+  data: Parameters<
+    typeof createInfographicHtml
+  >[0]
 ) {
   if (!env.BROWSER) {
     throw new Error(
@@ -1854,7 +1825,7 @@ async function sendPhotoToBale(
 }
 
 /*
- * منطق لغو ارسال را دست نمی‌زنیم.
+ * منطق لغو ارسال حفظ شده است.
  */
 async function isCalendarEnabled(
   env: CloudflareEnv
@@ -1898,6 +1869,7 @@ async function isCalendarEnabled(
     }
 
     return rows[0]?.value !== "false";
+
   } catch {
     return true;
   }
@@ -1905,6 +1877,7 @@ async function isCalendarEnabled(
 
 export async function GET() {
   try {
+
     const { env } =
       await getCloudflareContext({
         async: true,
@@ -1986,6 +1959,12 @@ export async function GET() {
         allEvents,
         persian.month,
         persian.day
+      );
+
+    const internationalEvents =
+      getInternationalEvents(
+        tehran.month,
+        tehran.day
       );
 
     const progress =
@@ -2083,6 +2062,8 @@ export async function GET() {
               todayEvents
             ),
 
+          internationalEvents,
+
           thought:
             content.thought,
 
@@ -2127,6 +2108,7 @@ export async function GET() {
     });
 
   } catch (error) {
+
     console.error(
       "[calendar] error:",
       error
@@ -2146,4 +2128,4 @@ export async function GET() {
       }
     );
   }
-    }
+}
