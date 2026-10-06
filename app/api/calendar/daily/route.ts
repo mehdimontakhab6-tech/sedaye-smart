@@ -715,6 +715,11 @@ function createInfographicHtml(data: {
 
   const season = data.season;
 
+  /*
+   * مناسبت‌های داخلی و بین‌المللی
+   * قبلاً در GET() فیلتر شده‌اند و فقط
+   * موارد مربوط به امروز به این قسمت می‌رسند.
+   */
   const allEvents = [
     ...data.events.map((x) => ({
       text: x,
@@ -732,6 +737,7 @@ function createInfographicHtml(data: {
         .map(
           (event) => `
             <div class="event-item">
+
               <span class="event-dot">
                 ${event.international ? "🌍" : "✦"}
               </span>
@@ -742,21 +748,29 @@ function createInfographicHtml(data: {
 
               ${
                 event.international
-                  ? `<span class="international">
-                       بین‌المللی
-                     </span>`
+                  ? `
+                    <span class="international">
+                      بین‌المللی
+                    </span>
+                  `
                   : ""
               }
+
             </div>
           `
         )
         .join("")
     : `
       <div class="event-item">
-        <span class="event-dot">✦</span>
+
+        <span class="event-dot">
+          ✦
+        </span>
+
         <span class="event-text">
           مناسبتی برای امروز ثبت نشده است.
         </span>
+
       </div>
     `;
 
@@ -771,11 +785,6 @@ function createInfographicHtml(data: {
 
 <style>
 
-/*
- * فونت جدید:
- * خواناتر، ضخیم‌تر و مناسب‌تر برای متن فارسی
- * در تصویر ۱۰۲۴×۱۵۰۰
- */
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&display=swap");
 
 * {
@@ -800,48 +809,49 @@ body {
     Arial,
     sans-serif;
 
+  color: #10212b;
+
   background:
     linear-gradient(
       180deg,
-      #dff6ff 0%,
-      #f5fcff 32%,
-      #ffffff 67%,
-      #f3faef 100%
+      ${season.sky1} 0%,
+      ${season.sky2} 42%,
+      #f5fbf2 100%
     );
-
-  color: #000000;
 }
 
 .page {
+  position: relative;
+
   width: ${WIDTH}px;
   height: ${HEIGHT}px;
-
-  position: relative;
 
   overflow: hidden;
 
   padding:
-    18px
+    22px
     28px
     18px;
 }
+
+/* =========================
+   پس‌زمینه طبیعت
+   ========================= */
 
 .nature {
   position: absolute;
 
   inset: 0;
 
-  overflow: hidden;
-
-  pointer-events: none;
+  z-index: 0;
 
   background-image:
     linear-gradient(
       180deg,
-      rgba(255,255,255,.08) 0%,
-      rgba(255,255,255,.04) 38%,
-      rgba(255,255,255,.12) 72%,
-      rgba(255,255,255,.20) 100%
+      rgba(255,255,255,.06) 0%,
+      rgba(255,255,255,.02) 35%,
+      rgba(255,255,255,.12) 70%,
+      rgba(244,250,240,.34) 100%
     ),
     url("https://images.unsplash.com/photo-1629140476741-04d07ddeff60?auto=format&fit=crop&fm=jpg&q=92&w=1800&h=2700");
 
@@ -858,10 +868,29 @@ body {
     no-repeat;
 
   filter:
-    saturate(1.08)
-    brightness(1.10)
+    saturate(1.12)
+    brightness(1.06)
     contrast(1.02);
 }
+
+.nature::after {
+  content: "";
+
+  position: absolute;
+
+  inset: 0;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.08),
+      rgba(255,255,255,.02) 35%,
+      rgba(255,255,255,.08) 70%,
+      rgba(244,250,240,.28)
+    );
+}
+
+/* عناصر تزئینی قبلی حفظ شده‌اند */
 
 .sun {
   position: absolute;
@@ -1034,172 +1063,183 @@ body {
   opacity: 0;
 }
 
+/* =========================
+   لایه اصلی محتوا
+   ========================= */
+
 .content {
   position: relative;
 
   z-index: 5;
 
+  width: 100%;
+  height: 100%;
+
   display: flex;
 
   flex-direction: column;
 
-  height: 100%;
+  gap: 10px;
 }
 
-/* عنوان */
+/* =========================
+   پنل شیشه‌ای
+   ========================= */
+
+.glass {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255,255,255,.84),
+      rgba(255,255,255,.65)
+    );
+
+  border:
+    1px solid
+    rgba(255,255,255,.94);
+
+  border-radius: 28px;
+
+  box-shadow:
+    0 9px 25px
+    rgba(18,54,70,.14),
+
+    inset 0 1px 0
+    rgba(255,255,255,.95);
+
+  backdrop-filter:
+    blur(10px);
+
+  -webkit-backdrop-filter:
+    blur(10px);
+}
+
+/* =========================
+   عنوان
+   ========================= */
 
 .header {
-  min-height: 165px;
-
-  display: flex;
-
-  flex-direction: column;
-
-  align-items: center;
-
-  justify-content: center;
-
-  text-align: center;
+  flex: 0 0 auto;
 
   padding:
-    8px
-    10px
-    10px;
+    17px
+    22px
+    15px;
+
+  text-align: center;
 }
 
 .title {
-  color: #000000;
+  color: #071c28;
 
-  font-size: 56px;
+  font-size: 55px;
 
-  line-height: 1.25;
+  line-height: 1.22;
 
   font-weight: 900;
 
-  letter-spacing: -.6px;
+  letter-spacing: -.7px;
 
   text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 12px rgba(255,255,255,.96);
+    0 2px 3px
+    rgba(255,255,255,.98);
 }
 
 .greeting {
-  margin-top: 10px;
+  margin-top: 6px;
 
-  color: #000000;
+  color: #123744;
 
-  font-size: 42px;
+  font-size: 34px;
 
-  line-height: 1.32;
+  line-height: 1.25;
 
   font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 11px rgba(255,255,255,.94);
 }
 
-/* تاریخ */
+/* =========================
+   تاریخ
+   ========================= */
 
 .date-area {
-  min-height: 220px;
-
-  padding:
-    10px
-    18px;
-
   position: relative;
 
-  text-align: right;
+  flex: 0 0 auto;
 
-  background: transparent;
+  padding:
+    14px
+    25px
+    17px;
 }
 
 .clock {
   position: absolute;
 
-  left: 18px;
-  top: 12px;
+  left: 25px;
+  top: 17px;
 
-  padding: 0;
+  color: #0a202b;
 
-  border-radius: 0;
-
-  background: transparent !important;
-
-  color: #000000;
-
-  font-size: 34px;
+  font-size: 31px;
 
   font-weight: 900;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 10px rgba(255,255,255,.94);
 }
 
 .weekday {
-  color: #000000;
+  color: #173b49;
 
-  font-size: 42px;
+  font-size: 34px;
 
-  line-height: 1.3;
+  line-height: 1.2;
 
   font-weight: 900;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 11px rgba(255,255,255,.94);
 }
 
 .persian-date {
-  margin-top: 0;
+  margin-top: 1px;
 
-  color: #000000;
+  color: #061b27;
 
-  font-size: 78px;
+  font-size: 75px;
 
-  line-height: 1.10;
+  line-height: 1.04;
 
   font-weight: 900;
 
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 13px rgba(255,255,255,.96);
+  letter-spacing: -.8px;
 }
 
 .date-lines {
-  margin-top: 10px;
+  margin-top: 9px;
 
   display: flex;
 
   flex-direction: row-reverse;
 
-  gap: 32px;
+  justify-content: flex-start;
 
-  color: #000000;
+  gap: 38px;
 
-  font-size: 29px;
+  color: #294b58;
+
+  font-size: 23px;
 
   line-height: 1.35;
 
   font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 9px rgba(255,255,255,.92);
 }
 
-/* پیشرفت سال */
+/* =========================
+   پیشرفت سال
+   ========================= */
 
 .year-area {
-  margin-top: 4px;
+  flex: 0 0 auto;
 
   padding:
-    8px
-    18px;
-
-  background: transparent;
+    12px
+    22px
+    12px;
 }
 
 .year-head {
@@ -1214,21 +1254,17 @@ body {
 
 .year-title,
 .year-percent {
-  color: #000000;
+  color: #112f3c;
 
-  font-size: 32px;
+  font-size: 27px;
 
   font-weight: 900;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 9px rgba(255,255,255,.92);
 }
 
 .track {
   width: 100%;
 
-  height: 21px;
+  height: 19px;
 
   margin-top: 7px;
 
@@ -1237,26 +1273,30 @@ body {
   border-radius: 20px;
 
   background:
-    rgba(255,255,255,.52);
+    rgba(255,255,255,.78);
 
   border:
     1px solid
-    rgba(0,0,0,.28);
+    rgba(16,50,63,.20);
 }
 
 .fill {
   width: ${progressValue}%;
 
-  height: 15px;
+  height: 13px;
 
   border-radius: 20px;
 
   background:
-    #000000;
+    linear-gradient(
+      90deg,
+      #183f4d,
+      #285c68
+    );
 }
 
 .year-meta {
-  margin-top: 5px;
+  margin-top: 4px;
 
   display: flex;
 
@@ -1264,111 +1304,112 @@ body {
 
   justify-content: space-between;
 
-  color: #000000;
+  color: #31505c;
 
-  font-size: 24px;
+  font-size: 20px;
 
   font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 8px rgba(255,255,255,.92);
 }
 
-/* اطلاعات */
+/* =========================
+   سه کارت
+   ========================= */
 
 .stats {
-  margin-top: 4px;
+  flex: 0 0 auto;
 
-  display: flex;
+  display: grid;
 
-  flex-direction: row-reverse;
+  grid-template-columns:
+    repeat(3, 1fr);
 
-  background: transparent;
+  gap: 10px;
 }
 
 .stat {
-  flex: 1;
+  min-height: 119px;
+
+  padding:
+    9px
+    7px
+    8px;
 
   text-align: center;
 
-  padding:
-    5px
-    7px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255,255,255,.84),
+      rgba(255,255,255,.64)
+    );
 
-  border: none;
+  border:
+    1px solid
+    rgba(255,255,255,.93);
+
+  border-radius: 24px;
+
+  box-shadow:
+    0 7px 18px
+    rgba(20,60,75,.10),
+
+    inset 0 1px 0
+    rgba(255,255,255,.90);
 }
 
 .stat-icon {
-  font-size: 38px;
+  font-size: 32px;
 
-  text-shadow:
-    0 2px 4px
-    rgba(255,255,255,.98);
+  line-height: 1;
 }
 
 .stat-label {
-  margin-top: 2px;
+  margin-top: 4px;
 
-  color: #000000;
+  color: #49636e;
 
-  font-size: 23px;
+  font-size: 18px;
 
   font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 8px rgba(255,255,255,.92);
 }
 
 .stat-value {
-  margin-top: 1px;
+  margin-top: 2px;
 
-  color: #000000;
+  color: #09202c;
 
-  font-size: 25px;
+  font-size: 22px;
 
   line-height: 1.25;
 
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 8px rgba(255,255,255,.92);
+  font-weight: 900;
 }
 
-/* مناسبت‌ها */
+/* =========================
+   مناسبت‌ها
+   ========================= */
 
 .events {
-  margin-top: 4px;
+  flex: 0 0 auto;
 
   padding:
-    7px
-    18px;
-
-  background: transparent;
-
-  text-align: right;
-
-  direction: rtl;
+    11px
+    20px
+    12px;
 }
 
 .section-title {
-  color: #000000;
+  color: #071c28;
 
-  font-size: 35px;
+  font-size: 29px;
 
-  line-height: 1.25;
+  line-height: 1.2;
 
   font-weight: 900;
 
   text-align: right;
 
   margin-bottom: 4px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 11px rgba(255,255,255,.94);
 }
 
 .event-item {
@@ -1380,23 +1421,17 @@ body {
 
   align-items: flex-start;
 
-  justify-content: flex-start;
-
   gap: 8px;
 
   padding: 2px 0;
 
-  color: #000000;
+  color: #173541;
 
-  font-size: 27px;
+  font-size: 21px;
 
-  line-height: 1.34;
+  line-height: 1.28;
 
   font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 10px rgba(255,255,255,.92);
 
   text-align: right;
 }
@@ -1405,15 +1440,12 @@ body {
   flex:
     0 0 auto;
 
-  font-size: 25px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99);
+  font-size: 20px;
 }
 
 .event-text {
   flex:
-    0 1 auto;
+    1 1 auto;
 
   text-align: right;
 }
@@ -1422,173 +1454,130 @@ body {
   flex:
     0 0 auto;
 
-  margin-right: 7px;
+  margin-right: 5px;
 
-  padding: 0;
+  color: #60747d;
 
-  border: none;
-
-  border-radius: 0;
-
-  color: #000000;
-
-  font-size: 16px;
+  font-size: 13px;
 
   font-weight: 800;
 
   white-space: nowrap;
 }
 
-/* سخن بزرگان */
+/* =========================
+   سخن بزرگان
+   ========================= */
 
 .quote {
-  margin-top: 4px;
+  flex: 0 0 auto;
 
   padding:
-    7px
-    18px;
-
-  background: transparent;
-
-  text-align: right;
-
-  direction: rtl;
+    11px
+    20px
+    12px;
 }
 
 .quote-title {
-  color: #000000;
+  color: #071c28;
 
-  font-size: 35px;
+  font-size: 29px;
 
-  line-height: 1.25;
+  line-height: 1.2;
 
   font-weight: 900;
 
   margin-bottom: 3px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 11px rgba(255,255,255,.94);
 }
 
 .quote-text {
-  color: #000000;
+  color: #173744;
 
-  font-size: 31px;
+  font-size: 24px;
 
-  line-height: 1.32;
+  line-height: 1.30;
 
   font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 11px rgba(255,255,255,.94);
 }
 
 .quote-author {
   margin-top: 4px;
 
-  color: #000000;
+  color: #536c76;
 
-  font-size: 25px;
+  font-size: 17px;
 
-  line-height: 1.32;
+  line-height: 1.3;
 
   font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 9px rgba(255,255,255,.92);
 }
 
-/* جرعه تفکر */
+/* =========================
+   جرعه‌ای تفکر
+   ========================= */
 
 .thought {
-  margin-top: 4px;
+  flex: 0 0 auto;
 
   padding:
-    7px
-    18px;
-
-  background: transparent;
-
-  text-align: right;
-
-  direction: rtl;
+    10px
+    20px
+    11px;
 }
 
 .thought-title {
-  color: #000000;
+  color: #071c28;
 
-  font-size: 34px;
+  font-size: 29px;
 
-  line-height: 1.25;
+  line-height: 1.2;
 
   font-weight: 900;
 
   margin-bottom: 3px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 11px rgba(255,255,255,.94);
 }
 
 .thought-text {
-  color: #000000;
+  color: #173744;
 
-  font-size: 27px;
+  font-size: 22px;
 
-  line-height: 1.32;
+  line-height: 1.30;
 
   font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 10px rgba(255,255,255,.92);
 }
 
-/* شعار پایین تصویر */
+/* =========================
+   شعار نهایی
+   ========================= */
 
 .footer-slogan {
-  margin-top: 0;
+  flex:
+    0 0 auto;
 
-  padding-top: 8px;
+  margin-top: auto;
 
-  padding-bottom: 8px;
+  padding:
+    7px
+    10px
+    3px;
 
-  color: #000000;
+  color: #071c28;
 
-  font-size: 52px;
+  font-size: 39px;
 
-  line-height: 1.22;
+  line-height: 1.18;
 
   font-weight: 900;
 
   text-align: center;
 
   text-shadow:
-    0 2px 3px rgba(255,255,255,.99),
-    0 0 13px rgba(255,255,255,.96);
-}
+    0 2px 4px
+    rgba(255,255,255,.98),
 
-.content {
-  height: 100%;
-  min-height: 100%;
-
-  justify-content: space-between;
-}
-
-.header,
-.date-area,
-.year-area,
-.stats,
-.events,
-.quote,
-.thought {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
+    0 0 12px
+    rgba(255,255,255,.90);
 }
 
 </style>
@@ -1617,7 +1606,11 @@ body {
 
   <div class="content">
 
-    <header class="header">
+    <!-- =====================
+         عنوان اصلی
+         ===================== -->
+
+    <header class="header glass">
 
       <div class="title">
         تقویم روزانه گروه صدای کارکنان ثبت احوال
@@ -1629,7 +1622,12 @@ body {
 
     </header>
 
-    <section class="date-area">
+
+    <!-- =====================
+         تاریخ
+         ===================== -->
+
+    <section class="date-area glass">
 
       <div class="clock">
         ⏰ ${escapeHtml(data.time)}
@@ -1659,7 +1657,12 @@ body {
 
     </section>
 
-    <section class="year-area">
+
+    <!-- =====================
+         پیشرفت سال
+         ===================== -->
+
+    <section class="year-area glass">
 
       <div class="year-head">
 
@@ -1674,7 +1677,9 @@ body {
       </div>
 
       <div class="track">
+
         <div class="fill"></div>
+
       </div>
 
       <div class="year-meta">
@@ -1692,6 +1697,11 @@ body {
       </div>
 
     </section>
+
+
+    <!-- =====================
+         سه کارت اطلاعاتی
+         ===================== -->
 
     <section class="stats">
 
@@ -1711,6 +1721,7 @@ body {
 
       </div>
 
+
       <div class="stat">
 
         <div class="stat-icon">
@@ -1726,6 +1737,7 @@ body {
         </div>
 
       </div>
+
 
       <div class="stat">
 
@@ -1745,7 +1757,12 @@ body {
 
     </section>
 
-    <section class="events">
+
+    <!-- =====================
+         رویدادها و مناسبت‌ها
+         ===================== -->
+
+    <section class="events glass">
 
       <div class="section-title">
         📌 رویدادها و مناسبت‌ها
@@ -1755,7 +1772,12 @@ body {
 
     </section>
 
-    <section class="quote">
+
+    <!-- =====================
+         سخن بزرگان
+         ===================== -->
+
+    <section class="quote glass">
 
       <div class="quote-title">
         🌟 سخن بزرگان
@@ -1766,14 +1788,21 @@ body {
       </div>
 
       <div class="quote-author">
-        گوینده: ${escapeHtml(data.author)}
+        گوینده:
+        ${escapeHtml(data.author)}
         ·
-        منبع: ${escapeHtml(data.source)}
+        منبع:
+        ${escapeHtml(data.source)}
       </div>
 
     </section>
 
-    <section class="thought">
+
+    <!-- =====================
+         جرعه‌ای تفکر
+         ===================== -->
+
+    <section class="thought glass">
 
       <div class="thought-title">
         💡 جرعه‌ای تفکر
@@ -1784,6 +1813,11 @@ body {
       </div>
 
     </section>
+
+
+    <!-- =====================
+         شعار پایین
+         ===================== -->
 
     <div class="footer-slogan">
       هم صدایی برای تحول و بهبود
@@ -2025,14 +2059,16 @@ export async function GET() {
       );
 
     /*
-     * دریافت مناسبت‌های سال و فیلتر دقیق
-     * فقط بر اساس ماه و روز شمسی امروز.
+     * دریافت مناسبت‌های سال
      */
     const allEvents =
       await getEvents(
         persian.year
       );
 
+    /*
+     * فقط مناسبت‌های دقیق همان روز
+     */
     const todayEvents =
       getEventsForDay(
         allEvents,
@@ -2041,8 +2077,7 @@ export async function GET() {
       );
 
     /*
-     * مناسبت‌های بین‌المللی فقط بر اساس
-     * ماه و روز میلادی امروز.
+     * مناسبت‌های بین‌المللی فقط برای امروز
      */
     const internationalEvents =
       getInternationalEvents(
@@ -2140,15 +2175,6 @@ export async function GET() {
               animal
             ),
 
-          /*
-           * مهم:
-           * منبع رویدادهای داخلی از event.text
-           * استفاده می‌کند.
-           *
-           * فیلتر getEventsForDay همچنان قبل از
-           * رسیدن به این قسمت فقط مناسبت همان روز
-           * را عبور می‌دهد.
-           */
           events:
             todayEvents
               .map((event: any) =>
