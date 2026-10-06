@@ -2025,9 +2025,15 @@ export async function GET() {
             ),
 
           events:
-            getEventText(
-              todayEvents
-            ),
+  todayEvents.map((event: any) =>
+    String(
+      event?.event ||
+      event?.title ||
+      event?.name ||
+      event?.description ||
+      ""
+    ).trim()
+  ).filter(Boolean),
 
           internationalEvents,
 
