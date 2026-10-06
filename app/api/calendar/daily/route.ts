@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 const TIME_ZONE = "Asia/Tehran";
 const WIDTH = 1024;
-const HEIGHT = 1536;
+const HEIGHT = 1500;
 
 const digits = "۰۱۲۳۴۵۶۷۸۹";
 
@@ -772,23 +772,35 @@ function createInfographicHtml(data: {
 <style>
 
 @font-face {
-  font-family: Vazirmatn;
-
+  font-family: Estedad;
   src:
-    url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Regular.ttf")
-    format("truetype");
-
+    url("https://cdn.jsdelivr.net/gh/aminabedi68/Estedad@v8.5/fonts/webfonts/Estedad-Regular.woff2")
+    format("woff2");
   font-weight: 400;
 }
 
 @font-face {
-  font-family: Vazirmatn;
-
+  font-family: Estedad;
   src:
-    url("https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Bold.ttf")
-    format("truetype");
-
+    url("https://cdn.jsdelivr.net/gh/aminabedi68/Estedad@v8.5/fonts/webfonts/Estedad-Bold.woff2")
+    format("woff2");
   font-weight: 700;
+}
+
+@font-face {
+  font-family: Estedad;
+  src:
+    url("https://cdn.jsdelivr.net/gh/aminabedi68/Estedad@v8.5/fonts/webfonts/Estedad-ExtraBold.woff2")
+    format("woff2");
+  font-weight: 800;
+}
+
+@font-face {
+  font-family: Estedad;
+  src:
+    url("https://cdn.jsdelivr.net/gh/aminabedi68/Estedad@v8.5/fonts/webfonts/Estedad-Black.woff2")
+    format("woff2");
+  font-weight: 900;
 }
 
 * {
@@ -808,7 +820,8 @@ body {
 
 body {
   font-family:
-    Vazirmatn,
+    Estedad,
+    Tahoma,
     Arial,
     sans-serif;
 
@@ -1532,6 +1545,465 @@ body {
     rgba(255,255,255,.98);
 }
 
+
+/* FINAL VISUAL OVERRIDES */
+
+.nature {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.18) 0%,
+      rgba(255,255,255,.10) 48%,
+      rgba(255,255,255,.20) 100%
+    ),
+    url("https://images.unsplash.com/photo-1629140476741-04d07ddeff60?auto=format&fit=crop&fm=jpg&q=90&w=1800&h=2700");
+
+  background-size:
+    cover,
+    cover;
+
+  background-position:
+    center,
+    center;
+
+  filter:
+    saturate(.96)
+    brightness(1.08);
+}
+
+.content {
+  height: 100%;
+  min-height: 100%;
+  justify-content: space-between;
+}
+
+.header,
+.date-area,
+.year-area,
+.stats,
+.events,
+.quote,
+.thought {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.header {
+  min-height: 165px;
+
+  padding:
+    8px
+    10px
+    10px;
+}
+
+.title {
+  color: #000000;
+
+  font-size: 50px;
+
+  line-height: 1.28;
+
+  font-weight: 900;
+
+  letter-spacing: -.5px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 10px rgba(255,255,255,.92);
+}
+
+.greeting {
+  margin-top: 10px;
+
+  color: #000000;
+
+  font-size: 36px;
+
+  line-height: 1.35;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 10px rgba(255,255,255,.92);
+}
+
+.date-area {
+  min-height: 220px;
+
+  padding:
+    10px
+    18px;
+}
+
+.clock {
+  left: 18px;
+
+  top: 12px;
+
+  padding: 0;
+
+  background: transparent !important;
+
+  border: none !important;
+
+  border-radius: 0;
+
+  color: #000000;
+
+  font-size: 31px;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 9px rgba(255,255,255,.90);
+}
+
+.weekday {
+  color: #000000;
+
+  font-size: 37px;
+
+  line-height: 1.3;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 10px rgba(255,255,255,.92);
+}
+
+.persian-date {
+  margin-top: 0;
+
+  color: #000000;
+
+  font-size: 70px;
+
+  line-height: 1.12;
+
+  font-weight: 900;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 12px rgba(255,255,255,.94);
+}
+
+.date-lines {
+  margin-top: 10px;
+
+  gap: 32px;
+
+  color: #000000;
+
+  font-size: 27px;
+
+  line-height: 1.35;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 9px rgba(255,255,255,.90);
+}
+
+.year-area {
+  margin-top: 4px;
+
+  padding:
+    8px
+    18px;
+}
+
+.year-title,
+.year-percent {
+  color: #000000;
+
+  font-size: 29px;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 8px rgba(255,255,255,.90);
+}
+
+.track {
+  height: 20px;
+
+  margin-top: 7px;
+
+  padding: 3px;
+
+  background:
+    rgba(255,255,255,.48);
+
+  border:
+    1px solid
+    rgba(0,0,0,.30);
+}
+
+.fill {
+  height: 14px;
+
+  background:
+    #000000;
+}
+
+.year-meta {
+  margin-top: 5px;
+
+  color: #000000;
+
+  font-size: 22px;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 8px rgba(255,255,255,.90);
+}
+
+.stats {
+  margin-top: 4px;
+}
+
+.stat {
+  padding:
+    5px
+    7px;
+
+  background:
+    transparent !important;
+
+  border:
+    none !important;
+}
+
+.stat-icon {
+  font-size: 35px;
+
+  text-shadow:
+    0 2px 4px
+    rgba(255,255,255,.98);
+}
+
+.stat-label {
+  margin-top: 2px;
+
+  color: #000000;
+
+  font-size: 21px;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 8px rgba(255,255,255,.90);
+}
+
+.stat-value {
+  margin-top: 1px;
+
+  color: #000000;
+
+  font-size: 23px;
+
+  line-height: 1.25;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 8px rgba(255,255,255,.90);
+}
+
+.events {
+  margin-top: 4px;
+
+  padding:
+    7px
+    18px;
+}
+
+.section-title {
+  color: #000000;
+
+  font-size: 33px;
+
+  line-height: 1.25;
+
+  font-weight: 900;
+
+  margin-bottom: 4px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 10px rgba(255,255,255,.92);
+}
+
+.event-item {
+  gap: 8px;
+
+  padding:
+    2px 0;
+
+  color: #000000;
+
+  font-size: 24px;
+
+  line-height: 1.35;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 9px rgba(255,255,255,.90);
+}
+
+.event-dot {
+  font-size: 23px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98);
+}
+
+.international {
+  margin-right: 7px;
+
+  padding: 0;
+
+  background:
+    transparent !important;
+
+  border:
+    none !important;
+
+  color: #000000;
+
+  font-size: 15px;
+
+  font-weight: 800;
+}
+
+.quote {
+  margin-top: 4px;
+
+  padding:
+    7px
+    18px;
+}
+
+.quote-title {
+  color: #000000;
+
+  font-size: 32px;
+
+  line-height: 1.25;
+
+  font-weight: 900;
+
+  margin-bottom: 3px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 10px rgba(255,255,255,.92);
+}
+
+.quote-text {
+  color: #000000;
+
+  font-size: 29px;
+
+  line-height: 1.34;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 10px rgba(255,255,255,.92);
+}
+
+.quote-author {
+  margin-top: 4px;
+
+  color: #000000;
+
+  font-size: 24px;
+
+  line-height: 1.35;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 9px rgba(255,255,255,.90);
+}
+
+.thought {
+  margin-top: 4px;
+
+  padding:
+    7px
+    18px;
+}
+
+.thought-title {
+  color: #000000;
+
+  font-size: 31px;
+
+  line-height: 1.25;
+
+  font-weight: 900;
+
+  margin-bottom: 3px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 10px rgba(255,255,255,.92);
+}
+
+.thought-text {
+  color: #000000;
+
+  font-size: 25px;
+
+  line-height: 1.34;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 9px rgba(255,255,255,.90);
+}
+
+.footer-slogan {
+  margin-top: 0;
+
+  padding-top: 8px;
+
+  padding-bottom: 8px;
+
+  color: #000000;
+
+  font-size: 50px;
+
+  line-height: 1.25;
+
+  font-weight: 900;
+
+  text-align: center;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.98),
+    0 0 12px rgba(255,255,255,.94);
+}
+
 </style>
 
 </head>
@@ -1707,9 +2179,9 @@ body {
       </div>
 
       <div class="quote-author">
-        — ${escapeHtml(data.author)}
+        گوینده: ${escapeHtml(data.author)}
         ·
-        ${escapeHtml(data.source)}
+        منبع: ${escapeHtml(data.source)}
       </div>
 
     </section>
@@ -2082,15 +2554,17 @@ export async function GET() {
             ),
 
           events:
-  todayEvents.map((event: any) =>
-    String(
-      event?.event ||
-      event?.title ||
-      event?.name ||
-      event?.description ||
-      ""
-    ).trim()
-  ).filter(Boolean),
+            todayEvents
+              .map((event: any) =>
+                String(
+                  event?.event ||
+                  event?.title ||
+                  event?.name ||
+                  event?.description ||
+                  ""
+                ).trim()
+              )
+              .filter(Boolean),
 
           internationalEvents,
 
@@ -2158,4 +2632,4 @@ export async function GET() {
       }
     );
   }
-}
+    }
