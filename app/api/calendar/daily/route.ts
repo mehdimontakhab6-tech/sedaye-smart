@@ -382,6 +382,27 @@ function getEventsForDay(
   });
 }
 
+/* =====================================
+   حذف تاریخ ابتدای متن مناسبت
+   مثال:
+   ۱۴ مهر روز دامپزشکی
+   →
+   روز دامپزشکی
+   ===================================== */
+
+function cleanEventText(value: string) {
+  return String(value)
+    .replace(
+      /^\s*[۰-۹0-9]{1,2}\s+(?:فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s*/,
+      ""
+    )
+    .replace(
+      /^\s*[۰-۹0-9]{1,2}\s*[\/\-]\s*[۰-۹0-9]{1,2}\s*/,
+      ""
+    )
+    .trim();
+}
+
 function getInternationalEvents(
   month: number,
   day: number
@@ -693,7 +714,7 @@ function createInfographicHtml(data: {
 
   const allEvents = [
     ...data.events.map((x) => ({
-      text: x,
+      text: cleanEventText(x),
       international: false,
     })),
     ...data.internationalEvents.map((x) => ({
@@ -932,13 +953,13 @@ body {
 
   color: #071f17;
 
-  font-size: 46px;
+  font-size: 50px;
 
   line-height: 1.15;
 
   font-weight: 900;
 
-  letter-spacing: -1px;
+  letter-spacing: -2px;
 
   text-shadow:
     0 2px 4px
@@ -950,7 +971,7 @@ body {
 
   color: #275543;
 
-  font-size: 25px;
+  font-size: 27px;
 
   line-height: 1.15;
 
@@ -979,7 +1000,7 @@ body {
 
   color: #183c30;
 
-  font-size: 25px;
+  font-size: 27px;
 
   font-weight: 900;
 
@@ -989,7 +1010,7 @@ body {
 .weekday {
   color: #315b49;
 
-  font-size: 27px;
+  font-size: 29px;
 
   line-height: 1.15;
 
@@ -1001,7 +1022,7 @@ body {
 
   color: #071e17;
 
-  font-size: 70px;
+  font-size: 74px;
 
   line-height: 1.03;
 
@@ -1025,7 +1046,7 @@ body {
 
   color: #38594e;
 
-  font-size: 20px;
+  font-size: 22px;
 
   line-height: 1.3;
 
@@ -1058,7 +1079,7 @@ body {
 .year-percent {
   color: #183e31;
 
-  font-size: 23px;
+  font-size: 25px;
 
   font-weight: 900;
 }
@@ -1108,7 +1129,7 @@ body {
 
   color: #46655a;
 
-  font-size: 17px;
+  font-size: 19px;
 
   font-weight: 800;
 }
@@ -1167,7 +1188,7 @@ body {
 }
 
 .stat-icon {
-  font-size: 29px;
+  font-size: 31px;
 
   line-height: 1;
 }
@@ -1177,7 +1198,7 @@ body {
 
   color: #527064;
 
-  font-size: 16px;
+  font-size: 18px;
 
   line-height: 1.15;
 
@@ -1189,7 +1210,7 @@ body {
 
   color: #0c2b20;
 
-  font-size: 20px;
+  font-size: 22px;
 
   line-height: 1.2;
 
@@ -1215,7 +1236,7 @@ body {
 .section-title {
   color: #071f17;
 
-  font-size: 29px;
+  font-size: 31px;
 
   line-height: 1.2;
 
@@ -1241,7 +1262,7 @@ body {
 
   color: #23463a;
 
-  font-size: 21px;
+  font-size: 23px;
 
   line-height: 1.32;
 
@@ -1253,7 +1274,7 @@ body {
 .event-dot {
   flex: 0 0 auto;
 
-  font-size: 21px;
+  font-size: 23px;
 
   line-height: 1.25;
 }
@@ -1273,7 +1294,7 @@ body {
 
   color: #668077;
 
-  font-size: 13px;
+  font-size: 15px;
 
   font-weight: 800;
 
@@ -1297,7 +1318,7 @@ body {
 .quote-title {
   color: #071f17;
 
-  font-size: 29px;
+  font-size: 31px;
 
   line-height: 1.2;
 
@@ -1309,7 +1330,7 @@ body {
 .quote-text {
   color: #23483b;
 
-  font-size: 25px;
+  font-size: 27px;
 
   line-height: 1.45;
 
@@ -1321,7 +1342,7 @@ body {
 
   color: #5a736a;
 
-  font-size: 18px;
+  font-size: 20px;
 
   line-height: 1.35;
 
@@ -1345,7 +1366,7 @@ body {
 .thought-title {
   color: #071f17;
 
-  font-size: 29px;
+  font-size: 31px;
 
   line-height: 1.2;
 
@@ -1357,7 +1378,7 @@ body {
 .thought-text {
   color: #23483b;
 
-  font-size: 25px;
+  font-size: 27px;
 
   line-height: 1.45;
 
@@ -1383,7 +1404,7 @@ body {
 
   color: #ffffff;
 
-  font-size: 36px;
+  font-size: 39px;
 
   line-height: 1.2;
 
