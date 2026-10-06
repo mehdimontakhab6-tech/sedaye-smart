@@ -771,37 +771,12 @@ function createInfographicHtml(data: {
 
 <style>
 
-@font-face {
-  font-family: Estedad;
-  src:
-    url("https://cdn.jsdelivr.net/gh/aminabedi68/Estedad@v8.5/fonts/webfonts/Estedad-Regular.woff2")
-    format("woff2");
-  font-weight: 400;
-}
-
-@font-face {
-  font-family: Estedad;
-  src:
-    url("https://cdn.jsdelivr.net/gh/aminabedi68/Estedad@v8.5/fonts/webfonts/Estedad-Bold.woff2")
-    format("woff2");
-  font-weight: 700;
-}
-
-@font-face {
-  font-family: Estedad;
-  src:
-    url("https://cdn.jsdelivr.net/gh/aminabedi68/Estedad@v8.5/fonts/webfonts/Estedad-ExtraBold.woff2")
-    format("woff2");
-  font-weight: 800;
-}
-
-@font-face {
-  font-family: Estedad;
-  src:
-    url("https://cdn.jsdelivr.net/gh/aminabedi68/Estedad@v8.5/fonts/webfonts/Estedad-Black.woff2")
-    format("woff2");
-  font-weight: 900;
-}
+/*
+ * فونت جدید:
+ * خواناتر، ضخیم‌تر و مناسب‌تر برای متن فارسی
+ * در تصویر ۱۰۲۴×۱۵۰۰
+ */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&display=swap");
 
 * {
   box-sizing: border-box;
@@ -820,7 +795,7 @@ body {
 
 body {
   font-family:
-    Estedad,
+    "Noto Sans Arabic",
     Tahoma,
     Arial,
     sans-serif;
@@ -863,11 +838,12 @@ body {
   background-image:
     linear-gradient(
       180deg,
-      rgba(255,255,255,.10) 0%,
-      rgba(255,255,255,.08) 42%,
-      rgba(255,255,255,.18) 100%
+      rgba(255,255,255,.08) 0%,
+      rgba(255,255,255,.04) 38%,
+      rgba(255,255,255,.12) 72%,
+      rgba(255,255,255,.20) 100%
     ),
-    url("https://images.unsplash.com/photo-1502120574417-d89e8a3e66eb?auto=format&fit=crop&fm=jpg&q=85&w=1600");
+    url("https://images.unsplash.com/photo-1629140476741-04d07ddeff60?auto=format&fit=crop&fm=jpg&q=92&w=1800&h=2700");
 
   background-size:
     cover,
@@ -880,6 +856,11 @@ body {
   background-repeat:
     no-repeat,
     no-repeat;
+
+  filter:
+    saturate(1.08)
+    brightness(1.10)
+    contrast(1.02);
 }
 
 .sun {
@@ -1068,7 +1049,7 @@ body {
 /* عنوان */
 
 .header {
-  min-height: 170px;
+  min-height: 165px;
 
   display: flex;
 
@@ -1081,139 +1062,144 @@ body {
   text-align: center;
 
   padding:
-    5px
-    15px
-    12px;
+    8px
+    10px
+    10px;
 }
 
 .title {
   color: #000000;
 
-  font-size: 52px;
+  font-size: 56px;
 
-  line-height: 1.3;
+  line-height: 1.25;
 
-  font-weight: 700;
+  font-weight: 900;
+
+  letter-spacing: -.6px;
 
   text-shadow:
-    0 2px 8px
-    rgba(255,255,255,.98);
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 12px rgba(255,255,255,.96);
 }
 
 .greeting {
-  margin-top: 12px;
+  margin-top: 10px;
 
   color: #000000;
 
-  font-size: 38px;
+  font-size: 42px;
 
-  line-height: 1.35;
+  line-height: 1.32;
 
-  font-weight: 700;
+  font-weight: 800;
 
   text-shadow:
-    0 2px 8px
-    rgba(255,255,255,.98);
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 11px rgba(255,255,255,.94);
 }
 
 /* تاریخ */
 
 .date-area {
-  min-height: 235px;
+  min-height: 220px;
 
   padding:
-    15px
-    24px
-    15px;
+    10px
+    18px;
 
   position: relative;
 
   text-align: right;
 
-  background:
-    rgba(255,255,255,.78);
-
-  border: none;
+  background: transparent;
 }
 
 .clock {
   position: absolute;
 
-  left: 20px;
-  top: 18px;
+  left: 18px;
+  top: 12px;
 
-  padding:
-    8px
-    15px;
+  padding: 0;
 
-  border-radius: 18px;
+  border-radius: 0;
 
-  background:
-    rgba(255,255,255,.96);
+  background: transparent !important;
 
   color: #000000;
 
-  font-size: 32px;
+  font-size: 34px;
 
-  font-weight: 700;
+  font-weight: 900;
 
-  border: none;
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 10px rgba(255,255,255,.94);
 }
 
 .weekday {
   color: #000000;
 
-  font-size: 36px;
+  font-size: 42px;
 
-  line-height: 1.35;
+  line-height: 1.3;
 
-  font-weight: 700;
+  font-weight: 900;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 11px rgba(255,255,255,.94);
 }
 
 .persian-date {
-  margin-top: 2px;
+  margin-top: 0;
 
   color: #000000;
 
-  font-size: 74px;
+  font-size: 78px;
 
-  line-height: 1.15;
+  line-height: 1.10;
 
-  font-weight: 700;
+  font-weight: 900;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 13px rgba(255,255,255,.96);
 }
 
 .date-lines {
-  margin-top: 12px;
+  margin-top: 10px;
 
   display: flex;
 
   flex-direction: row-reverse;
 
-  gap: 38px;
+  gap: 32px;
 
   color: #000000;
 
-  font-size: 27px;
+  font-size: 29px;
 
-  line-height: 1.4;
+  line-height: 1.35;
 
-  font-weight: 700;
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 9px rgba(255,255,255,.92);
 }
 
 /* پیشرفت سال */
 
 .year-area {
-  margin-top: 8px;
+  margin-top: 4px;
 
   padding:
-    12px
-    22px
-    12px;
+    8px
+    18px;
 
-  background:
-    rgba(255,255,255,.80);
-
-  border: none;
+  background: transparent;
 }
 
 .year-head {
@@ -1230,32 +1216,38 @@ body {
 .year-percent {
   color: #000000;
 
-  font-size: 31px;
+  font-size: 32px;
 
-  font-weight: 700;
+  font-weight: 900;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 9px rgba(255,255,255,.92);
 }
 
 .track {
   width: 100%;
 
-  height: 22px;
+  height: 21px;
 
-  margin-top: 9px;
+  margin-top: 7px;
 
   padding: 3px;
 
   border-radius: 20px;
 
   background:
-    rgba(0,0,0,.10);
+    rgba(255,255,255,.52);
 
-  border: none;
+  border:
+    1px solid
+    rgba(0,0,0,.28);
 }
 
 .fill {
   width: ${progressValue}%;
 
-  height: 16px;
+  height: 15px;
 
   border-radius: 20px;
 
@@ -1264,7 +1256,7 @@ body {
 }
 
 .year-meta {
-  margin-top: 6px;
+  margin-top: 5px;
 
   display: flex;
 
@@ -1274,24 +1266,25 @@ body {
 
   color: #000000;
 
-  font-size: 23px;
+  font-size: 24px;
 
-  font-weight: 700;
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 8px rgba(255,255,255,.92);
 }
 
 /* اطلاعات */
 
 .stats {
-  margin-top: 8px;
+  margin-top: 4px;
 
   display: flex;
 
   flex-direction: row-reverse;
 
-  background:
-    rgba(255,255,255,.80);
-
-  border: none;
+  background: transparent;
 }
 
 .stat {
@@ -1300,52 +1293,60 @@ body {
   text-align: center;
 
   padding:
-    9px
-    8px;
+    5px
+    7px;
 
   border: none;
 }
 
 .stat-icon {
   font-size: 38px;
+
+  text-shadow:
+    0 2px 4px
+    rgba(255,255,255,.98);
 }
 
 .stat-label {
-  margin-top: 3px;
-
-  color: #000000;
-
-  font-size: 22px;
-
-  font-weight: 700;
-}
-
-.stat-value {
   margin-top: 2px;
 
   color: #000000;
 
-  font-size: 24px;
+  font-size: 23px;
 
-  line-height: 1.3;
+  font-weight: 800;
 
-  font-weight: 700;
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 8px rgba(255,255,255,.92);
+}
+
+.stat-value {
+  margin-top: 1px;
+
+  color: #000000;
+
+  font-size: 25px;
+
+  line-height: 1.25;
+
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 8px rgba(255,255,255,.92);
 }
 
 /* مناسبت‌ها */
 
 .events {
-  margin-top: 8px;
+  margin-top: 4px;
 
   padding:
-    12px
-    22px
-    12px;
+    7px
+    18px;
 
-  background:
-    rgba(255,255,255,.88);
-
-  border: none;
+  background: transparent;
 
   text-align: right;
 
@@ -1357,13 +1358,17 @@ body {
 
   font-size: 35px;
 
-  line-height: 1.3;
+  line-height: 1.25;
 
-  font-weight: 700;
+  font-weight: 900;
 
   text-align: right;
 
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 11px rgba(255,255,255,.94);
 }
 
 .event-item {
@@ -1377,17 +1382,21 @@ body {
 
   justify-content: flex-start;
 
-  gap: 9px;
+  gap: 8px;
 
-  padding: 3px 0;
+  padding: 2px 0;
 
   color: #000000;
 
-  font-size: 25px;
+  font-size: 27px;
 
-  line-height: 1.4;
+  line-height: 1.34;
 
-  font-weight: 700;
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 10px rgba(255,255,255,.92);
 
   text-align: right;
 }
@@ -1396,7 +1405,10 @@ body {
   flex:
     0 0 auto;
 
-  font-size: 24px;
+  font-size: 25px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99);
 }
 
 .event-text {
@@ -1410,21 +1422,19 @@ body {
   flex:
     0 0 auto;
 
-  margin-right: 8px;
+  margin-right: 7px;
 
-  padding:
-    2px
-    7px;
+  padding: 0;
 
   border: none;
 
-  border-radius: 8px;
+  border-radius: 0;
 
   color: #000000;
 
-  font-size: 15px;
+  font-size: 16px;
 
-  font-weight: 700;
+  font-weight: 800;
 
   white-space: nowrap;
 }
@@ -1432,17 +1442,13 @@ body {
 /* سخن بزرگان */
 
 .quote {
-  margin-top: 8px;
+  margin-top: 4px;
 
   padding:
-    12px
-    22px
-    12px;
+    7px
+    18px;
 
-  background:
-    rgba(255,255,255,.88);
-
-  border: none;
+  background: transparent;
 
   text-align: right;
 
@@ -1452,49 +1458,59 @@ body {
 .quote-title {
   color: #000000;
 
-  font-size: 34px;
+  font-size: 35px;
 
-  font-weight: 700;
+  line-height: 1.25;
 
-  margin-bottom: 5px;
+  font-weight: 900;
+
+  margin-bottom: 3px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 11px rgba(255,255,255,.94);
 }
 
 .quote-text {
   color: #000000;
 
-  font-size: 29px;
+  font-size: 31px;
 
-  line-height: 1.4;
+  line-height: 1.32;
 
-  font-weight: 700;
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 11px rgba(255,255,255,.94);
 }
 
 .quote-author {
-  margin-top: 5px;
+  margin-top: 4px;
 
   color: #000000;
 
-  font-size: 21px;
+  font-size: 25px;
 
-  line-height: 1.4;
+  line-height: 1.32;
 
-  font-weight: 700;
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 9px rgba(255,255,255,.92);
 }
 
 /* جرعه تفکر */
 
 .thought {
-  margin-top: 8px;
+  margin-top: 4px;
 
   padding:
-    12px
-    22px
-    12px;
+    7px
+    18px;
 
-  background:
-    rgba(255,255,255,.88);
-
-  border: none;
+  background: transparent;
 
   text-align: right;
 
@@ -1506,9 +1522,15 @@ body {
 
   font-size: 34px;
 
-  font-weight: 700;
+  line-height: 1.25;
 
-  margin-bottom: 5px;
+  font-weight: 900;
+
+  margin-bottom: 3px;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 11px rgba(255,255,255,.94);
 }
 
 .thought-text {
@@ -1516,64 +1538,43 @@ body {
 
   font-size: 27px;
 
-  line-height: 1.4;
+  line-height: 1.32;
 
-  font-weight: 700;
+  font-weight: 800;
+
+  text-shadow:
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 10px rgba(255,255,255,.92);
 }
 
 /* شعار پایین تصویر */
 
 .footer-slogan {
-  margin-top: auto;
+  margin-top: 0;
 
-  padding-top: 12px;
+  padding-top: 8px;
 
   padding-bottom: 8px;
 
   color: #000000;
 
-  font-size: 30px;
+  font-size: 52px;
 
-  line-height: 1.3;
+  line-height: 1.22;
 
-  font-weight: 700;
+  font-weight: 900;
 
   text-align: center;
 
   text-shadow:
-    0 2px 8px
-    rgba(255,255,255,.98);
-}
-
-
-/* FINAL VISUAL OVERRIDES */
-
-.nature {
-  background-image:
-    linear-gradient(
-      180deg,
-      rgba(255,255,255,.18) 0%,
-      rgba(255,255,255,.10) 48%,
-      rgba(255,255,255,.20) 100%
-    ),
-    url("https://images.unsplash.com/photo-1629140476741-04d07ddeff60?auto=format&fit=crop&fm=jpg&q=90&w=1800&h=2700");
-
-  background-size:
-    cover,
-    cover;
-
-  background-position:
-    center,
-    center;
-
-  filter:
-    saturate(.96)
-    brightness(1.08);
+    0 2px 3px rgba(255,255,255,.99),
+    0 0 13px rgba(255,255,255,.96);
 }
 
 .content {
   height: 100%;
   min-height: 100%;
+
   justify-content: space-between;
 }
 
@@ -1588,420 +1589,6 @@ body {
   border: none !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
-}
-
-.header {
-  min-height: 165px;
-
-  padding:
-    8px
-    10px
-    10px;
-}
-
-.title {
-  color: #000000;
-
-  font-size: 50px;
-
-  line-height: 1.28;
-
-  font-weight: 900;
-
-  letter-spacing: -.5px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 10px rgba(255,255,255,.92);
-}
-
-.greeting {
-  margin-top: 10px;
-
-  color: #000000;
-
-  font-size: 36px;
-
-  line-height: 1.35;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 10px rgba(255,255,255,.92);
-}
-
-.date-area {
-  min-height: 220px;
-
-  padding:
-    10px
-    18px;
-}
-
-.clock {
-  left: 18px;
-
-  top: 12px;
-
-  padding: 0;
-
-  background: transparent !important;
-
-  border: none !important;
-
-  border-radius: 0;
-
-  color: #000000;
-
-  font-size: 31px;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 9px rgba(255,255,255,.90);
-}
-
-.weekday {
-  color: #000000;
-
-  font-size: 37px;
-
-  line-height: 1.3;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 10px rgba(255,255,255,.92);
-}
-
-.persian-date {
-  margin-top: 0;
-
-  color: #000000;
-
-  font-size: 70px;
-
-  line-height: 1.12;
-
-  font-weight: 900;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 12px rgba(255,255,255,.94);
-}
-
-.date-lines {
-  margin-top: 10px;
-
-  gap: 32px;
-
-  color: #000000;
-
-  font-size: 27px;
-
-  line-height: 1.35;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 9px rgba(255,255,255,.90);
-}
-
-.year-area {
-  margin-top: 4px;
-
-  padding:
-    8px
-    18px;
-}
-
-.year-title,
-.year-percent {
-  color: #000000;
-
-  font-size: 29px;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 8px rgba(255,255,255,.90);
-}
-
-.track {
-  height: 20px;
-
-  margin-top: 7px;
-
-  padding: 3px;
-
-  background:
-    rgba(255,255,255,.48);
-
-  border:
-    1px solid
-    rgba(0,0,0,.30);
-}
-
-.fill {
-  height: 14px;
-
-  background:
-    #000000;
-}
-
-.year-meta {
-  margin-top: 5px;
-
-  color: #000000;
-
-  font-size: 22px;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 8px rgba(255,255,255,.90);
-}
-
-.stats {
-  margin-top: 4px;
-}
-
-.stat {
-  padding:
-    5px
-    7px;
-
-  background:
-    transparent !important;
-
-  border:
-    none !important;
-}
-
-.stat-icon {
-  font-size: 35px;
-
-  text-shadow:
-    0 2px 4px
-    rgba(255,255,255,.98);
-}
-
-.stat-label {
-  margin-top: 2px;
-
-  color: #000000;
-
-  font-size: 21px;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 8px rgba(255,255,255,.90);
-}
-
-.stat-value {
-  margin-top: 1px;
-
-  color: #000000;
-
-  font-size: 23px;
-
-  line-height: 1.25;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 8px rgba(255,255,255,.90);
-}
-
-.events {
-  margin-top: 4px;
-
-  padding:
-    7px
-    18px;
-}
-
-.section-title {
-  color: #000000;
-
-  font-size: 33px;
-
-  line-height: 1.25;
-
-  font-weight: 900;
-
-  margin-bottom: 4px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 10px rgba(255,255,255,.92);
-}
-
-.event-item {
-  gap: 8px;
-
-  padding:
-    2px 0;
-
-  color: #000000;
-
-  font-size: 24px;
-
-  line-height: 1.35;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 9px rgba(255,255,255,.90);
-}
-
-.event-dot {
-  font-size: 23px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98);
-}
-
-.international {
-  margin-right: 7px;
-
-  padding: 0;
-
-  background:
-    transparent !important;
-
-  border:
-    none !important;
-
-  color: #000000;
-
-  font-size: 15px;
-
-  font-weight: 800;
-}
-
-.quote {
-  margin-top: 4px;
-
-  padding:
-    7px
-    18px;
-}
-
-.quote-title {
-  color: #000000;
-
-  font-size: 32px;
-
-  line-height: 1.25;
-
-  font-weight: 900;
-
-  margin-bottom: 3px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 10px rgba(255,255,255,.92);
-}
-
-.quote-text {
-  color: #000000;
-
-  font-size: 29px;
-
-  line-height: 1.34;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 10px rgba(255,255,255,.92);
-}
-
-.quote-author {
-  margin-top: 4px;
-
-  color: #000000;
-
-  font-size: 24px;
-
-  line-height: 1.35;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 9px rgba(255,255,255,.90);
-}
-
-.thought {
-  margin-top: 4px;
-
-  padding:
-    7px
-    18px;
-}
-
-.thought-title {
-  color: #000000;
-
-  font-size: 31px;
-
-  line-height: 1.25;
-
-  font-weight: 900;
-
-  margin-bottom: 3px;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 10px rgba(255,255,255,.92);
-}
-
-.thought-text {
-  color: #000000;
-
-  font-size: 25px;
-
-  line-height: 1.34;
-
-  font-weight: 800;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 9px rgba(255,255,255,.90);
-}
-
-.footer-slogan {
-  margin-top: 0;
-
-  padding-top: 8px;
-
-  padding-bottom: 8px;
-
-  color: #000000;
-
-  font-size: 50px;
-
-  line-height: 1.25;
-
-  font-weight: 900;
-
-  text-align: center;
-
-  text-shadow:
-    0 2px 3px rgba(255,255,255,.98),
-    0 0 12px rgba(255,255,255,.94);
 }
 
 </style>
@@ -2553,10 +2140,20 @@ export async function GET() {
               animal
             ),
 
+          /*
+           * مهم:
+           * منبع رویدادهای داخلی از event.text
+           * استفاده می‌کند.
+           *
+           * فیلتر getEventsForDay همچنان قبل از
+           * رسیدن به این قسمت فقط مناسبت همان روز
+           * را عبور می‌دهد.
+           */
           events:
             todayEvents
               .map((event: any) =>
                 String(
+                  event?.text ||
                   event?.event ||
                   event?.title ||
                   event?.name ||
@@ -2632,4 +2229,4 @@ export async function GET() {
       }
     );
   }
-    }
+}
