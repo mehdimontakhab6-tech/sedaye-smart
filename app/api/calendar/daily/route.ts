@@ -135,6 +135,16 @@ function getPersianZodiac(month: number) {
   return signs[month - 1] || "";
 }
 
+/*
+ * تقویم حیوانی سال‌های ایرانی
+ *
+ * ۱۴۰۰ = گاو
+ * ۱۴۰۱ = ببر
+ * ۱۴۰۲ = خرگوش
+ * ۱۴۰۳ = اژدها
+ * ۱۴۰۴ = مار
+ * ۱۴۰۵ = اسب
+ */
 function getAnimal(year: number) {
   const animals = [
     "موش",
@@ -151,7 +161,94 @@ function getAnimal(year: number) {
     "خوک",
   ];
 
-  return animals[((year - 4) % 12 + 12) % 12];
+  const index =
+    ((year - 1399) % 12 + 12) % 12;
+
+  return animals[index];
+}
+
+function getAnimalEmoji(animal: string) {
+  const emojis: Record<string, string> = {
+    موش: "🐀",
+    گاو: "🐂",
+    ببر: "🐅",
+    خرگوش: "🐇",
+    اژدها: "🐉",
+    مار: "🐍",
+    اسب: "🐎",
+    بز: "🐐",
+    میمون: "🐒",
+    خروس: "🐓",
+    سگ: "🐕",
+    خوک: "🐖",
+  };
+
+  return emojis[animal] || "✨";
+}
+
+function getSeason(month: number) {
+  if (month >= 1 && month <= 3) return "spring";
+  if (month >= 4 && month <= 6) return "summer";
+  if (month >= 7 && month <= 9) return "autumn";
+  return "winter";
+}
+
+function getSeasonData(month: number) {
+  const season = getSeason(month);
+
+  if (season === "spring") {
+    return {
+      title: "بهار",
+      sky1: "#73c9ef",
+      sky2: "#dff6ff",
+      sun: "#ffd45a",
+      mountain: "#789f76",
+      mountainDark: "#4c7858",
+      forest: "#327653",
+      ground: "#8bbf72",
+      flower: "#f5a6b8",
+    };
+  }
+
+  if (season === "summer") {
+    return {
+      title: "تابستان",
+      sky1: "#35a9e8",
+      sky2: "#d7f3ff",
+      sun: "#ffd447",
+      mountain: "#648f72",
+      mountainDark: "#3d694f",
+      forest: "#246947",
+      ground: "#5c9a55",
+      flower: "#f3d65c",
+    };
+  }
+
+  if (season === "autumn") {
+    return {
+      title: "پاییز",
+      sky1: "#79b9d1",
+      sky2: "#f8e4bd",
+      sun: "#f6bd45",
+      mountain: "#85735b",
+      mountainDark: "#5e594b",
+      forest: "#a76535",
+      ground: "#a87943",
+      flower: "#d98639",
+    };
+  }
+
+  return {
+    title: "زمستان",
+    sky1: "#79b5d8",
+    sky2: "#e9f5fc",
+    sun: "#f8d56d",
+    mountain: "#8297a4",
+    mountainDark: "#607481",
+    forest: "#45695f",
+    ground: "#e7f1f5",
+    flower: "#ffffff",
+  };
 }
 
 function getMoonPhase(date: Date) {
@@ -188,16 +285,12 @@ async function getHijriDate(gregorian: string) {
       }
     );
 
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return null;
 
     const json = await response.json();
     const hijri = json?.data?.hijri;
 
-    if (!hijri) {
-      return null;
-    }
+    if (!hijri) return null;
 
     return {
       day: hijri.day,
@@ -223,9 +316,7 @@ async function getEvents(persianYear: number) {
       }
     );
 
-    if (!response.ok) {
-      return [];
-    }
+    if (!response.ok) return [];
 
     const data = await response.json();
 
@@ -314,261 +405,210 @@ function getEventText(events: any[]) {
       ).trim()
     )
     .filter(Boolean)
-    .slice(0, 5);
+    .slice(0, 6);
 }
 
 /*
- * برای هر روز ماه یک محتوای متفاوت.
- * روزهای 1 تا 31 هر کدام متن مخصوص خودشان را دارند.
+ * محتوای روزانه
+ *
+ * عمداً از حوزه‌های مختلف استفاده شده:
+ * دانش، ادبیات، علم، مدیریت، ورزش، فناوری،
+ * کارآفرینی، فرهنگ و اندیشه.
+ *
+ * نقل‌قول‌های خیلی کوتاه نگه داشته شده‌اند.
  */
 const DAILY_CONTENT = [
   {
-    quote:
-      "تو نیکی می‌کن و در دجله انداز، که ایزد در بیابانت دهد باز",
-    author: "سعدی",
-    source: "گلستان",
-    thought:
-      "امروز کدام کار خیر را می‌توانم بدون انتظار جبران انجام دهم؟",
+    quote: "دانش، آغاز خرد است.",
+    author: "سقراط",
+    source: "حکمت منسوب",
+    thought: "امروز چه چیزی می‌توانم یاد بگیرم که فردای من را بهتر کند؟",
   },
   {
-    quote:
-      "بنی آدم اعضای یکدیگرند",
-    author: "سعدی",
-    source: "گلستان",
-    thought:
-      "در رفتار امروز من، سهم همدلی با دیگران چقدر است؟",
-  },
-  {
-    quote:
-      "نابرده رنج گنج میسر نمی‌شود",
-    author: "سعدی",
-    source: "گلستان",
-    thought:
-      "برای رسیدن به هدفم، امروز چه گام کوچکی باید بردارم؟",
-  },
-  {
-    quote:
-      "هر که ناموخت از گذشت روزگار، نیز ناموزد ز هیچ آموزگار",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "از تجربه دیروز چه درسی می‌توانم برای امروز بگیرم؟",
-  },
-  {
-    quote:
-      "این قافله عمر عجب می‌گذرد",
-    author: "خیام",
-    source: "رباعیات",
-    thought:
-      "اگر امروز تکرارشدنی نباشد، چگونه آن را بهتر زندگی می‌کنم؟",
-  },
-  {
-    quote:
-      "توانا بود هر که دانا بود",
-    author: "فردوسی",
-    source: "شاهنامه",
-    thought:
-      "کدام دانشی می‌تواند امروز توانایی من را بیشتر کند؟",
-  },
-  {
-    quote:
-      "ز گهواره تا گور دانش بجوی",
-    author: "حدیث مشهور",
+    quote: "موفقیت، مجموع تلاش‌های کوچک روزانه است.",
+    author: "رابرت کولیر",
     source: "نقل مشهور",
-    thought:
-      "امروز چه چیز تازه‌ای می‌توانم یاد بگیرم؟",
+    thought: "کدام کار کوچک امروز می‌تواند در آینده نتیجه بزرگی بسازد؟",
   },
   {
-    quote:
-      "کار نیکو کردن از پر کردن است",
-    author: "ضرب‌المثل فارسی",
-    source: "ضرب‌المثل",
-    thought:
-      "کدام مهارت با تمرین بیشتر در من بهتر می‌شود؟",
+    quote: "هرگز تسلیم نشو.",
+    author: "وینستون چرچیل",
+    source: "نقل مشهور",
+    thought: "در برابر سختی امروز، کجا می‌توانم یک قدم دیگر ادامه بدهم؟",
   },
   {
-    quote:
-      "رهرو آن نیست که گه تند و گهی خسته رود",
-    author: "سعدی",
-    source: "غزل سعدی",
-    thought:
-      "آیا در مسیر هدفم پیوستگی دارم یا فقط گاهی تلاش می‌کنم؟",
+    quote: "آینده به کسانی تعلق دارد که به آن باور دارند.",
+    author: "النور روزولت",
+    source: "نقل مشهور",
+    thought: "برای آینده‌ای که می‌خواهم، امروز چه کاری باید انجام دهم؟",
   },
   {
-    quote:
-      "مشک آن است که خود ببوید، نه آنکه عطار بگوید",
-    author: "ضرب‌المثل فارسی",
-    source: "ضرب‌المثل",
-    thought:
-      "آیا کیفیت کارم بدون تعریف دیگران هم دیده می‌شود؟",
+    quote: "زندگی آن چیزی است که برای ما اتفاق می‌افتد.",
+    author: "جان لنون",
+    source: "نقل مشهور",
+    thought: "چقدر از امروز را آگاهانه زندگی می‌کنم؟",
   },
   {
-    quote:
-      "قطره قطره جمع گردد وانگهی دریا شود",
-    author: "ضرب‌المثل فارسی",
-    source: "ضرب‌المثل",
-    thought:
-      "کدام قدم کوچک امروز در آینده نتیجه بزرگی می‌سازد؟",
+    quote: "آنچه مهم است، این است که هرگز از پرسیدن دست نکشیم.",
+    author: "آلبرت اینشتین",
+    source: "نقل مشهور",
+    thought: "امروز چه پرسشی می‌تواند نگاه من را تغییر دهد؟",
   },
   {
-    quote:
-      "توانا بود هر که دانا بود",
-    author: "فردوسی",
-    source: "شاهنامه",
-    thought:
-      "چه دانشی را باید از حالت اطلاعات به مهارت تبدیل کنم؟",
+    quote: "ساده بودن، نهایت پیچیدگی است.",
+    author: "لئوناردو داوینچی",
+    source: "نقل مشهور",
+    thought: "چه چیزی را می‌توانم در کار امروز ساده‌تر و بهتر کنم؟",
   },
   {
-    quote:
-      "خوشا آنان که دائم در نمازند",
-    author: "حافظ",
-    source: "غزل حافظ",
-    thought:
-      "چگونه می‌توانم حضور ذهن و آرامش بیشتری در کار امروز داشته باشم؟",
+    quote: "اگر می‌توانی چیزی را تصور کنی، می‌توانی برای آن تلاش کنی.",
+    author: "والت دیزنی",
+    source: "نقل مشهور",
+    thought: "کدام ایده را باید از ذهنم به یک اقدام واقعی تبدیل کنم؟",
   },
   {
-    quote:
-      "دوش دیدم که ملائک در میخانه زدند",
-    author: "حافظ",
-    source: "غزل حافظ",
-    thought:
-      "آیا برای دیدن فرصت‌های تازه، ذهنم را از پیش‌داوری‌ها آزاد کرده‌ام؟",
+    quote: "موفقیت، رفتن از شکستی به شکست دیگر بدون از دست دادن اشتیاق است.",
+    author: "وینستون چرچیل",
+    source: "نقل مشهور",
+    thought: "از آخرین اشتباه خود چه درسی گرفته‌ام؟",
   },
   {
-    quote:
-      "هر که دلارام دید از دلش آرام رفت",
-    author: "حافظ",
-    source: "غزل حافظ",
-    thought:
-      "چه چیزی واقعاً به زندگی من معنا و آرامش می‌دهد؟",
+    quote: "دانستن کافی نیست؛ باید به کار بست.",
+    author: "یوهان ولفگانگ گوته",
+    source: "نقل مشهور",
+    thought: "کدام دانسته من امروز باید به عمل تبدیل شود؟",
   },
   {
-    quote:
-      "بنی آدم اعضای یک پیکرند",
-    author: "سعدی",
-    source: "گلستان",
-    thought:
-      "امروز چگونه می‌توانم به موفقیت یک همکار کمک کنم؟",
+    quote: "خلاقیت، هوشِ در حال خوشگذرانی است.",
+    author: "آلبرت اینشتین",
+    source: "نقل مشهور",
+    thought: "آیا برای پیدا کردن راه تازه، به خودم فرصت فکر کردن می‌دهم؟",
   },
   {
-    quote:
-      "به جهان خرم از آنم که جهان خرم از اوست",
-    author: "سعدی",
-    source: "غزل سعدی",
-    thought:
-      "نگاه من به محیط اطرافم چگونه بر حال خودم اثر می‌گذارد؟",
+    quote: "کیفیت یعنی درست انجام دادن کار، وقتی کسی نگاه نمی‌کند.",
+    author: "هنری فورد",
+    source: "نقل مشهور",
+    thought: "آیا کیفیت کار من به حضور یا نظارت دیگران وابسته است؟",
   },
   {
-    quote:
-      "هر که در این بزم مقرب‌تر است، جام بلا بیشترش می‌دهند",
-    author: "حافظ",
-    source: "غزل حافظ",
-    thought:
-      "در برابر مسئولیت‌های دشوار، چقدر تاب‌آوری دارم؟",
+    quote: "بهترین راه پیش‌بینی آینده، ساختن آن است.",
+    author: "پیتر دراکر",
+    source: "نقل مشهور",
+    thought: "من امروز کدام بخش از آینده خودم را می‌سازم؟",
   },
   {
-    quote:
-      "تو پای به راه در نه و هیچ مپرس",
-    author: "عطار نیشابوری",
-    source: "منطق‌الطیر",
-    thought:
-      "برای شروع کاری که به تعویق انداخته‌ام، اولین قدم چیست؟",
+    quote: "اگر چیزی را نمی‌توانی توضیح دهی، به اندازه کافی آن را نفهمیده‌ای.",
+    author: "آلبرت اینشتین",
+    source: "نقل منسوب",
+    thought: "کدام موضوع را باید عمیق‌تر و ساده‌تر بفهمم؟",
   },
   {
-    quote:
-      "این نیز بگذرد",
-    author: "ضرب‌المثل فارسی",
-    source: "ضرب‌المثل",
-    thought:
-      "آیا در روزهای سخت، موقتی بودن شرایط را به یاد دارم؟",
+    quote: "راه هزار کیلومتری با یک قدم آغاز می‌شود.",
+    author: "لائوتسه",
+    source: "دائو ده جینگ",
+    thought: "اولین قدم واقعی من برای هدف امروز چیست؟",
   },
   {
-    quote:
-      "از محبت خارها گل می‌شود",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "امروز کجا می‌توانم با مهربانی، نتیجه بهتری بسازم؟",
+    quote: "آنچه انجام می‌دهی، تو را می‌سازد.",
+    author: "ارسطو",
+    source: "حکمت منسوب",
+    thought: "عادت‌های امروز من چه شخصیتی برای فردایم می‌سازند؟",
   },
   {
-    quote:
-      "هر کسی از ظن خود شد یار من",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "آیا پیش از قضاوت درباره دیگران، دیدگاه آنان را می‌شنوم؟",
+    quote: "باور کن که می‌توانی، نیمی از راه را رفته‌ای.",
+    author: "تئودور روزولت",
+    source: "نقل مشهور",
+    thought: "کدام تردید را امروز باید کنار بگذارم؟",
   },
   {
-    quote:
-      "آب کم جو، تشنگی آور به دست",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "میزان اشتیاق من برای یادگیری و رشد چقدر است؟",
+    quote: "هیچ‌کس با استعداد به دنیا نمی‌آید؛ مهارت ساخته می‌شود.",
+    author: "نقل آموزشی",
+    source: "حکمت معاصر",
+    thought: "کدام مهارت را باید با تمرین مداوم بهتر کنم؟",
   },
   {
-    quote:
-      "دشمن دانا که غم جان بود بهتر از آن دوست که نادان بود",
-    author: "نظامی گنجوی",
-    source: "مخزن‌الاسرار",
-    thought:
-      "آیا از بازخورد صادقانه، حتی اگر سخت باشد، استفاده می‌کنم؟",
+    quote: "اگر می‌خواهی جهان را تغییر دهی، از خودت شروع کن.",
+    author: "مهاتما گاندی",
+    source: "نقل مشهور",
+    thought: "امروز کدام تغییر کوچک را از خودم شروع می‌کنم؟",
   },
   {
-    quote:
-      "جهان یادگار است و ما رفتنی",
-    author: "فردوسی",
-    source: "شاهنامه",
-    thought:
-      "دوست دارم چه اثری از کار امروز من باقی بماند؟",
+    quote: "ورزش، جشن توانایی‌های بدن است.",
+    author: "نقل معاصر",
+    source: "حکمت ورزشی",
+    thought: "چگونه می‌توانم امروز بیشتر مراقب انرژی و توان خود باشم؟",
   },
   {
-    quote:
-      "چو دخلت نیست، خرج آهسته‌تر کن",
-    author: "سعدی",
-    source: "گلستان",
-    thought:
-      "امروز کدام منبع یا زمان را می‌توانم هوشمندانه‌تر مدیریت کنم؟",
+    quote: "رقابت اصلی با دیروزِ خودت است.",
+    author: "مایکل جردن",
+    source: "نقل مشهور",
+    thought: "امروز در چه چیزی می‌توانم کمی بهتر از دیروز باشم؟",
   },
   {
-    quote:
-      "هر که را اسرار حق آموختند، مهر کردند و دهانش دوختند",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "آیا در گفتار و نگهداری اطلاعات، به اندازه کافی مسئولیت‌پذیرم؟",
+    quote: "رویا بزرگ داشته باش و کوچک شروع کن.",
+    author: "ریچارد برانسون",
+    source: "نقل مشهور",
+    thought: "برای یک هدف بزرگ، قدم کوچک امروز من چیست؟",
   },
   {
-    quote:
-      "جهد کن تا پیرهن از عیب پاک",
-    author: "مولانا",
-    source: "مثنوی معنوی",
-    thought:
-      "کدام عادت کوچک را امروز باید اصلاح کنم؟",
+    quote: "اشتباه کردن پایان راه نیست؛ بخشی از یادگیری است.",
+    author: "نقل آموزشی",
+    source: "حکمت معاصر",
+    thought: "از یک اشتباه گذشته چگونه می‌توانم فرصت بسازم؟",
   },
   {
-    quote:
-      "هنر چشمه زاینده است و دولت پاینده",
-    author: "فردوسی",
-    source: "شاهنامه",
-    thought:
-      "کدام توانایی خود را باید بیشتر پرورش دهم؟",
+    quote: "آینده را نمی‌توان با عادت‌های گذشته ساخت.",
+    author: "پیتر دراکر",
+    source: "نقل مشهور",
+    thought: "کدام عادت قدیمی دیگر برای آینده من مناسب نیست؟",
   },
   {
-    quote:
-      "هر که را خوابگه آخر مشتی خاک است",
-    author: "حافظ",
-    source: "غزل حافظ",
-    thought:
-      "چه چیزی در زندگی من ارزش واقعی و ماندگار دارد؟",
+    quote: "اگر کاری ارزش انجام دادن دارد، ارزش خوب انجام دادن دارد.",
+    author: "نقل مشهور",
+    source: "حکمت کاری",
+    thought: "امروز کدام کار را باید با دقت بیشتری انجام دهم؟",
   },
   {
-    quote:
-      "بزرگی سراسر به گفتار نیست",
-    author: "فردوسی",
-    source: "شاهنامه",
-    thought:
-      "آیا رفتار امروز من با ارزش‌هایی که می‌گویم هماهنگ است؟",
+    quote: "صبوری، هنر امید داشتن است.",
+    author: "لوس دو کلاپیه",
+    source: "حکمت منسوب",
+    thought: "کجا باید به جای عجله، صبر و استمرار داشته باشم؟",
+  },
+  {
+    quote: "یک تیم قوی از افراد متفاوت ساخته می‌شود.",
+    author: "نقل مدیریتی",
+    source: "حکمت معاصر",
+    thought: "امروز چگونه می‌توانم به موفقیت یک همکار کمک کنم؟",
+  },
+  {
+    quote: "تغییر تنها ثابت زندگی است.",
+    author: "هراکلیتوس",
+    source: "حکمت یونان باستان",
+    thought: "آیا به جای مقاومت بیهوده، از تغییر برای رشد استفاده می‌کنم؟",
+  },
+  {
+    quote: "آنچه اندازه می‌گیری، می‌توانی بهتر کنی.",
+    author: "پیتر دراکر",
+    source: "نقل مدیریتی",
+    thought: "کدام نتیجه را باید دقیق‌تر بررسی و اندازه‌گیری کنم؟",
+  },
+  {
+    quote: "هر روز فرصتی تازه برای بهتر شدن است.",
+    author: "حکمت معاصر",
+    source: "نقل انگیزشی",
+    thought: "امروز چه یک درصدی می‌توانم بهتر شوم؟",
+  },
+  {
+    quote: "بزرگی در خدمت به دیگران است.",
+    author: "آلبرت شوایتزر",
+    source: "نقل مشهور",
+    thought: "امروز چه کمکی می‌توانم بدون انتظار جبران انجام دهم؟",
+  },
+  {
+    quote: "هیچ موفقیتی بدون پشتکار پایدار نمی‌ماند.",
+    author: "حکمت معاصر",
+    source: "نقل انگیزشی",
+    thought: "کدام هدف به استمرار بیشتری از من نیاز دارد؟",
   },
 ];
 
@@ -590,51 +630,55 @@ function createInfographicHtml(data: {
   moon: string;
   zodiac: string;
   animal: string;
+  animalEmoji: string;
   events: string[];
   thought: string;
   quote: string;
   author: string;
   source: string;
+  season: {
+    title: string;
+    sky1: string;
+    sky2: string;
+    sun: string;
+    mountain: string;
+    mountainDark: string;
+    forest: string;
+    ground: string;
+    flower: string;
+  };
 }) {
   const progressValue = Math.min(
     100,
     Math.max(0, Number(data.progress))
   );
 
+  const season = data.season;
+
   const eventsHtml = data.events.length
     ? data.events
         .map(
           (event) => `
-            <div class="event-row">
-              <div class="event-icon">✓</div>
-              <div class="event-text">
-                ${escapeHtml(event)}
-              </div>
+            <div class="event-item">
+              <span class="event-dot">✦</span>
+              <span>${escapeHtml(event)}</span>
             </div>
           `
         )
         .join("")
     : `
-        <div class="event-row">
-          <div class="event-icon">•</div>
-          <div class="event-text">
-            مناسبتی برای امروز ثبت نشده است.
-          </div>
-        </div>
-      `;
+      <div class="event-item">
+        <span class="event-dot">✦</span>
+        <span>مناسبتی برای امروز ثبت نشده است.</span>
+      </div>
+    `;
 
   return `
 <!doctype html>
 <html lang="fa" dir="rtl">
-
 <head>
 
 <meta charset="utf-8">
-
-<meta
-  name="viewport"
-  content="width=${WIDTH}, height=${HEIGHT}"
->
 
 <style>
 
@@ -674,122 +718,228 @@ body {
 }
 
 body {
-
   font-family:
     Vazirmatn,
     Arial,
     sans-serif;
 
-  color: #102f45;
-
   background:
     linear-gradient(
       180deg,
-      #fffdf5 0%,
-      #f6fbff 45%,
-      #ffffff 100%
+      ${season.sky1} 0%,
+      ${season.sky2} 43%,
+      #fdfcf5 72%,
+      ${season.ground} 100%
     );
+
+  color: #18384c;
 }
 
 .page {
-
   width: ${WIDTH}px;
   height: ${HEIGHT}px;
-
-  padding:
-    0
-    24px
-    18px;
-
-  display: flex;
-  flex-direction: column;
-
-  overflow: hidden;
-}
-
-/* =========================
-   TOP
-========================= */
-
-.hero {
-
-  height: 218px;
-
-  margin:
-    0
-    -24px
-    14px;
 
   position: relative;
 
   overflow: hidden;
-
-  display: flex;
-
-  align-items: center;
-  justify-content: center;
 
   padding:
     28px
     38px
     30px;
 
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================
+   NATURE BACKGROUND
+========================== */
+
+.nature {
+  position: absolute;
+
+  inset: 0;
+
+  overflow: hidden;
+
+  pointer-events: none;
+}
+
+.sun {
+  position: absolute;
+
+  top: 68px;
+  left: 95px;
+
+  width: 118px;
+  height: 118px;
+
+  border-radius: 50%;
+
   background:
-
     radial-gradient(
-      circle at 18% 22%,
-      rgba(255,255,255,.96) 0 7%,
-      transparent 20%
-    ),
+      circle,
+      #fffbd0 0 15%,
+      ${season.sun} 38%,
+      rgba(255,211,82,.32) 67%,
+      transparent 72%
+    );
 
-    radial-gradient(
-      circle at 50% 55%,
-      rgba(255,226,119,.98) 0 6%,
-      rgba(255,194,67,.48) 15%,
-      transparent 34%
-    ),
-
-    linear-gradient(
-      180deg,
-      #8fd4ff 0%,
-      #d9f2ff 48%,
-      #fff2c8 72%,
-      #d6efd8 100%
+  filter:
+    drop-shadow(
+      0 0 26px
+      rgba(255,209,75,.7)
     );
 }
 
-.hero::before {
+.cloud {
+  position: absolute;
 
+  width: 220px;
+  height: 52px;
+
+  border-radius: 60px;
+
+  background: rgba(255,255,255,.45);
+
+  filter: blur(2px);
+}
+
+.cloud::before,
+.cloud::after {
   content: "";
 
   position: absolute;
 
-  inset:
-    80px
-    -60px
-    0;
+  bottom: 0;
 
-  background:
+  border-radius: 50%;
 
-    linear-gradient(
-      155deg,
-      transparent 0 48%,
-      #5b9274 49% 61%,
-      transparent 62%
-    ),
-
-    linear-gradient(
-      25deg,
-      transparent 0 52%,
-      #7db08a 53% 66%,
-      transparent 67%
-    );
-
-  opacity: .9;
+  background: rgba(255,255,255,.48);
 }
 
-.hero::after {
+.cloud::before {
+  width: 85px;
+  height: 85px;
 
+  right: 35px;
+}
+
+.cloud::after {
+  width: 65px;
+  height: 65px;
+
+  right: 100px;
+}
+
+.cloud.one {
+  top: 100px;
+  right: 75px;
+}
+
+.cloud.two {
+  top: 190px;
+  left: 240px;
+
+  transform: scale(.72);
+
+  opacity: .55;
+}
+
+.mountains-back {
+  position: absolute;
+
+  left: -5%;
+  right: -5%;
+
+  top: 250px;
+
+  height: 330px;
+
+  background:
+    linear-gradient(
+      145deg,
+      transparent 0 20%,
+      ${season.mountain} 21% 49%,
+      transparent 50%
+    ),
+    linear-gradient(
+      215deg,
+      transparent 0 18%,
+      ${season.mountain} 19% 47%,
+      transparent 48%
+    );
+
+  opacity: .65;
+}
+
+.mountains-front {
+  position: absolute;
+
+  left: -8%;
+  right: -8%;
+
+  top: 330px;
+
+  height: 360px;
+
+  background:
+    linear-gradient(
+      145deg,
+      transparent 0 28%,
+      ${season.mountainDark} 29% 58%,
+      transparent 59%
+    ),
+    linear-gradient(
+      215deg,
+      transparent 0 30%,
+      ${season.mountain} 31% 62%,
+      transparent 63%
+    );
+}
+
+.forest {
+  position: absolute;
+
+  left: 0;
+  right: 0;
+
+  bottom: -20px;
+
+  height: 480px;
+
+  background:
+    radial-gradient(
+      ellipse at 10% 100%,
+      ${season.forest} 0 21%,
+      transparent 22%
+    ),
+    radial-gradient(
+      ellipse at 25% 100%,
+      ${season.forest} 0 25%,
+      transparent 26%
+    ),
+    radial-gradient(
+      ellipse at 45% 100%,
+      ${season.forest} 0 23%,
+      transparent 24%
+    ),
+    radial-gradient(
+      ellipse at 67% 100%,
+      ${season.forest} 0 28%,
+      transparent 29%
+    ),
+    radial-gradient(
+      ellipse at 87% 100%,
+      ${season.forest} 0 24%,
+      transparent 25%
+    );
+
+  opacity: .34;
+}
+
+.forest::after {
   content: "";
 
   position: absolute;
@@ -798,320 +948,277 @@ body {
   right: 0;
   bottom: 0;
 
-  height: 66px;
+  height: 145px;
 
   background:
-
-    radial-gradient(
-      ellipse at 20% 100%,
-      #3e765d 0 23%,
-      transparent 24%
-    ),
-
-    radial-gradient(
-      ellipse at 65% 100%,
-      #56866b 0 28%,
-      transparent 29%
-    ),
-
     linear-gradient(
       180deg,
       transparent,
-      rgba(255,255,255,.7)
+      rgba(26,86,58,.55)
     );
 }
 
-.hero-title {
+/* ==========================
+   MAIN CONTENT
+========================== */
 
+.content {
   position: relative;
 
-  z-index: 3;
+  z-index: 5;
+
+  height: 100%;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================
+   HEADER
+========================== */
+
+.header {
+  min-height: 190px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
 
   text-align: center;
 
-  direction: rtl;
+  padding:
+    10px
+    20px
+    20px;
+}
 
-  color: #063f6e;
+.title {
+  color: #063e62;
+
+  font-size: 43px;
+
+  line-height: 1.35;
+
+  font-weight: 700;
 
   text-shadow:
     0 3px 12px
     rgba(255,255,255,.95);
 }
 
-.hero-title-main {
-
-  font-size: 44px;
-
-  line-height: 1.35;
-
-  font-weight: 700;
-}
-
-.hero-title-sub {
-
+.greeting {
   margin-top: 8px;
 
-  color: #b45b00;
+  color: #a95700;
 
-  font-size: 34px;
-
-  line-height: 1.35;
+  font-size: 31px;
 
   font-weight: 700;
+
+  text-shadow:
+    0 2px 9px
+    rgba(255,255,255,.9);
 }
 
-/* =========================
-   DATE
-========================= */
+.season {
+  margin-top: 6px;
 
-.date-panel {
+  color: #316a58;
 
-  min-height: 238px;
+  font-size: 20px;
 
-  padding:
-    20px
-    28px;
+  font-weight: 700;
 
+  opacity: .92;
+}
+
+/* ==========================
+   DATE AREA
+========================== */
+
+.date-area {
   position: relative;
 
-  border: none;
+  min-height: 245px;
 
-  border-top:
-    5px solid
-    #28a9d6;
-
-  border-bottom:
-    4px solid
-    #b8df73;
-
-  border-radius: 0;
-
-  background:
-    rgba(255,255,255,.35);
-
-  box-shadow: none;
-}
-
-.date-panel::before {
-
-  content: "";
-
-  position: absolute;
-
-  top: 18px;
-
-  right: 24px;
-  left: 24px;
-
-  height: 3px;
-
-  border-radius: 10px;
+  padding:
+    18px
+    30px
+    20px;
 
   background:
     linear-gradient(
       90deg,
-      #1689cf,
-      #8bd5ed
+      rgba(255,255,255,.16),
+      rgba(255,255,255,.72),
+      rgba(255,255,255,.16)
     );
 
-  opacity: .55;
-}
+  border-top:
+    2px solid
+    rgba(255,255,255,.78);
 
-.date-weekday {
-
-  margin-top: 22px;
-
-  color: #547183;
-
-  font-size: 30px;
-
-  font-weight: 700;
+  border-bottom:
+    2px solid
+    rgba(255,255,255,.75);
 
   text-align: right;
 }
 
-.date-main {
+.clock {
+  position: absolute;
 
-  margin-top: 4px;
+  left: 24px;
+  top: 20px;
 
-  color: #0d4a78;
+  padding:
+    9px
+    16px;
 
-  font-size: 64px;
+  border-radius: 18px;
+
+  color: #ffffff;
+
+  background:
+    rgba(9,71,105,.84);
+
+  font-size: 24px;
+
+  font-weight: 700;
+
+  box-shadow:
+    0 7px 18px
+    rgba(9,71,105,.16);
+}
+
+.weekday {
+  color: #5e7583;
+
+  font-size: 27px;
+
+  font-weight: 700;
+}
+
+.persian-date {
+  margin-top: 1px;
+
+  color: #0c4b76;
+
+  font-size: 61px;
 
   line-height: 1.2;
 
   font-weight: 700;
-
-  text-align: right;
 }
 
-.date-grid {
+.date-lines {
+  margin-top: 14px;
 
   display: flex;
 
   flex-direction: row-reverse;
 
-  gap: 14px;
+  gap: 34px;
 
-  margin-top: 18px;
+  color: #486a79;
+
+  font-size: 21px;
+
+  font-weight: 700;
 }
 
-.date-chip {
+.date-lines span {
+  display: inline-flex;
 
-  flex: 1;
+  align-items: center;
+
+  gap: 8px;
+}
+
+/* ==========================
+   YEAR PROGRESS
+========================== */
+
+.year-area {
+  margin-top: 12px;
 
   padding:
     13px
-    16px;
-
-  border-radius: 18px;
+    26px
+    15px;
 
   background:
-    rgba(255,255,255,.72);
+    rgba(255,255,255,.46);
 
-  border:
-    1px solid
-    #d8eaf5;
+  border-top:
+    2px solid
+    rgba(47,151,130,.38);
 
-  text-align: right;
+  border-bottom:
+    2px solid
+    rgba(47,151,130,.25);
 }
 
-.date-chip-label {
+.year-head {
+  display: flex;
 
-  color: #7c8e9a;
+  flex-direction: row-reverse;
 
-  font-size: 18px;
+  justify-content: space-between;
 
-  margin-bottom: 3px;
+  align-items: center;
 }
 
-.date-chip-value {
+.year-title {
+  color: #126b61;
 
-  color: #29485d;
+  font-size: 25px;
+
+  font-weight: 700;
+}
+
+.year-percent {
+  color: #14536d;
 
   font-size: 24px;
 
   font-weight: 700;
 }
 
-.clock {
-
-  position: absolute;
-
-  top: 24px;
-  left: 28px;
-
-  padding:
-    11px
-    18px;
-
-  border-radius: 18px;
-
-  color: #fff;
-
-  background:
-    linear-gradient(
-      135deg,
-      #0d4d76,
-      #1d82b0
-    );
-
-  font-size: 27px;
-
-  font-weight: 700;
-
-  box-shadow:
-    0 8px 18px
-    rgba(13,77,118,.2);
-}
-
-/* =========================
-   YEAR
-========================= */
-
-.progress-panel {
-
-  margin-top: 11px;
-
-  padding:
-    17px
-    26px;
-
-  border:
-    1.5px solid
-    #b6dfd8;
-
-  border-radius: 0;
-
-  background:
-    rgba(255,255,255,.32);
-
-  box-shadow: none;
-}
-
-.panel-heading {
-
-  display: flex;
-
-  flex-direction: row-reverse;
-
-  justify-content: space-between;
-
-  align-items: center;
-
-  margin-bottom: 13px;
-}
-
-.panel-title {
-
-  color: #12685f;
-
-  font-size: 27px;
-
-  font-weight: 700;
-}
-
-.percent {
-
-  color: #174a68;
-
-  font-size: 25px;
-
-  font-weight: 700;
-}
-
-.progress-track {
-
+.track {
   width: 100%;
 
-  height: 24px;
+  height: 20px;
 
-  padding: 4px;
+  margin-top: 10px;
 
-  overflow: hidden;
+  padding: 3px;
 
   border-radius: 20px;
 
-  background: #d9eef1;
+  background:
+    rgba(255,255,255,.76);
 }
 
-.progress-fill {
-
+.fill {
   width: ${progressValue}%;
 
-  height: 16px;
+  height: 14px;
 
-  border-radius: 18px;
+  border-radius: 20px;
 
   background:
     linear-gradient(
       90deg,
-      #18a276,
-      #39b993
+      #1b9874,
+      #65c77e
     );
 }
 
-.progress-meta {
+.year-meta {
+  margin-top: 6px;
 
   display: flex;
 
@@ -1119,608 +1226,527 @@ body {
 
   justify-content: space-between;
 
-  margin-top: 9px;
+  color: #587772;
 
-  color: #5c7c7a;
-
-  font-size: 20px;
+  font-size: 18px;
 }
 
-/* =========================
-   STATS
-========================= */
+/* ==========================
+   STATS - INLINE
+========================== */
 
 .stats {
+  margin-top: 12px;
 
   display: flex;
 
   flex-direction: row-reverse;
 
-  gap: 10px;
+  align-items: stretch;
 
-  margin-top: 11px;
-}
+  justify-content: space-between;
 
-.stat {
-
-  flex: 1;
-
-  min-height: 108px;
+  gap: 0;
 
   padding:
     10px
-    9px;
-
-  border-radius: 0;
-
-  border: none;
-
-  border-top:
-    2px solid
-    #d9e9f2;
-
-  border-bottom:
-    2px solid
-    #d9e9f2;
+    0;
 
   background:
-    rgba(255,255,255,.28);
+    rgba(255,255,255,.32);
+
+  border-top:
+    1px solid
+    rgba(255,255,255,.8);
+
+  border-bottom:
+    1px solid
+    rgba(255,255,255,.8);
+}
+
+.stat {
+  flex: 1;
 
   text-align: center;
 
-  box-shadow: none;
+  padding:
+    5px
+    12px;
+
+  border-left:
+    1px solid
+    rgba(60,111,126,.18);
+}
+
+.stat:last-child {
+  border-left: none;
 }
 
 .stat-icon {
-
-  font-size: 37px;
+  font-size: 32px;
 
   line-height: 1;
-
-  margin-bottom: 8px;
 }
 
 .stat-label {
+  margin-top: 5px;
 
-  color: #7a728e;
+  color: #667e87;
 
-  font-size: 18px;
-
-  margin-bottom: 4px;
+  font-size: 17px;
 }
 
 .stat-value {
+  margin-top: 2px;
 
-  color: #3c326d;
+  color: #31566c;
 
-  font-size: 23px;
+  font-size: 20px;
+
+  line-height: 1.3;
 
   font-weight: 700;
-
-  line-height: 1.35;
 }
 
-/* =========================
+/* ==========================
    EVENTS
-========================= */
+========================== */
 
-.events-panel {
-
+.events {
   margin-top: 11px;
 
   padding:
-    16px
-    24px;
+    12px
+    24px
+    14px;
 
-  border-radius: 0;
-
-  border: none;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,.22),
+      rgba(255,250,230,.68),
+      rgba(255,255,255,.22)
+    );
 
   border-top:
     3px solid
-    #f3a51c;
+    rgba(224,148,31,.7);
 
   border-bottom:
-    2px solid
-    #f3d48e;
-
-  background:
-    rgba(255,250,237,.34);
-
-  box-shadow: none;
-
-  direction: rtl;
-
-  text-align: right;
+    1px solid
+    rgba(224,148,31,.25);
 }
 
-.events-heading {
+.section-title {
+  color: #c5740b;
 
-  display: block;
-
-  margin-bottom: 13px;
-
-  color: #d47700;
-
-  font-size: 30px;
+  font-size: 27px;
 
   font-weight: 700;
 
-  text-align: right;
+  margin-bottom: 7px;
 }
 
-.event-row {
-
+.event-item {
   display: flex;
 
   flex-direction: row-reverse;
 
   align-items: flex-start;
 
-  gap: 12px;
+  gap: 10px;
 
-  padding: 6px 0;
+  padding: 4px 0;
 
-  border-bottom:
-    1px solid
-    #f3e6cb;
+  color: #394f5d;
 
-  color: #3b4e5c;
+  font-size: 21px;
 
-  font-size: 26px;
-
-  line-height: 1.45;
-
-  text-align: right;
+  line-height: 1.42;
 }
 
-.event-row:last-child {
+.event-dot {
+  flex: 0 0 auto;
 
-  border-bottom: none;
+  color: #e39a20;
+
+  font-size: 20px;
 }
 
-.event-icon {
-
-  flex:
-    0 0 30px;
-
-  width: 30px;
-
-  height: 30px;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  border-radius: 50%;
-
-  background: #f4a321;
-
-  color: #fff;
-
-  font-size: 16px;
-
-  font-weight: 700;
-}
-
-.event-text {
-
-  flex: 1;
-
-  text-align: right;
-}
-
-/* =========================
+/* ==========================
    QUOTE
-========================= */
-
-.quote-panel {
-
-  margin-top: 10px;
-
-  padding:
-    15px
-    24px;
-
-  position: relative;
-
-  overflow: hidden;
-
-  border-radius: 0;
-
-  border: none;
-
-  border-top:
-    3px solid
-    #7666d8;
-
-  border-bottom:
-    2px solid
-    #c9c1f1;
-
-  background:
-    rgba(247,244,255,.34);
-
-  box-shadow: none;
-
-  direction: rtl;
-
-  text-align: right;
-}
-
-.quote-panel::before {
-
-  content: "“";
-
-  position: absolute;
-
-  left: 22px;
-  top: -24px;
-
-  color: #8d82d4;
-
-  font-family: Georgia, serif;
-
-  font-size: 110px;
-
-  opacity: .28;
-}
-
-.quote-heading {
-
-  margin-bottom: 10px;
-
-  color: #5b4ca0;
-
-  font-size: 30px;
-
-  font-weight: 700;
-
-  text-align: right;
-}
+========================== */
 
 .quote {
-
-  position: relative;
-
-  z-index: 2;
-
-  color: #273d56;
-
-  font-size: 28px;
-
-  line-height: 1.45;
-
-  font-weight: 700;
-
-  text-align: right;
-}
-
-.quote-author {
-
-  margin-top: 8px;
-
-  color: #716a84;
-
-  font-size: 18px;
-
-  text-align: right;
-}
-
-/* =========================
-   THOUGHT
-========================= */
-
-.thought-panel {
-
-  margin-top: 10px;
+  margin-top: 11px;
 
   padding:
-    15px
-    24px;
-
-  position: relative;
-
-  overflow: hidden;
-
-  border-radius: 0;
-
-  border: none;
-
-  border-top:
-    3px solid
-    #10a6a6;
-
-  border-bottom:
-    2px solid
-    #9be0e0;
-
-  background:
-    rgba(239,255,255,.34);
-
-  box-shadow: none;
-
-  direction: rtl;
-
-  text-align: right;
-}
-
-.thought-heading {
-
-  margin-bottom: 9px;
-
-  color: #087d80;
-
-  font-size: 30px;
-
-  font-weight: 700;
-
-  text-align: right;
-}
-
-.thought {
-
-  color: #163f57;
-
-  font-size: 28px;
-
-  line-height: 1.45;
-
-  font-weight: 700;
-
-  text-align: right;
-}
-
-.thought::after {
-
-  content: "✦";
-
-  display: block;
-
-  margin-top: 6px;
-
-  color: #24a99d;
-
-  font-size: 25px;
-
-  text-align: center;
-}
-
-/* =========================
-   FOOTER
-========================= */
-
-.footer {
-
-  margin-top: auto;
-
-  height: 6px;
-
-  padding: 0;
-
-  margin-top: 4px;
-}
-
-.footer-line {
-
-  width: 150px;
-
-  height: 3px;
-
-  margin:
-    0
-    auto
-    10px;
-
-  border-radius: 5px;
+    13px
+    25px
+    14px;
 
   background:
     linear-gradient(
       90deg,
-      #e8a32b,
-      #1b7197
+      rgba(255,255,255,.2),
+      rgba(246,243,255,.72),
+      rgba(255,255,255,.2)
+    );
+
+  border-top:
+    3px solid
+    rgba(102,89,190,.6);
+
+  border-bottom:
+    1px solid
+    rgba(102,89,190,.24);
+
+  text-align: right;
+}
+
+.quote-title {
+  color: #5b4e9e;
+
+  font-size: 27px;
+
+  font-weight: 700;
+
+  margin-bottom: 7px;
+}
+
+.quote-text {
+  color: #263f52;
+
+  font-size: 24px;
+
+  line-height: 1.48;
+
+  font-weight: 700;
+}
+
+.quote-author {
+  margin-top: 5px;
+
+  color: #766e84;
+
+  font-size: 17px;
+}
+
+/* ==========================
+   THOUGHT
+========================== */
+
+.thought {
+  margin-top: 11px;
+
+  padding:
+    13px
+    25px
+    15px;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,.2),
+      rgba(237,255,254,.72),
+      rgba(255,255,255,.2)
+    );
+
+  border-top:
+    3px solid
+    rgba(16,151,151,.65);
+
+  border-bottom:
+    1px solid
+    rgba(16,151,151,.25);
+
+  text-align: right;
+}
+
+.thought-title {
+  color: #087e80;
+
+  font-size: 27px;
+
+  font-weight: 700;
+
+  margin-bottom: 7px;
+}
+
+.thought-text {
+  color: #21495c;
+
+  font-size: 23px;
+
+  line-height: 1.48;
+
+  font-weight: 700;
+}
+
+/* ==========================
+   BOTTOM NATURE STRIP
+========================== */
+
+.bottom-nature {
+  position: absolute;
+
+  z-index: 2;
+
+  left: 0;
+  right: 0;
+
+  bottom: 0;
+
+  height: 190px;
+
+  background:
+    linear-gradient(
+      180deg,
+      transparent,
+      rgba(255,255,255,.15)
     );
 }
 
+.bottom-nature::before,
+.bottom-nature::after {
+  content: "";
+
+  position: absolute;
+
+  bottom: -75px;
+
+  border-radius: 50% 50% 0 0;
+}
+
+.bottom-nature::before {
+  left: -8%;
+
+  width: 70%;
+
+  height: 180px;
+
+  background:
+    ${season.forest};
+
+  opacity: .45;
+}
+
+.bottom-nature::after {
+  right: -10%;
+
+  width: 72%;
+
+  height: 160px;
+
+  background:
+    ${season.mountainDark};
+
+  opacity: .27;
+}
+
 </style>
+
 </head>
 
 <body>
 
 <div class="page">
 
-  <section class="hero">
+  <div class="nature">
 
-    <div class="hero-title">
+    <div class="sun"></div>
 
-      <div class="hero-title-main">
+    <div class="cloud one"></div>
+
+    <div class="cloud two"></div>
+
+    <div class="mountains-back"></div>
+
+    <div class="mountains-front"></div>
+
+    <div class="forest"></div>
+
+  </div>
+
+  <div class="content">
+
+    <header class="header">
+
+      <div class="title">
         تقویم روزانه گروه صدای کارکنان ثبت احوال
       </div>
 
-      <div class="hero-title-sub">
+      <div class="greeting">
         روزت پر از اتفاقات خوب ☀️
       </div>
 
-    </div>
+      <div class="season">
+        طبیعت ${escapeHtml(season.title)}
+      </div>
 
-  </section>
+    </header>
 
-  <section class="date-panel">
+    <section class="date-area">
 
-    <div class="clock">
-      ⏰ ${escapeHtml(data.time)}
-    </div>
+      <div class="clock">
+        ⏰ ${escapeHtml(data.time)}
+      </div>
 
-    <div class="date-weekday">
-      ${escapeHtml(data.weekday)}
-    </div>
+      <div class="weekday">
+        ${escapeHtml(data.weekday)}
+      </div>
 
-    <div class="date-main">
-      ${escapeHtml(data.persianDate)}
-    </div>
+      <div class="persian-date">
+        ${escapeHtml(data.persianDate)}
+      </div>
 
-    <div class="date-grid">
+      <div class="date-lines">
 
-      <div class="date-chip">
-
-        <div class="date-chip-label">
-          میلادی
-        </div>
-
-        <div class="date-chip-value">
+        <span>
+          📅 میلادی:
           ${escapeHtml(data.gregorianDate)}
-        </div>
+        </span>
 
-      </div>
-
-      <div class="date-chip">
-
-        <div class="date-chip-label">
-          قمری
-        </div>
-
-        <div class="date-chip-value">
+        <span>
+          🌙 قمری:
           ${escapeHtml(data.hijriDate)}
+        </span>
+
+      </div>
+
+    </section>
+
+    <section class="year-area">
+
+      <div class="year-head">
+
+        <div class="year-title">
+          📊 پیشرفت سال
+        </div>
+
+        <div class="year-percent">
+          ${escapeHtml(data.progress)}٪
         </div>
 
       </div>
 
-    </div>
+      <div class="track">
 
-  </section>
+        <div class="fill"></div>
 
-  <section class="progress-panel">
-
-    <div class="panel-heading">
-
-      <div class="panel-title">
-        📊 چشم‌انداز سال
       </div>
 
-      <div class="percent">
-        ${escapeHtml(data.progress)}٪
+      <div class="year-meta">
+
+        <span>
+          ${escapeHtml(data.remaining)}
+          روز باقی‌مانده
+        </span>
+
+        <span>
+          ${escapeHtml(data.weeksRemaining)}
+          هفته
+        </span>
+
       </div>
 
-    </div>
+    </section>
 
-    <div class="progress-track">
+    <section class="stats">
 
-      <div class="progress-fill"></div>
+      <div class="stat">
 
-    </div>
+        <div class="stat-icon">
+          ${escapeHtml(data.animalEmoji)}
+        </div>
 
-    <div class="progress-meta">
+        <div class="stat-label">
+          نماد سال
+        </div>
 
-      <span>
-        ${escapeHtml(data.remaining)}
-        روز باقی‌مانده
-      </span>
+        <div class="stat-value">
+          ${escapeHtml(data.animal)}
+        </div>
 
-      <span>
-        حدود
-        ${escapeHtml(data.weeksRemaining)}
-        هفته
-      </span>
-
-    </div>
-
-  </section>
-
-  <section class="stats">
-
-    <div class="stat">
-
-      <div class="stat-icon">
-        🌙
       </div>
 
-      <div class="stat-label">
-        وضعیت ماه
+      <div class="stat">
+
+        <div class="stat-icon">
+          ♎
+        </div>
+
+        <div class="stat-label">
+          برج
+        </div>
+
+        <div class="stat-value">
+          ${escapeHtml(data.zodiac)}
+        </div>
+
       </div>
 
-      <div class="stat-value">
-        ${escapeHtml(data.moon)}
+      <div class="stat">
+
+        <div class="stat-icon">
+          🌙
+        </div>
+
+        <div class="stat-label">
+          وضعیت ماه
+        </div>
+
+        <div class="stat-value">
+          ${escapeHtml(data.moon)}
+        </div>
+
       </div>
 
-    </div>
+    </section>
 
-    <div class="stat">
+    <section class="events">
 
-      <div class="stat-icon">
-        ♎
+      <div class="section-title">
+        📌 رویدادها و مناسبت‌ها
       </div>
 
-      <div class="stat-label">
-        برج
+      ${eventsHtml}
+
+    </section>
+
+    <section class="quote">
+
+      <div class="quote-title">
+        🌟 سخن بزرگان
       </div>
 
-      <div class="stat-value">
-        ${escapeHtml(data.zodiac)}
+      <div class="quote-text">
+        «${escapeHtml(data.quote)}»
       </div>
 
-    </div>
-
-    <div class="stat">
-
-      <div class="stat-icon">
-        🐎
+      <div class="quote-author">
+        — ${escapeHtml(data.author)}
+        ·
+        ${escapeHtml(data.source)}
       </div>
 
-      <div class="stat-label">
-        نماد سال
+    </section>
+
+    <section class="thought">
+
+      <div class="thought-title">
+        💡 جرعه‌ای تفکر
       </div>
 
-      <div class="stat-value">
-        ${escapeHtml(data.animal)}
+      <div class="thought-text">
+        «${escapeHtml(data.thought)}»
       </div>
 
-    </div>
+    </section>
 
-  </section>
+  </div>
 
-  <section class="events-panel">
-
-    <div class="events-heading">
-      📌 رویدادها و مناسبت‌ها
-    </div>
-
-    ${eventsHtml}
-
-  </section>
-
-  <section class="quote-panel">
-
-    <div class="quote-heading">
-      🪶 سخن بزرگان
-    </div>
-
-    <div class="quote">
-      «${escapeHtml(data.quote)}»
-    </div>
-
-    <div class="quote-author">
-      — ${escapeHtml(data.author)}
-      ·
-      ${escapeHtml(data.source)}
-    </div>
-
-  </section>
-
-  <section class="thought-panel">
-
-    <div class="thought-heading">
-      💡 جرعه‌ای تفکر
-    </div>
-
-    <div class="thought">
-      «${escapeHtml(data.thought)}»
-    </div>
-
-  </section>
-
-  <footer class="footer"></footer>
+  <div class="bottom-nature"></div>
 
 </div>
 
@@ -1731,9 +1757,7 @@ body {
 
 async function createInfographic(
   env: CloudflareEnv,
-  data: Parameters<
-    typeof createInfographicHtml
-  >[0]
+  data: Parameters<typeof createInfographicHtml>[0]
 ) {
   if (!env.BROWSER) {
     throw new Error(
@@ -1769,7 +1793,6 @@ async function createInfographic(
     );
 
   if (!response.ok) {
-
     const errorText =
       await response
         .text()
@@ -1790,7 +1813,6 @@ async function sendPhotoToBale(
   chatId: string,
   png: Uint8Array
 ) {
-
   const form = new FormData();
 
   form.append(
@@ -1802,7 +1824,7 @@ async function sendPhotoToBale(
     "photo",
     new Blob(
       [
-        new Uint8Array(png)
+        new Uint8Array(png),
       ],
       {
         type: "image/png",
@@ -1832,17 +1854,12 @@ async function sendPhotoToBale(
 }
 
 /*
- * وضعیت ارسال تقویم از تنظیمات Supabase خوانده می‌شود.
- * اگر تنظیمات در دسترس نباشد،
- * رفتار پیش‌فرض فعال بودن است.
+ * منطق لغو ارسال را دست نمی‌زنیم.
  */
-
 async function isCalendarEnabled(
   env: CloudflareEnv
 ) {
-
   try {
-
     const url =
       env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -1881,18 +1898,13 @@ async function isCalendarEnabled(
     }
 
     return rows[0]?.value !== "false";
-
   } catch {
-
     return true;
-
   }
 }
 
 export async function GET() {
-
   try {
-
     const { env } =
       await getCloudflareContext({
         async: true,
@@ -1902,7 +1914,6 @@ export async function GET() {
       await isCalendarEnabled(env);
 
     if (!enabled) {
-
       return NextResponse.json({
         ok: true,
         cancelled: true,
@@ -1910,7 +1921,6 @@ export async function GET() {
         message:
           "ارسال تقویم لغو شده است.",
       });
-
     }
 
     const token =
@@ -1922,11 +1932,9 @@ export async function GET() {
       );
 
     if (!token || !chatId) {
-
       return NextResponse.json(
         {
           ok: false,
-
           error:
             "BALE_SMART_TOKEN یا BALE_GROUP_ID تنظیم نشده است.",
         },
@@ -1934,7 +1942,6 @@ export async function GET() {
           status: 500,
         }
       );
-
     }
 
     const now =
@@ -1993,9 +2000,14 @@ export async function GET() {
         persian.day
       );
 
+    const animal =
+      getAnimal(
+        persian.year
+      );
+
     const hijriText =
       hijri
-        ? `${hijri.day} ${hijri.month} ${hijri.year}`
+        ? `${fa(hijri.day)} ${hijri.month} ${fa(hijri.year)}`
         : "نامشخص";
 
     const time =
@@ -2026,7 +2038,17 @@ export async function GET() {
             hijriText,
 
           gregorianDate:
-            gregorian,
+            `${fa(tehran.year)}/` +
+            `${fa(
+              String(
+                tehran.month
+              ).padStart(2, "0")
+            )}/` +
+            `${fa(
+              String(
+                tehran.day
+              ).padStart(2, "0")
+            )}`,
 
           time,
 
@@ -2049,9 +2071,11 @@ export async function GET() {
               persian.month
             ),
 
-          animal:
-            getAnimal(
-              persian.year
+          animal,
+
+          animalEmoji:
+            getAnimalEmoji(
+              animal
             ),
 
           events:
@@ -2070,6 +2094,11 @@ export async function GET() {
 
           source:
             content.source,
+
+          season:
+            getSeasonData(
+              persian.month
+            ),
         }
       );
 
@@ -2081,7 +2110,6 @@ export async function GET() {
       );
 
     return NextResponse.json({
-
       ok:
         sent.response.ok &&
         sent.result?.ok === true,
@@ -2096,11 +2124,9 @@ export async function GET() {
 
       bale:
         sent.result,
-
     });
 
   } catch (error) {
-
     console.error(
       "[calendar] error:",
       error
