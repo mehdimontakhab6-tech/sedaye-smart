@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 const TIME_ZONE = "Asia/Tehran";
 const WIDTH = 1024;
-const HEIGHT = 1500;
+const HEIGHT = 1536;
 
 const digits = "۰۱۲۳۴۵۶۷۸۹";
 
@@ -846,6 +846,27 @@ body {
   overflow: hidden;
 
   pointer-events: none;
+
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.10) 0%,
+      rgba(255,255,255,.08) 42%,
+      rgba(255,255,255,.18) 100%
+    ),
+    url("https://images.unsplash.com/photo-1502120574417-d89e8a3e66eb?auto=format&fit=crop&fm=jpg&q=85&w=1600");
+
+  background-size:
+    cover,
+    cover;
+
+  background-position:
+    center,
+    center;
+
+  background-repeat:
+    no-repeat,
+    no-repeat;
 }
 
 .sun {
@@ -867,6 +888,8 @@ body {
       rgba(255,211,82,.28) 68%,
       transparent 73%
     );
+
+  opacity: 0;
 }
 
 .cloud {
@@ -879,6 +902,8 @@ body {
 
   background:
     rgba(255,255,255,.58);
+
+  opacity: 0;
 }
 
 .cloud::before,
@@ -945,7 +970,7 @@ body {
       transparent 48%
     );
 
-  opacity: .55;
+  opacity: 0;
 }
 
 .mountains-front {
@@ -972,7 +997,7 @@ body {
       transparent 63%
     );
 
-  opacity: .72;
+  opacity: 0;
 }
 
 .forest {
@@ -1012,7 +1037,7 @@ body {
       transparent 25%
     );
 
-  opacity: .28;
+  opacity: 0;
 }
 
 .content {
@@ -1051,7 +1076,7 @@ body {
 .title {
   color: #000000;
 
-  font-size: 48px;
+  font-size: 52px;
 
   line-height: 1.3;
 
@@ -1067,11 +1092,15 @@ body {
 
   color: #000000;
 
-  font-size: 35px;
+  font-size: 38px;
 
   line-height: 1.35;
 
   font-weight: 700;
+
+  text-shadow:
+    0 2px 8px
+    rgba(255,255,255,.98);
 }
 
 /* تاریخ */
@@ -1111,7 +1140,7 @@ body {
 
   color: #000000;
 
-  font-size: 30px;
+  font-size: 32px;
 
   font-weight: 700;
 
@@ -1121,7 +1150,7 @@ body {
 .weekday {
   color: #000000;
 
-  font-size: 34px;
+  font-size: 36px;
 
   line-height: 1.35;
 
@@ -1133,7 +1162,7 @@ body {
 
   color: #000000;
 
-  font-size: 70px;
+  font-size: 74px;
 
   line-height: 1.15;
 
@@ -1151,7 +1180,7 @@ body {
 
   color: #000000;
 
-  font-size: 25px;
+  font-size: 27px;
 
   line-height: 1.4;
 
@@ -1188,7 +1217,7 @@ body {
 .year-percent {
   color: #000000;
 
-  font-size: 29px;
+  font-size: 31px;
 
   font-weight: 700;
 }
@@ -1232,7 +1261,7 @@ body {
 
   color: #000000;
 
-  font-size: 22px;
+  font-size: 23px;
 
   font-weight: 700;
 }
@@ -1265,7 +1294,7 @@ body {
 }
 
 .stat-icon {
-  font-size: 36px;
+  font-size: 38px;
 }
 
 .stat-label {
@@ -1273,7 +1302,7 @@ body {
 
   color: #000000;
 
-  font-size: 21px;
+  font-size: 22px;
 
   font-weight: 700;
 }
@@ -1283,7 +1312,7 @@ body {
 
   color: #000000;
 
-  font-size: 23px;
+  font-size: 24px;
 
   line-height: 1.3;
 
@@ -1313,7 +1342,7 @@ body {
 .section-title {
   color: #000000;
 
-  font-size: 33px;
+  font-size: 35px;
 
   line-height: 1.3;
 
@@ -1341,7 +1370,7 @@ body {
 
   color: #000000;
 
-  font-size: 24px;
+  font-size: 25px;
 
   line-height: 1.4;
 
@@ -1354,7 +1383,7 @@ body {
   flex:
     0 0 auto;
 
-  font-size: 23px;
+  font-size: 24px;
 }
 
 .event-text {
@@ -1410,7 +1439,7 @@ body {
 .quote-title {
   color: #000000;
 
-  font-size: 32px;
+  font-size: 34px;
 
   font-weight: 700;
 
@@ -1420,7 +1449,7 @@ body {
 .quote-text {
   color: #000000;
 
-  font-size: 27px;
+  font-size: 29px;
 
   line-height: 1.4;
 
@@ -1432,7 +1461,7 @@ body {
 
   color: #000000;
 
-  font-size: 20px;
+  font-size: 21px;
 
   line-height: 1.4;
 
@@ -1462,7 +1491,7 @@ body {
 .thought-title {
   color: #000000;
 
-  font-size: 32px;
+  font-size: 34px;
 
   font-weight: 700;
 
@@ -1472,11 +1501,35 @@ body {
 .thought-text {
   color: #000000;
 
-  font-size: 25px;
+  font-size: 27px;
 
   line-height: 1.4;
 
   font-weight: 700;
+}
+
+/* شعار پایین تصویر */
+
+.footer-slogan {
+  margin-top: auto;
+
+  padding-top: 12px;
+
+  padding-bottom: 8px;
+
+  color: #000000;
+
+  font-size: 30px;
+
+  line-height: 1.3;
+
+  font-weight: 700;
+
+  text-align: center;
+
+  text-shadow:
+    0 2px 8px
+    rgba(255,255,255,.98);
 }
 
 </style>
@@ -1672,6 +1725,10 @@ body {
       </div>
 
     </section>
+
+    <div class="footer-slogan">
+      هم صدایی برای تحول و بهبود
+    </div>
 
   </div>
 
