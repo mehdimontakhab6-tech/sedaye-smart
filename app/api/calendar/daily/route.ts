@@ -135,16 +135,6 @@ function getPersianZodiac(month: number) {
   return signs[month - 1] || "";
 }
 
-/*
- * سال حیوانی ایرانی
- *
- * ۱۴۰۰ = گاو
- * ۱۴۰۱ = ببر
- * ۱۴۰۲ = خرگوش
- * ۱۴۰۳ = اژدها
- * ۱۴۰۴ = مار
- * ۱۴۰۵ = اسب
- */
 function getAnimal(year: number) {
   const animals = [
     "موش",
@@ -346,9 +336,6 @@ async function getEvents(persianYear: number) {
   }
 }
 
-/*
- * فقط مناسبت‌های دقیق همان روز شمسی
- */
 function getEventsForDay(
   events: any[],
   month: number,
@@ -395,12 +382,6 @@ function getEventsForDay(
   });
 }
 
-/*
- * مناسبت‌های بین‌المللی
- *
- * این موارد نیز فقط در صورتی نمایش داده می‌شوند
- * که تاریخ میلادی امروز دقیقاً با آن مناسبت برابر باشد.
- */
 function getInternationalEvents(
   month: number,
   day: number
@@ -549,11 +530,6 @@ function getInternationalEvents(
   return fixed[`${month}-${day}`] || [];
 }
 
-/*
- * سخن بزرگان
- *
- * منبع/گوینده همراه سخن نمایش داده می‌شود.
- */
 const DAILY_CONTENT = [
   {
     quote: "بهترین راه پیش‌بینی آینده، ساختن آن است.",
@@ -715,11 +691,6 @@ function createInfographicHtml(data: {
 
   const season = data.season;
 
-  /*
-   * مناسبت‌های داخلی و بین‌المللی
-   * قبلاً در GET() فیلتر شده‌اند و فقط
-   * موارد مربوط به امروز به این قسمت می‌رسند.
-   */
   const allEvents = [
     ...data.events.map((x) => ({
       text: x,
@@ -737,7 +708,6 @@ function createInfographicHtml(data: {
         .map(
           (event) => `
             <div class="event-item">
-
               <span class="event-dot">
                 ${event.international ? "🌍" : "✦"}
               </span>
@@ -755,22 +725,16 @@ function createInfographicHtml(data: {
                   `
                   : ""
               }
-
             </div>
           `
         )
         .join("")
     : `
       <div class="event-item">
-
-        <span class="event-dot">
-          ✦
-        </span>
-
+        <span class="event-dot">✦</span>
         <span class="event-text">
           مناسبتی برای امروز ثبت نشده است.
         </span>
-
       </div>
     `;
 
@@ -785,7 +749,7 @@ function createInfographicHtml(data: {
 
 <style>
 
-@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap");
 
 * {
   box-sizing: border-box;
@@ -804,20 +768,14 @@ body {
 
 body {
   font-family:
-    "Noto Sans Arabic",
+    "Vazirmatn",
     Tahoma,
     Arial,
     sans-serif;
 
-  color: #10212b;
+  color: #10252d;
 
-  background:
-    linear-gradient(
-      180deg,
-      ${season.sky1} 0%,
-      ${season.sky2} 42%,
-      #f5fbf2 100%
-    );
+  background: #315c45;
 }
 
 .page {
@@ -828,15 +786,12 @@ body {
 
   overflow: hidden;
 
-  padding:
-    22px
-    28px
-    18px;
+  padding: 22px 28px 20px;
 }
 
-/* =========================
-   پس‌زمینه طبیعت
-   ========================= */
+/* =====================================
+   تصویر اصلی جنگل سبز
+   ===================================== */
 
 .nature {
   position: absolute;
@@ -848,29 +803,23 @@ body {
   background-image:
     linear-gradient(
       180deg,
-      rgba(255,255,255,.06) 0%,
-      rgba(255,255,255,.02) 35%,
-      rgba(255,255,255,.12) 70%,
-      rgba(244,250,240,.34) 100%
+      rgba(7, 42, 30, .20) 0%,
+      rgba(7, 42, 30, .08) 35%,
+      rgba(7, 42, 30, .18) 70%,
+      rgba(4, 32, 22, .34) 100%
     ),
-    url("https://images.unsplash.com/photo-1629140476741-04d07ddeff60?auto=format&fit=crop&fm=jpg&q=92&w=1800&h=2700");
+    url("https://images.unsplash.com/photo-1629140476741-04d07ddeff60?auto=format&fit=crop&fm=jpg&q=95&w=1800&h=2700");
 
-  background-size:
-    cover,
-    cover;
+  background-size: cover, cover;
 
-  background-position:
-    center,
-    center;
+  background-position: center, center;
 
-  background-repeat:
-    no-repeat,
-    no-repeat;
+  background-repeat: no-repeat, no-repeat;
 
   filter:
-    saturate(1.12)
-    brightness(1.06)
-    contrast(1.02);
+    saturate(1.15)
+    brightness(.98)
+    contrast(1.04);
 }
 
 .nature::after {
@@ -884,188 +833,28 @@ body {
     linear-gradient(
       180deg,
       rgba(255,255,255,.08),
-      rgba(255,255,255,.02) 35%,
-      rgba(255,255,255,.08) 70%,
-      rgba(244,250,240,.28)
+      rgba(255,255,255,0) 30%,
+      rgba(0,30,20,.08) 75%,
+      rgba(0,25,17,.18)
     );
 }
 
-/* عناصر تزئینی قبلی حفظ شده‌اند */
+/* =====================================
+   عناصر قدیمی طبیعت عمداً نامرئی هستند
+   چون عکس واقعی پس‌زمینه استفاده می‌شود
+   ===================================== */
 
-.sun {
-  position: absolute;
-
-  top: 45px;
-  left: 70px;
-
-  width: 145px;
-  height: 145px;
-
-  border-radius: 50%;
-
-  background:
-    radial-gradient(
-      circle,
-      #fffbd2 0 18%,
-      ${season.sun} 40%,
-      rgba(255,211,82,.28) 68%,
-      transparent 73%
-    );
-
-  opacity: 0;
-}
-
-.cloud {
-  position: absolute;
-
-  width: 240px;
-  height: 55px;
-
-  border-radius: 60px;
-
-  background:
-    rgba(255,255,255,.58);
-
-  opacity: 0;
-}
-
-.cloud::before,
-.cloud::after {
-  content: "";
-
-  position: absolute;
-
-  bottom: 0;
-
-  border-radius: 50%;
-
-  background:
-    rgba(255,255,255,.60);
-}
-
-.cloud::before {
-  width: 90px;
-  height: 90px;
-
-  right: 35px;
-}
-
-.cloud::after {
-  width: 70px;
-  height: 70px;
-
-  right: 105px;
-}
-
-.cloud.one {
-  top: 95px;
-  right: 55px;
-}
-
-.cloud.two {
-  top: 180px;
-  left: 230px;
-
-  transform: scale(.75);
-}
-
-.mountains-back {
-  position: absolute;
-
-  left: -5%;
-  right: -5%;
-
-  top: 245px;
-
-  height: 330px;
-
-  background:
-    linear-gradient(
-      145deg,
-      transparent 0 20%,
-      ${season.mountain} 21% 49%,
-      transparent 50%
-    ),
-    linear-gradient(
-      215deg,
-      transparent 0 18%,
-      ${season.mountain} 19% 47%,
-      transparent 48%
-    );
-
-  opacity: 0;
-}
-
-.mountains-front {
-  position: absolute;
-
-  left: -8%;
-  right: -8%;
-
-  top: 325px;
-
-  height: 360px;
-
-  background:
-    linear-gradient(
-      145deg,
-      transparent 0 28%,
-      ${season.mountainDark} 29% 58%,
-      transparent 59%
-    ),
-    linear-gradient(
-      215deg,
-      transparent 0 30%,
-      ${season.mountain} 31% 62%,
-      transparent 63%
-    );
-
-  opacity: 0;
-}
-
+.sun,
+.cloud,
+.mountains-back,
+.mountains-front,
 .forest {
-  position: absolute;
-
-  left: 0;
-  right: 0;
-
-  bottom: -20px;
-
-  height: 500px;
-
-  background:
-    radial-gradient(
-      ellipse at 10% 100%,
-      ${season.forest} 0 21%,
-      transparent 22%
-    ),
-    radial-gradient(
-      ellipse at 25% 100%,
-      ${season.forest} 0 25%,
-      transparent 26%
-    ),
-    radial-gradient(
-      ellipse at 45% 100%,
-      ${season.forest} 0 23%,
-      transparent 24%
-    ),
-    radial-gradient(
-      ellipse at 67% 100%,
-      ${season.forest} 0 28%,
-      transparent 29%
-    ),
-    radial-gradient(
-      ellipse at 87% 100%,
-      ${season.forest} 0 24%,
-      transparent 25%
-    );
-
-  opacity: 0;
+  display: none;
 }
 
-/* =========================
-   لایه اصلی محتوا
-   ========================= */
+/* =====================================
+   لایه محتوا
+   ===================================== */
 
 .content {
   position: relative;
@@ -1079,173 +868,186 @@ body {
 
   flex-direction: column;
 
-  gap: 10px;
+  gap: 9px;
 }
 
-/* =========================
-   پنل شیشه‌ای
-   ========================= */
+/* =====================================
+   کادرهای شیشه‌ای
+   ===================================== */
 
 .glass {
   background:
     linear-gradient(
       135deg,
-      rgba(255,255,255,.84),
-      rgba(255,255,255,.65)
+      rgba(255,255,255,.91),
+      rgba(245,252,248,.79)
     );
 
   border:
     1px solid
-    rgba(255,255,255,.94);
+    rgba(255,255,255,.98);
 
-  border-radius: 28px;
+  border-radius: 25px;
 
   box-shadow:
-    0 9px 25px
-    rgba(18,54,70,.14),
+    0 8px 24px
+    rgba(7,35,28,.20),
 
     inset 0 1px 0
-    rgba(255,255,255,.95);
+    rgba(255,255,255,1);
 
   backdrop-filter:
-    blur(10px);
+    blur(13px);
 
   -webkit-backdrop-filter:
-    blur(10px);
+    blur(13px);
 }
 
-/* =========================
-   عنوان
-   ========================= */
+/* =====================================
+   عنوان اصلی
+   ===================================== */
 
 .header {
-  flex: 0 0 auto;
+  flex: 0 0 112px;
 
-  padding:
-    17px
-    22px
-    15px;
+  padding: 12px 18px 10px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  align-items: center;
 
   text-align: center;
+
+  overflow: hidden;
 }
 
 .title {
-  color: #071c28;
+  width: 100%;
 
-  font-size: 55px;
+  white-space: nowrap;
 
-  line-height: 1.22;
+  color: #071f17;
+
+  font-size: 42px;
+
+  line-height: 1.15;
 
   font-weight: 900;
 
-  letter-spacing: -.7px;
+  letter-spacing: -1px;
 
   text-shadow:
-    0 2px 3px
+    0 2px 4px
     rgba(255,255,255,.98);
 }
 
 .greeting {
   margin-top: 6px;
 
-  color: #123744;
+  color: #275543;
 
-  font-size: 34px;
+  font-size: 25px;
 
-  line-height: 1.25;
+  line-height: 1.15;
 
   font-weight: 800;
 }
 
-/* =========================
+/* =====================================
    تاریخ
-   ========================= */
+   ===================================== */
 
 .date-area {
+  flex: 0 0 216px;
+
   position: relative;
 
-  flex: 0 0 auto;
+  padding: 14px 24px 15px;
 
-  padding:
-    14px
-    25px
-    17px;
+  overflow: hidden;
 }
 
 .clock {
   position: absolute;
 
-  left: 25px;
-  top: 17px;
+  left: 24px;
+  top: 15px;
 
-  color: #0a202b;
+  color: #183c30;
 
-  font-size: 31px;
+  font-size: 25px;
 
   font-weight: 900;
+
+  direction: rtl;
 }
 
 .weekday {
-  color: #173b49;
+  color: #315b49;
 
-  font-size: 34px;
+  font-size: 27px;
 
-  line-height: 1.2;
+  line-height: 1.15;
 
   font-weight: 900;
 }
 
 .persian-date {
-  margin-top: 1px;
+  margin-top: 3px;
 
-  color: #061b27;
+  color: #071e17;
 
-  font-size: 75px;
+  font-size: 70px;
 
-  line-height: 1.04;
+  line-height: 1.03;
 
   font-weight: 900;
 
-  letter-spacing: -.8px;
+  letter-spacing: -1px;
 }
 
 .date-lines {
-  margin-top: 9px;
+  margin-top: 10px;
 
   display: flex;
 
-  flex-direction: row-reverse;
+  flex-direction: row;
 
   justify-content: flex-start;
 
-  gap: 38px;
+  align-items: center;
 
-  color: #294b58;
+  gap: 35px;
 
-  font-size: 23px;
+  color: #38594e;
 
-  line-height: 1.35;
+  font-size: 20px;
+
+  line-height: 1.3;
 
   font-weight: 800;
 }
 
-/* =========================
+/* =====================================
    پیشرفت سال
-   ========================= */
+   ===================================== */
 
 .year-area {
-  flex: 0 0 auto;
+  flex: 0 0 108px;
 
-  padding:
-    12px
-    22px
-    12px;
+  padding: 11px 20px 10px;
+
+  overflow: hidden;
 }
 
 .year-head {
   display: flex;
 
-  flex-direction: row-reverse;
+  flex-direction: row;
 
   justify-content: space-between;
 
@@ -1254,9 +1056,9 @@ body {
 
 .year-title,
 .year-percent {
-  color: #112f3c;
+  color: #183e31;
 
-  font-size: 27px;
+  font-size: 23px;
 
   font-weight: 900;
 }
@@ -1264,34 +1066,34 @@ body {
 .track {
   width: 100%;
 
-  height: 19px;
+  height: 17px;
 
-  margin-top: 7px;
+  margin-top: 6px;
 
-  padding: 3px;
+  padding: 2px;
 
   border-radius: 20px;
 
   background:
-    rgba(255,255,255,.78);
+    rgba(255,255,255,.85);
 
   border:
     1px solid
-    rgba(16,50,63,.20);
+    rgba(26,71,56,.20);
 }
 
 .fill {
   width: ${progressValue}%;
 
-  height: 13px;
+  height: 11px;
 
   border-radius: 20px;
 
   background:
     linear-gradient(
       90deg,
-      #183f4d,
-      #285c68
+      #245b46,
+      #4e8b68
     );
 }
 
@@ -1300,23 +1102,23 @@ body {
 
   display: flex;
 
-  flex-direction: row-reverse;
+  flex-direction: row;
 
   justify-content: space-between;
 
-  color: #31505c;
+  color: #46655a;
 
-  font-size: 20px;
+  font-size: 17px;
 
   font-weight: 800;
 }
 
-/* =========================
+/* =====================================
    سه کارت
-   ========================= */
+   ===================================== */
 
 .stats {
-  flex: 0 0 auto;
+  flex: 0 0 118px;
 
   display: grid;
 
@@ -1327,48 +1129,57 @@ body {
 }
 
 .stat {
-  min-height: 119px;
+  min-width: 0;
 
-  padding:
-    9px
-    7px
-    8px;
+  height: 118px;
+
+  padding: 8px 7px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  align-items: center;
 
   text-align: center;
 
   background:
     linear-gradient(
       145deg,
-      rgba(255,255,255,.84),
-      rgba(255,255,255,.64)
+      rgba(255,255,255,.91),
+      rgba(245,252,248,.77)
     );
 
   border:
     1px solid
-    rgba(255,255,255,.93);
+    rgba(255,255,255,.98);
 
-  border-radius: 24px;
+  border-radius: 23px;
 
   box-shadow:
     0 7px 18px
-    rgba(20,60,75,.10),
+    rgba(20,60,48,.15),
 
     inset 0 1px 0
-    rgba(255,255,255,.90);
+    rgba(255,255,255,.95);
 }
 
 .stat-icon {
-  font-size: 32px;
+  font-size: 29px;
 
   line-height: 1;
 }
 
 .stat-label {
-  margin-top: 4px;
+  margin-top: 3px;
 
-  color: #49636e;
+  color: #527064;
 
-  font-size: 18px;
+  font-size: 16px;
+
+  line-height: 1.15;
 
   font-weight: 800;
 }
@@ -1376,32 +1187,33 @@ body {
 .stat-value {
   margin-top: 2px;
 
-  color: #09202c;
+  color: #0c2b20;
 
-  font-size: 22px;
+  font-size: 20px;
 
-  line-height: 1.25;
+  line-height: 1.2;
 
   font-weight: 900;
+
+  white-space: nowrap;
 }
 
-/* =========================
+/* =====================================
    مناسبت‌ها
-   ========================= */
+   ===================================== */
 
 .events {
-  flex: 0 0 auto;
+  flex: 0 0 222px;
 
-  padding:
-    11px
-    20px
-    12px;
+  padding: 12px 19px 10px;
+
+  overflow: hidden;
 }
 
 .section-title {
-  color: #071c28;
+  color: #071f17;
 
-  font-size: 29px;
+  font-size: 25px;
 
   line-height: 1.2;
 
@@ -1421,13 +1233,13 @@ body {
 
   align-items: flex-start;
 
-  gap: 8px;
+  gap: 7px;
 
   padding: 2px 0;
 
-  color: #173541;
+  color: #23463a;
 
-  font-size: 21px;
+  font-size: 18px;
 
   line-height: 1.28;
 
@@ -1437,147 +1249,145 @@ body {
 }
 
 .event-dot {
-  flex:
-    0 0 auto;
+  flex: 0 0 auto;
 
-  font-size: 20px;
+  font-size: 18px;
+
+  line-height: 1.25;
 }
 
 .event-text {
-  flex:
-    1 1 auto;
+  flex: 1 1 auto;
+
+  min-width: 0;
 
   text-align: right;
 }
 
 .international {
-  flex:
-    0 0 auto;
+  flex: 0 0 auto;
 
-  margin-right: 5px;
+  margin-right: 4px;
 
-  color: #60747d;
+  color: #668077;
 
-  font-size: 13px;
+  font-size: 12px;
 
   font-weight: 800;
 
   white-space: nowrap;
 }
 
-/* =========================
+/* =====================================
    سخن بزرگان
-   ========================= */
+   ===================================== */
 
 .quote {
-  flex: 0 0 auto;
+  flex: 0 0 168px;
 
-  padding:
-    11px
-    20px
-    12px;
+  padding: 12px 19px 11px;
+
+  overflow: hidden;
 }
 
 .quote-title {
-  color: #071c28;
+  color: #071f17;
 
-  font-size: 29px;
+  font-size: 25px;
 
   line-height: 1.2;
 
   font-weight: 900;
 
-  margin-bottom: 3px;
+  margin-bottom: 5px;
 }
 
 .quote-text {
-  color: #173744;
+  color: #23483b;
 
-  font-size: 24px;
+  font-size: 21px;
 
-  line-height: 1.30;
+  line-height: 1.35;
 
   font-weight: 800;
 }
 
 .quote-author {
-  margin-top: 4px;
+  margin-top: 6px;
 
-  color: #536c76;
+  color: #5a736a;
 
-  font-size: 17px;
+  font-size: 15px;
 
-  line-height: 1.3;
+  line-height: 1.25;
 
   font-weight: 800;
 }
 
-/* =========================
+/* =====================================
    جرعه‌ای تفکر
-   ========================= */
+   ===================================== */
 
 .thought {
-  flex: 0 0 auto;
+  flex: 0 0 130px;
 
-  padding:
-    10px
-    20px
-    11px;
+  padding: 11px 19px 10px;
+
+  overflow: hidden;
 }
 
 .thought-title {
-  color: #071c28;
+  color: #071f17;
 
-  font-size: 29px;
+  font-size: 25px;
 
   line-height: 1.2;
 
   font-weight: 900;
 
-  margin-bottom: 3px;
+  margin-bottom: 5px;
 }
 
 .thought-text {
-  color: #173744;
+  color: #23483b;
 
-  font-size: 22px;
+  font-size: 20px;
 
-  line-height: 1.30;
+  line-height: 1.35;
 
   font-weight: 800;
 }
 
-/* =========================
-   شعار نهایی
-   ========================= */
+/* =====================================
+   شعار پایین
+   ===================================== */
 
 .footer-slogan {
-  flex:
-    0 0 auto;
+  flex: 1 1 auto;
 
-  margin-top: auto;
+  min-height: 58px;
 
-  padding:
-    7px
-    10px
-    3px;
+  display: flex;
 
-  color: #071c28;
+  align-items: center;
 
-  font-size: 39px;
+  justify-content: center;
 
-  line-height: 1.18;
+  padding: 3px 8px 0;
+
+  color: #ffffff;
+
+  font-size: 29px;
+
+  line-height: 1.2;
 
   font-weight: 900;
 
   text-align: center;
 
   text-shadow:
-    0 2px 4px
-    rgba(255,255,255,.98),
-
-    0 0 12px
-    rgba(255,255,255,.90);
+    0 2px 5px rgba(0,0,0,.65),
+    0 0 12px rgba(0,0,0,.35);
 }
 
 </style>
@@ -1606,10 +1416,6 @@ body {
 
   <div class="content">
 
-    <!-- =====================
-         عنوان اصلی
-         ===================== -->
-
     <header class="header glass">
 
       <div class="title">
@@ -1621,11 +1427,6 @@ body {
       </div>
 
     </header>
-
-
-    <!-- =====================
-         تاریخ
-         ===================== -->
 
     <section class="date-area glass">
 
@@ -1656,11 +1457,6 @@ body {
       </div>
 
     </section>
-
-
-    <!-- =====================
-         پیشرفت سال
-         ===================== -->
 
     <section class="year-area glass">
 
@@ -1698,11 +1494,6 @@ body {
 
     </section>
 
-
-    <!-- =====================
-         سه کارت اطلاعاتی
-         ===================== -->
-
     <section class="stats">
 
       <div class="stat">
@@ -1721,7 +1512,6 @@ body {
 
       </div>
 
-
       <div class="stat">
 
         <div class="stat-icon">
@@ -1737,7 +1527,6 @@ body {
         </div>
 
       </div>
-
 
       <div class="stat">
 
@@ -1757,11 +1546,6 @@ body {
 
     </section>
 
-
-    <!-- =====================
-         رویدادها و مناسبت‌ها
-         ===================== -->
-
     <section class="events glass">
 
       <div class="section-title">
@@ -1771,11 +1555,6 @@ body {
       ${eventsHtml}
 
     </section>
-
-
-    <!-- =====================
-         سخن بزرگان
-         ===================== -->
 
     <section class="quote glass">
 
@@ -1797,11 +1576,6 @@ body {
 
     </section>
 
-
-    <!-- =====================
-         جرعه‌ای تفکر
-         ===================== -->
-
     <section class="thought glass">
 
       <div class="thought-title">
@@ -1813,11 +1587,6 @@ body {
       </div>
 
     </section>
-
-
-    <!-- =====================
-         شعار پایین
-         ===================== -->
 
     <div class="footer-slogan">
       هم صدایی برای تحول و بهبود
@@ -1933,9 +1702,6 @@ async function sendPhotoToBale(
   };
 }
 
-/*
- * منطق لغو ارسال حفظ شده است.
- */
 async function isCalendarEnabled(
   env: CloudflareEnv
 ) {
@@ -2058,17 +1824,11 @@ export async function GET() {
         `${tehran.year}`
       );
 
-    /*
-     * دریافت مناسبت‌های سال
-     */
     const allEvents =
       await getEvents(
         persian.year
       );
 
-    /*
-     * فقط مناسبت‌های دقیق همان روز
-     */
     const todayEvents =
       getEventsForDay(
         allEvents,
@@ -2076,9 +1836,6 @@ export async function GET() {
         persian.day
       );
 
-    /*
-     * مناسبت‌های بین‌المللی فقط برای امروز
-     */
     const internationalEvents =
       getInternationalEvents(
         tehran.month,
