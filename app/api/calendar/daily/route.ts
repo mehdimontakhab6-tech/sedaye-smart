@@ -265,8 +265,35 @@ function getMoonPhase(date: Date) {
 
 async function getHijriDate(gregorian: string) {
   try {
+    const [day, month, year] =
+      gregorian.split("-").map(Number);
+
+    const previousDate = new Date(
+      Date.UTC(year, month - 1, day)
+    );
+
+    previousDate.setUTCDate(
+      previousDate.getUTCDate() - 1
+    );
+
+    const previousDay =
+      String(
+        previousDate.getUTCDate()
+      ).padStart(2, "0");
+
+    const previousMonth =
+      String(
+        previousDate.getUTCMonth() + 1
+      ).padStart(2, "0");
+
+    const previousYear =
+      previousDate.getUTCFullYear();
+
+    const previousGregorian =
+      `${previousDay}-${previousMonth}-${previousYear}`;
+
     const response = await fetch(
-      `https://api.aladhan.com/v1/gToH?date=${gregorian}`,
+      `https://api.aladhan.com/v1/gToH?date=${previousGregorian}`,
       {
         headers: {
           Accept: "application/json",
@@ -929,7 +956,7 @@ body {
    ===================================== */
 
 .header {
-  flex: 0 0 132px;
+  flex: 0 0 145px;
 
   padding: 12px 18px 10px;
 
@@ -953,13 +980,13 @@ body {
 
   color: #071f17;
 
-  font-size: 50px;
+  font-size: 52px;
 
   line-height: 1.15;
 
   font-weight: 900;
 
-  letter-spacing: -2px;
+  letter-spacing: -2.5px;
 
   text-shadow:
     0 2px 4px
@@ -971,7 +998,7 @@ body {
 
   color: #275543;
 
-  font-size: 27px;
+  font-size: 29px;
 
   line-height: 1.15;
 
@@ -1000,7 +1027,7 @@ body {
 
   color: #183c30;
 
-  font-size: 27px;
+  font-size: 29px;
 
   font-weight: 900;
 
@@ -1010,7 +1037,7 @@ body {
 .weekday {
   color: #315b49;
 
-  font-size: 29px;
+  font-size: 31px;
 
   line-height: 1.15;
 
@@ -1022,7 +1049,7 @@ body {
 
   color: #071e17;
 
-  font-size: 74px;
+  font-size: 76px;
 
   line-height: 1.03;
 
@@ -1046,7 +1073,7 @@ body {
 
   color: #38594e;
 
-  font-size: 22px;
+  font-size: 24px;
 
   line-height: 1.3;
 
@@ -1079,7 +1106,7 @@ body {
 .year-percent {
   color: #183e31;
 
-  font-size: 25px;
+  font-size: 27px;
 
   font-weight: 900;
 }
@@ -1129,7 +1156,7 @@ body {
 
   color: #46655a;
 
-  font-size: 19px;
+  font-size: 21px;
 
   font-weight: 800;
 }
@@ -1188,7 +1215,7 @@ body {
 }
 
 .stat-icon {
-  font-size: 31px;
+  font-size: 33px;
 
   line-height: 1;
 }
@@ -1198,7 +1225,7 @@ body {
 
   color: #527064;
 
-  font-size: 18px;
+  font-size: 20px;
 
   line-height: 1.15;
 
@@ -1210,7 +1237,7 @@ body {
 
   color: #0c2b20;
 
-  font-size: 22px;
+  font-size: 24px;
 
   line-height: 1.2;
 
@@ -1236,7 +1263,7 @@ body {
 .section-title {
   color: #071f17;
 
-  font-size: 31px;
+  font-size: 33px;
 
   line-height: 1.2;
 
@@ -1262,7 +1289,7 @@ body {
 
   color: #23463a;
 
-  font-size: 23px;
+  font-size: 25px;
 
   line-height: 1.32;
 
@@ -1274,7 +1301,7 @@ body {
 .event-dot {
   flex: 0 0 auto;
 
-  font-size: 23px;
+  font-size: 25px;
 
   line-height: 1.25;
 }
@@ -1294,7 +1321,7 @@ body {
 
   color: #668077;
 
-  font-size: 15px;
+  font-size: 17px;
 
   font-weight: 800;
 
@@ -1318,7 +1345,7 @@ body {
 .quote-title {
   color: #071f17;
 
-  font-size: 31px;
+  font-size: 33px;
 
   line-height: 1.2;
 
@@ -1330,7 +1357,7 @@ body {
 .quote-text {
   color: #23483b;
 
-  font-size: 27px;
+  font-size: 29px;
 
   line-height: 1.45;
 
@@ -1342,7 +1369,7 @@ body {
 
   color: #5a736a;
 
-  font-size: 20px;
+  font-size: 22px;
 
   line-height: 1.35;
 
@@ -1366,7 +1393,7 @@ body {
 .thought-title {
   color: #071f17;
 
-  font-size: 31px;
+  font-size: 33px;
 
   line-height: 1.2;
 
@@ -1378,7 +1405,7 @@ body {
 .thought-text {
   color: #23483b;
 
-  font-size: 27px;
+  font-size: 29px;
 
   line-height: 1.45;
 
@@ -1404,7 +1431,7 @@ body {
 
   color: #ffffff;
 
-  font-size: 39px;
+  font-size: 41px;
 
   line-height: 1.2;
 
