@@ -739,40 +739,26 @@ function createInfographicHtml(data: {
 
   const season = data.season;
 
-  const allEvents = [
-    ...data.events.map((x) => ({
-      text: cleanEventText(x),
-      international: false,
-    })),
-    ...data.internationalEvents.map((x) => ({
-      text: x,
-      international: true,
-    })),
-  ];
+  const internalEvents = data.events
+    .map((x) => cleanEventText(x))
+    .filter(Boolean);
 
-  const eventsHtml = allEvents.length
-    ? allEvents
-        .slice(0, 8)
+  const internationalEvents =
+    data.internationalEvents.filter(Boolean);
+
+  const internalEventsHtml = internalEvents.length
+    ? internalEvents
+        .slice(0, 4)
         .map(
           (event) => `
             <div class="event-item">
               <span class="event-dot">
-                ${event.international ? "🌍" : "✦"}
+                ✦
               </span>
 
               <span class="event-text">
-                ${escapeHtml(event.text)}
+                ${escapeHtml(event)}
               </span>
-
-              ${
-                event.international
-                  ? `
-                    <span class="international">
-                      بین‌المللی
-                    </span>
-                  `
-                  : ""
-              }
             </div>
           `
         )
@@ -785,6 +771,33 @@ function createInfographicHtml(data: {
         </span>
       </div>
     `;
+
+  const internationalEventsHtml =
+    internationalEvents.length
+      ? internationalEvents
+          .slice(0, 4)
+          .map(
+            (event) => `
+              <div class="event-item">
+                <span class="event-dot">
+                  🌍
+                </span>
+
+                <span class="event-text">
+                  ${escapeHtml(event)}
+                </span>
+              </div>
+            `
+          )
+          .join("")
+      : `
+        <div class="event-item">
+          <span class="event-dot">🌍</span>
+          <span class="event-text">
+            مناسبت بین‌المللی برای امروز ثبت نشده است.
+          </span>
+        </div>
+      `;
 
   return `
 <!doctype html>
@@ -952,6 +965,91 @@ body {
 }
 
 /* =====================================
+   رنگ‌بندی کادرها
+   ===================================== */
+
+.header {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(232,248,239,.96),
+      rgba(210,238,222,.88)
+    );
+}
+
+.date-area {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(235,248,255,.96),
+      rgba(214,238,247,.88)
+    );
+}
+
+.year-area {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255,247,222,.96),
+      rgba(250,234,191,.88)
+    );
+}
+
+.stat:nth-child(1) {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(237,250,239,.96),
+      rgba(211,239,219,.88)
+    );
+}
+
+.stat:nth-child(2) {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(239,244,255,.96),
+      rgba(216,228,249,.88)
+    );
+}
+
+.stat:nth-child(3) {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(250,241,255,.96),
+      rgba(235,219,247,.88)
+    );
+}
+
+.events {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255,248,229,.96),
+      rgba(249,232,195,.88)
+    );
+}
+
+.quote {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(244,239,255,.96),
+      rgba(226,218,247,.88)
+    );
+}
+
+.thought {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(231,249,246,.96),
+      rgba(205,237,231,.88)
+    );
+}
+
+/* =====================================
    عنوان اصلی
    ===================================== */
 
@@ -980,13 +1078,13 @@ body {
 
   color: #071f17;
 
-  font-size: 52px;
+  font-size: 54px;
 
   line-height: 1.15;
 
   font-weight: 900;
 
-  letter-spacing: -2.5px;
+  letter-spacing: -3px;
 
   text-shadow:
     0 2px 4px
@@ -998,7 +1096,7 @@ body {
 
   color: #275543;
 
-  font-size: 29px;
+  font-size: 31px;
 
   line-height: 1.15;
 
@@ -1027,7 +1125,7 @@ body {
 
   color: #183c30;
 
-  font-size: 29px;
+  font-size: 31px;
 
   font-weight: 900;
 
@@ -1037,7 +1135,7 @@ body {
 .weekday {
   color: #315b49;
 
-  font-size: 31px;
+  font-size: 33px;
 
   line-height: 1.15;
 
@@ -1049,7 +1147,7 @@ body {
 
   color: #071e17;
 
-  font-size: 76px;
+  font-size: 78px;
 
   line-height: 1.03;
 
@@ -1073,7 +1171,7 @@ body {
 
   color: #38594e;
 
-  font-size: 24px;
+  font-size: 26px;
 
   line-height: 1.3;
 
@@ -1106,7 +1204,7 @@ body {
 .year-percent {
   color: #183e31;
 
-  font-size: 27px;
+  font-size: 29px;
 
   font-weight: 900;
 }
@@ -1156,7 +1254,7 @@ body {
 
   color: #46655a;
 
-  font-size: 21px;
+  font-size: 23px;
 
   font-weight: 800;
 }
@@ -1193,13 +1291,6 @@ body {
 
   text-align: center;
 
-  background:
-    linear-gradient(
-      145deg,
-      rgba(255,255,255,.91),
-      rgba(245,252,248,.77)
-    );
-
   border:
     1px solid
     rgba(255,255,255,.98);
@@ -1215,7 +1306,7 @@ body {
 }
 
 .stat-icon {
-  font-size: 33px;
+  font-size: 37px;
 
   line-height: 1;
 }
@@ -1225,7 +1316,7 @@ body {
 
   color: #527064;
 
-  font-size: 20px;
+  font-size: 22px;
 
   line-height: 1.15;
 
@@ -1237,7 +1328,7 @@ body {
 
   color: #0c2b20;
 
-  font-size: 24px;
+  font-size: 26px;
 
   line-height: 1.2;
 
@@ -1255,7 +1346,7 @@ body {
 
   height: 222px;
 
-  padding: 15px 19px 12px;
+  padding: 13px 17px 11px;
 
   overflow: hidden;
 }
@@ -1263,7 +1354,7 @@ body {
 .section-title {
   color: #071f17;
 
-  font-size: 33px;
+  font-size: 35px;
 
   line-height: 1.2;
 
@@ -1271,7 +1362,59 @@ body {
 
   text-align: right;
 
-  margin-bottom: 7px;
+  margin-bottom: 6px;
+}
+
+.events-grid {
+  width: 100%;
+
+  height: calc(100% - 51px);
+
+  display: grid;
+
+  grid-template-columns:
+    1fr 1fr;
+
+  gap: 12px;
+}
+
+.event-group {
+  min-width: 0;
+
+  height: 100%;
+
+  padding: 8px 10px;
+
+  border-radius: 18px;
+
+  border:
+    1px solid
+    rgba(255,255,255,.90);
+
+  background:
+    rgba(255,255,255,.48);
+
+  overflow: hidden;
+}
+
+.event-group-title {
+  color: #163d30;
+
+  font-size: 25px;
+
+  line-height: 1.2;
+
+  font-weight: 900;
+
+  text-align: center;
+
+  padding-bottom: 5px;
+
+  margin-bottom: 3px;
+
+  border-bottom:
+    2px solid
+    rgba(37,92,69,.22);
 }
 
 .event-item {
@@ -1283,15 +1426,15 @@ body {
 
   align-items: flex-start;
 
-  gap: 8px;
+  gap: 7px;
 
-  padding: 3px 0;
+  padding: 2px 0;
 
   color: #23463a;
 
-  font-size: 25px;
+  font-size: 27px;
 
-  line-height: 1.32;
+  line-height: 1.28;
 
   font-weight: 800;
 
@@ -1301,9 +1444,9 @@ body {
 .event-dot {
   flex: 0 0 auto;
 
-  font-size: 25px;
+  font-size: 29px;
 
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .event-text {
@@ -1321,7 +1464,7 @@ body {
 
   color: #668077;
 
-  font-size: 17px;
+  font-size: 19px;
 
   font-weight: 800;
 
@@ -1345,7 +1488,7 @@ body {
 .quote-title {
   color: #071f17;
 
-  font-size: 33px;
+  font-size: 35px;
 
   line-height: 1.2;
 
@@ -1357,7 +1500,7 @@ body {
 .quote-text {
   color: #23483b;
 
-  font-size: 29px;
+  font-size: 31px;
 
   line-height: 1.45;
 
@@ -1369,7 +1512,7 @@ body {
 
   color: #5a736a;
 
-  font-size: 22px;
+  font-size: 24px;
 
   line-height: 1.35;
 
@@ -1393,7 +1536,7 @@ body {
 .thought-title {
   color: #071f17;
 
-  font-size: 33px;
+  font-size: 35px;
 
   line-height: 1.2;
 
@@ -1405,7 +1548,7 @@ body {
 .thought-text {
   color: #23483b;
 
-  font-size: 29px;
+  font-size: 31px;
 
   line-height: 1.45;
 
@@ -1431,7 +1574,7 @@ body {
 
   color: #ffffff;
 
-  font-size: 41px;
+  font-size: 43px;
 
   line-height: 1.2;
 
@@ -1606,7 +1749,29 @@ body {
         📌 رویدادها و مناسبت‌ها
       </div>
 
-      ${eventsHtml}
+      <div class="events-grid">
+
+        <div class="event-group">
+
+          <div class="event-group-title">
+            🇮🇷 مناسبت‌های داخلی
+          </div>
+
+          ${internalEventsHtml}
+
+        </div>
+
+        <div class="event-group">
+
+          <div class="event-group-title">
+            🌍 مناسبت‌های بین‌المللی
+          </div>
+
+          ${internationalEventsHtml}
+
+        </div>
+
+      </div>
 
     </section>
 
@@ -2066,4 +2231,4 @@ export async function GET() {
       }
     );
   }
-    }
+      }
