@@ -1105,7 +1105,7 @@ body {
   letter-spacing: -2.5px;
 
   font-family:
-    "B Titr Bold",
+    "vazirmatn",
     Tahoma,
     Arial,
     sans-serif;
