@@ -1054,7 +1054,7 @@ body {
    ===================================== */
 
 .header {
-  flex: 0 0 145px;
+  flex: 0 0 155px;
 
   padding: 12px 18px 10px;
 
@@ -1078,13 +1078,13 @@ body {
 
   color: #071f17;
 
-  font-size: 54px;
+  font-size: 58px;
 
   line-height: 1.15;
 
   font-weight: 900;
 
-  letter-spacing: -3px;
+  letter-spacing: -2px;
 
   text-shadow:
     0 2px 4px
@@ -1096,11 +1096,11 @@ body {
 
   color: #275543;
 
-  font-size: 31px;
+  font-size: 33px;
 
   line-height: 1.15;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 /* =====================================
@@ -1125,7 +1125,7 @@ body {
 
   color: #183c30;
 
-  font-size: 31px;
+  font-size: 33px;
 
   font-weight: 900;
 
@@ -1135,7 +1135,7 @@ body {
 .weekday {
   color: #315b49;
 
-  font-size: 33px;
+  font-size: 35px;
 
   line-height: 1.15;
 
@@ -1147,7 +1147,7 @@ body {
 
   color: #071e17;
 
-  font-size: 78px;
+  font-size: 82px;
 
   line-height: 1.03;
 
@@ -1171,11 +1171,11 @@ body {
 
   color: #38594e;
 
-  font-size: 26px;
+  font-size: 28px;
 
   line-height: 1.3;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 /* =====================================
@@ -1204,7 +1204,7 @@ body {
 .year-percent {
   color: #183e31;
 
-  font-size: 29px;
+  font-size: 31px;
 
   font-weight: 900;
 }
@@ -1254,9 +1254,9 @@ body {
 
   color: #46655a;
 
-  font-size: 23px;
+  font-size: 25px;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 /* =====================================
@@ -1306,7 +1306,7 @@ body {
 }
 
 .stat-icon {
-  font-size: 37px;
+  font-size: 41px;
 
   line-height: 1;
 }
@@ -1316,11 +1316,11 @@ body {
 
   color: #527064;
 
-  font-size: 22px;
+  font-size: 24px;
 
   line-height: 1.15;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .stat-value {
@@ -1328,7 +1328,7 @@ body {
 
   color: #0c2b20;
 
-  font-size: 26px;
+  font-size: 28px;
 
   line-height: 1.2;
 
@@ -1354,7 +1354,7 @@ body {
 .section-title {
   color: #071f17;
 
-  font-size: 35px;
+  font-size: 37px;
 
   line-height: 1.2;
 
@@ -1400,7 +1400,7 @@ body {
 .event-group-title {
   color: #163d30;
 
-  font-size: 25px;
+  font-size: 27px;
 
   line-height: 1.2;
 
@@ -1432,11 +1432,11 @@ body {
 
   color: #23463a;
 
-  font-size: 27px;
+  font-size: 29px;
 
   line-height: 1.28;
 
-  font-weight: 800;
+  font-weight: 900;
 
   text-align: right;
 }
@@ -1444,7 +1444,7 @@ body {
 .event-dot {
   flex: 0 0 auto;
 
-  font-size: 29px;
+  font-size: 32px;
 
   line-height: 1.2;
 }
@@ -1464,9 +1464,9 @@ body {
 
   color: #668077;
 
-  font-size: 19px;
+  font-size: 20px;
 
-  font-weight: 800;
+  font-weight: 900;
 
   white-space: nowrap;
 }
@@ -1488,7 +1488,7 @@ body {
 .quote-title {
   color: #071f17;
 
-  font-size: 35px;
+  font-size: 37px;
 
   line-height: 1.2;
 
@@ -1500,11 +1500,11 @@ body {
 .quote-text {
   color: #23483b;
 
-  font-size: 31px;
+  font-size: 33px;
 
   line-height: 1.45;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .quote-author {
@@ -1512,11 +1512,11 @@ body {
 
   color: #5a736a;
 
-  font-size: 24px;
+  font-size: 26px;
 
   line-height: 1.35;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 /* =====================================
@@ -1536,7 +1536,7 @@ body {
 .thought-title {
   color: #071f17;
 
-  font-size: 35px;
+  font-size: 37px;
 
   line-height: 1.2;
 
@@ -1548,11 +1548,11 @@ body {
 .thought-text {
   color: #23483b;
 
-  font-size: 31px;
+  font-size: 33px;
 
   line-height: 1.45;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 /* =====================================
@@ -1574,7 +1574,7 @@ body {
 
   color: #ffffff;
 
-  font-size: 43px;
+  font-size: 45px;
 
   line-height: 1.2;
 
@@ -2231,4 +2231,4 @@ export async function GET() {
       }
     );
   }
-      }
+}
