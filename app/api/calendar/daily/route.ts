@@ -810,8 +810,25 @@ function createInfographicHtml(data: {
 
 <style>
 
-@import url("https://db.onlinewebfonts.com/c/3671adca6f650c92b83f906e49656986?family=B+Nazanin");
-@import url("https://db.onlinewebfonts.com/c/a0ea7e7833cd4f7694a4913fccb9aacf?family=B+Titr+Bold");
+@font-face {
+  font-family: "B Nazanin";
+  src:
+    url("https://raw.githubusercontent.com/artbijan/Web-Font/master/BNazaninBold.woff2")
+    format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "B Titr Bold";
+  src:
+    url("https://raw.githubusercontent.com/artbijan/Web-Font/master/BTitrBold.woff2")
+    format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
 
 * {
   box-sizing: border-box;
