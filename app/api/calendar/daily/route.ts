@@ -1102,7 +1102,7 @@ body {
 
   font-weight: 900;
 
-  letter-spacing: -2px;
+  letter-spacing: -2.5px;
 
   font-family:
     "B Titr Bold",
@@ -1111,8 +1111,9 @@ body {
     sans-serif;
 
   text-shadow:
-    0 2px 4px
-    rgba(255,255,255,.98);
+    0 2px 0 rgba(255,255,255,.95),
+    0 3px 5px rgba(0,0,0,.18),
+    0 0 1px rgba(7,31,23,.55);
 }
 
 .greeting {
