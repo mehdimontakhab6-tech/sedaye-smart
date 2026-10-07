@@ -810,7 +810,8 @@ function createInfographicHtml(data: {
 
 <style>
 
-@import url("https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap");
+@import url("https://db.onlinewebfonts.com/c/3671adca6f650c92b83f906e49656986?family=B+Nazanin");
+@import url("https://db.onlinewebfonts.com/c/a0ea7e7833cd4f7694a4913fccb9aacf?family=B+Titr+Bold");
 
 * {
   box-sizing: border-box;
@@ -829,7 +830,7 @@ body {
 
 body {
   font-family:
-    "Vazirmatn",
+    "B Nazanin",
     Tahoma,
     Arial,
     sans-serif;
@@ -1085,6 +1086,12 @@ body {
   font-weight: 900;
 
   letter-spacing: -2px;
+
+  font-family:
+    "B Titr Bold",
+    Tahoma,
+    Arial,
+    sans-serif;
 
   text-shadow:
     0 2px 4px
@@ -1363,6 +1370,12 @@ body {
   text-align: right;
 
   margin-bottom: 6px;
+
+  font-family:
+    "B Titr Bold",
+    Tahoma,
+    Arial,
+    sans-serif;
 }
 
 .events-grid {
@@ -1415,6 +1428,12 @@ body {
   border-bottom:
     2px solid
     rgba(37,92,69,.22);
+
+  font-family:
+    "B Titr Bold",
+    Tahoma,
+    Arial,
+    sans-serif;
 }
 
 .event-item {
@@ -1495,6 +1514,12 @@ body {
   font-weight: 900;
 
   margin-bottom: 9px;
+
+  font-family:
+    "B Titr Bold",
+    Tahoma,
+    Arial,
+    sans-serif;
 }
 
 .quote-text {
@@ -1543,6 +1568,12 @@ body {
   font-weight: 900;
 
   margin-bottom: 9px;
+
+  font-family:
+    "B Titr Bold",
+    Tahoma,
+    Arial,
+    sans-serif;
 }
 
 .thought-text {
@@ -2231,4 +2262,4 @@ export async function GET() {
       }
     );
   }
-}
+    }
