@@ -1078,7 +1078,7 @@ body {
 
   color: #071f17;
 
-  font-size: 58px;
+  font-size: 54px;
 
   line-height: 1.15;
 
