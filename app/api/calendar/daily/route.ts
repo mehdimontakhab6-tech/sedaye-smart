@@ -579,129 +579,22 @@ function getInternationalEvents(
   return fixed[`${month}-${day}`] || [];
 }
 
-const DAILY_CONTENT = [
-  {
-    quote: "بهترین راه پیش‌بینی آینده، ساختن آن است.",
-    author: "پیتر دراکر",
-    source: "نقل مشهور",
-    thought:
-      "امروز چه کاری می‌توانم برای ساختن آینده بهتر انجام دهم؟",
-  },
-  {
-    quote: "هرگز تسلیم نشو.",
-    author: "وینستون چرچیل",
-    source: "نقل مشهور",
-    thought:
-      "در برابر سختی امروز، کجا می‌توانم یک قدم دیگر ادامه بدهم؟",
-  },
-  {
-    quote:
-      "آینده به کسانی تعلق دارد که به آن باور دارند.",
-    author: "النور روزولت",
-    source: "نقل مشهور",
-    thought:
-      "برای آینده‌ای که می‌خواهم، امروز چه کاری باید انجام دهم؟",
-  },
-  {
-    quote:
-      "آنچه مهم است، این است که هرگز از پرسیدن دست نکشیم.",
-    author: "آلبرت اینشتین",
-    source: "نقل مشهور",
-    thought:
-      "امروز چه پرسشی می‌تواند نگاه من را تغییر دهد؟",
-  },
-  {
-    quote: "ساده بودن، نهایت پیچیدگی است.",
-    author: "لئوناردو داوینچی",
-    source: "نقل مشهور",
-    thought:
-      "چه چیزی را می‌توانم در کار امروز ساده‌تر و بهتر کنم؟",
-  },
-  {
-    quote: "دانستن کافی نیست؛ باید به کار بست.",
-    author: "یوهان ولفگانگ گوته",
-    source: "نقل مشهور",
-    thought:
-      "کدام دانسته من امروز باید به عمل تبدیل شود؟",
-  },
-  {
-    quote:
-      "راه هزار کیلومتری با یک قدم آغاز می‌شود.",
-    author: "لائوتسه",
-    source: "دائو ده جینگ",
-    thought:
-      "اولین قدم واقعی من برای هدف امروز چیست؟",
-  },
-  {
-    quote:
-      "باور کن که می‌توانی، نیمی از راه را رفته‌ای.",
-    author: "تئودور روزولت",
-    source: "نقل مشهور",
-    thought:
-      "کدام تردید را امروز باید کنار بگذارم؟",
-  },
-  {
-    quote:
-      "اگر می‌خواهی جهان را تغییر دهی، از خودت شروع کن.",
-    author: "مهاتما گاندی",
-    source: "نقل مشهور",
-    thought:
-      "امروز کدام تغییر کوچک را از خودم شروع می‌کنم؟",
-  },
-  {
-    quote:
-      "رقابت اصلی با دیروزِ خودت است.",
-    author: "مایکل جردن",
-    source: "نقل مشهور",
-    thought:
-      "امروز در چه چیزی می‌توانم کمی بهتر از دیروز باشم؟",
-  },
-  {
-    quote:
-      "رویا بزرگ داشته باش و کوچک شروع کن.",
-    author: "ریچارد برانسون",
-    source: "نقل مشهور",
-    thought:
-      "برای یک هدف بزرگ، قدم کوچک امروز من چیست؟",
-  },
-  {
-    quote:
-      "تغییر تنها ثابت زندگی است.",
-    author: "هراکلیتوس",
-    source: "حکمت یونان باستان",
-    thought:
-      "آیا از تغییر برای رشد خود استفاده می‌کنم؟",
-  },
-  {
-    quote:
-      "آنچه اندازه می‌گیری، می‌توانی بهتر کنی.",
-    author: "پیتر دراکر",
-    source: "نقل مدیریتی",
-    thought:
-      "کدام نتیجه را باید دقیق‌تر بررسی کنم؟",
-  },
-  {
-    quote:
-      "هر روز فرصتی تازه برای بهتر شدن است.",
-    author: "حکمت معاصر",
-    source: "نقل انگیزشی",
-    thought:
-      "امروز چه یک درصدی می‌توانم بهتر شوم؟",
-  },
-  {
-    quote:
-      "بزرگی در خدمت به دیگران است.",
-    author: "آلبرت شوایتزر",
-    source: "نقل مشهور",
-    thought:
-      "امروز چه کمکی می‌توانم بدون انتظار جبران انجام دهم؟",
-  },
-];
+function getDailyContent(dayOfYear: number) {
+  const item =
+    DAILY_CONTENT[
+      (dayOfYear - 1) % DAILY_CONTENT.length
+    ] as any;
 
-function getDailyContent(day: number) {
-  return DAILY_CONTENT[
-    (day - 1) % DAILY_CONTENT.length
-  ];
+  if (Array.isArray(item)) {
+    return {
+      author: item[0],
+      quote: item[1],
+      source: item[2],
+      thought: item[3],
+    };
+  }
+
+  return item;
 }
 
 function createInfographicHtml(data: {
@@ -1836,11 +1729,7 @@ body {
       </div>
 
       <div class="quote-author">
-        گوینده:
-        ${escapeHtml(data.author)}
-        ·
-        منبع:
-        ${escapeHtml(data.source)}
+        — ${escapeHtml(data.author)}
       </div>
 
     </section>
@@ -1848,7 +1737,7 @@ body {
     <section class="thought glass">
 
       <div class="thought-title">
-        💡 جرعه‌ای تفکر
+        🧠 جرعه‌ای تفکر
       </div>
 
       <div class="thought-text">
@@ -2120,7 +2009,7 @@ export async function GET() {
 
     const content =
       getDailyContent(
-        persian.day
+        progress.dayOfYear
       );
 
     const animal =
@@ -2281,4 +2170,4 @@ export async function GET() {
       }
     );
   }
-    }
+}
