@@ -119,18 +119,18 @@ function getYearProgress(
 
 function getPersianZodiac(month: number) {
   const signs = [
-    "حمل ♈",
-    "ثور ♉",
-    "جوزا ♊",
-    "سرطان ♋",
-    "اسد ♌",
-    "سنبله ♍",
-    "میزان ♎",
-    "عقرب ♏",
-    "قوس ♐",
-    "جدی ♑",
-    "دلو ♒",
-    "حوت ♓",
+    "حمل",
+    "ثور",
+    "جوزا",
+    "سرطان",
+    "اسد",
+    "سنبله",
+    "میزان",
+    "عقرب",
+    "قوس",
+    "جدی",
+    "دلو",
+    "حوت",
   ];
 
   return signs[month - 1] || "";
@@ -253,15 +253,15 @@ function getMoonPhase(date: Date) {
     age += synodicMonth;
   }
 
-  if (age < 1.85) return "ماه نو 🌑";
-  if (age < 7.38) return "هلال افزاینده 🌒";
-  if (age < 9.22) return "ربع اول 🌓";
-  if (age < 14.77) return "تربیع افزاینده 🌔";
-  if (age < 16.61) return "ماه کامل 🌕";
-  if (age < 22.15) return "تربیع کاهنده 🌖";
-  if (age < 23.99) return "ربع آخر 🌗";
+  if (age < 1.85) return "ماه نو";
+  if (age < 7.38) return "هلال افزاینده";
+  if (age < 9.22) return "ربع اول";
+  if (age < 14.77) return "تربیع افزاینده";
+  if (age < 16.61) return "ماه کامل";
+  if (age < 22.15) return "تربیع کاهنده";
+  if (age < 23.99) return "ربع آخر";
 
-  return "هلال کاهنده 🌘";
+  return "هلال کاهنده";
 }
 
 async function getHijriDate(gregorian: string) {
@@ -647,7 +647,7 @@ function createInfographicHtml(data: {
           (event) => `
             <div class="event-item">
               <span class="event-dot">
-                ✦
+                -
               </span>
 
               <span class="event-text">
@@ -659,7 +659,7 @@ function createInfographicHtml(data: {
         .join("")
     : `
       <div class="event-item">
-        <span class="event-dot">✦</span>
+        <span class="event-dot">-</span>
         <span class="event-text">
           مناسبتی برای امروز ثبت نشده است.
         </span>
@@ -674,7 +674,7 @@ function createInfographicHtml(data: {
             (event) => `
               <div class="event-item">
                 <span class="event-dot">
-                  🌍
+                  -
                 </span>
 
                 <span class="event-text">
@@ -686,7 +686,7 @@ function createInfographicHtml(data: {
           .join("")
       : `
         <div class="event-item">
-          <span class="event-dot">🌍</span>
+          <span class="event-dot">-</span>
           <span class="event-text">
             مناسبت بین‌المللی برای امروز ثبت نشده است.
           </span>
@@ -1697,7 +1697,6 @@ body {
         <div class="event-group">
 
           <div class="event-group-title">
-            🇮🇷 مناسبت‌های داخلی
           </div>
 
           ${internalEventsHtml}
@@ -1707,7 +1706,6 @@ body {
         <div class="event-group">
 
           <div class="event-group-title">
-            🌍 مناسبت‌های بین‌المللی
           </div>
 
           ${internationalEventsHtml}
@@ -2170,4 +2168,4 @@ export async function GET() {
       }
     );
   }
-}
+    }
