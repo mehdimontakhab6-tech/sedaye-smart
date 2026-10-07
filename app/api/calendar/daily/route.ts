@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { DAILY_CONTENT } from "./daily-content";
 
 const TIME_ZONE = "Asia/Tehran";
 const WIDTH = 1024;
