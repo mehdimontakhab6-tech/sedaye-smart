@@ -261,7 +261,6 @@ const CONTEXT_TERMS = [
   "هویتی",
   "تولد",
   "فوت",
-  "نام",
 ];
 
 function normalizePersianText(value: string): string {
@@ -565,7 +564,7 @@ function parseGregorianDate(
   }
 
   return null;
-    }
+}
 
 function parseDate(
   value?: string
@@ -769,6 +768,24 @@ function parseFeed(
   };
 }
 
+/*
+ * فیلتر بسیار دقیق اخبار ثبت احوال
+ *
+ * اصل مهم:
+ * واژه‌های عمومی مثل «نام»، «فوت»، «تولد»
+ * یا «جمعیت» به‌تنهایی برای مرتبط بودن کافی نیستند.
+ *
+ * خبر باید یا:
+ *
+ * 1) مستقیماً در عنوان به ثبت احوال یا یکی از
+ * خدمات هویتی مشخص اشاره کند.
+ *
+ * یا:
+ *
+ * 2) در عنوان یک موضوع جمعیتی/ثبت احوالی داشته باشد
+ * و در توضیحات نیز صراحتاً به ثبت احوال، خدمات
+ * هویتی یا داده‌های ثبت احوالی اشاره شده باشد.
+ */
 function isRelevantNews(
   title: string,
   description = ""
@@ -781,81 +798,128 @@ function isRelevantNews(
       description
     );
 
-  const full =
-    `${t} ${d}`;
+  /*
+   * این موارد حتی اگر همراه با یک واژه عمومی
+   * ثبت احوالی باشند، معمولاً خبرهای نامرتبط هستند.
+   */
+  const blocked = [
+    "دلار",
+    "ارز",
+    "تخصیص ارز",
+    "رسوب کالا",
+    "واردکنندگان",
+    "واردات",
+    "صادرات",
+    "فروش خودرو",
+    "خرید خودرو",
+    "وام",
+    "بانک",
+    "بانکی",
+    "سهام",
+    "بورس",
+    "قیمت طلا",
+    "قیمت سکه",
+    "قیمت مسکن",
+    "مسکن",
+    "سوخت",
+    "بنزین",
+    "گازوئیل",
+    "فوتبال",
+    "ورزش",
+    "کشتی",
+    "والیبال",
+    "بسکتبال",
+    "مائو",
+    "انقلاب فرهنگی چین",
+  ];
 
   if (
-    STRONG_TERMS.some((term) =>
+    blocked.some((term) =>
       t.includes(
         normalizePersianText(term)
       )
     )
   ) {
-    return true;
-  }
-
-  const secondary =
-    SECONDARY_TERMS.some(
-      (term) =>
-        t.includes(
-          normalizePersianText(term)
-        )
-    );
-
-  if (secondary) {
-    const blocked = [
-      "دلار",
-      "ارز",
-      "فروش خودرو",
-      "خرید خودرو",
-      "وام",
-      "بانک",
-      "سهام",
-      "بورس",
-      "قیمت طلا",
-      "قیمت سکه",
-      "قیمت مسکن",
-      "سوخت",
-      "بنزین",
-      "فوتبال",
-      "ورزش",
-    ];
-
-    return !blocked.some(
-      (term) =>
-        t.includes(
-          normalizePersianText(term)
-        )
-    );
-  }
-
-  const hasContext =
-    CONTEXT_TERMS.some(
-      (term) =>
-        full.includes(
-          normalizePersianText(term)
-        )
-    );
-
-  if (!hasContext) {
     return false;
   }
 
-  const descriptionRelevant =
-    STRONG_TERMS.some(
-      (term) =>
-        d.includes(
-          normalizePersianText(term)
-        )
+  /*
+   * ۱) تطبیق مستقیم عنوان
+   *
+   * اگر عنوان مستقیماً درباره ثبت احوال،
+   * سازمان ثبت احوال، کارت ملی، شناسنامه،
+   * سامانه سهیم، خدمات هویتی و موارد مشخص
+   * باشد، خبر مرتبط محسوب می‌شود.
+   */
+  const directTitleMatch =
+    STRONG_TERMS.some((term) =>
+      t.includes(
+        normalizePersianText(term)
+      )
     ) ||
-    SECONDARY_TERMS.some(
-      (term) =>
-        d.includes(
-          normalizePersianText(term)
-        )
+    SECONDARY_TERMS.some((term) =>
+      t.includes(
+        normalizePersianText(term)
+      )
     );
 
-  return descriptionRelevant;
+  if (directTitleMatch) {
+    return true;
+  }
+
+  /*
+   * ۲) تطبیق موضوعی کنترل‌شده
+   *
+   * این واژه‌ها به‌تنهایی کافی نیستند.
+   * باید هم در عنوان باشند و هم توضیحات RSS
+   * صراحتاً به موضوع ثبت احوال/هویت مرتبط باشند.
+   *
+   * «نام» عمداً حذف شده است.
+   */
+  const contextualTitleTerms = [
+    "ولادت",
+    "وفات",
+    "ازدواج",
+    "طلاق",
+    "جمعیت",
+    "هویتی",
+    "تولد",
+    "فوت",
+  ];
+
+  const hasContextInTitle =
+    contextualTitleTerms.some((term) =>
+      t.includes(
+        normalizePersianText(term)
+      )
+    );
+
+  if (!hasContextInTitle) {
+    return false;
+  }
+
+  /*
+   * توضیحات نیز باید نشانه صریح ثبت احوالی
+   * داشته باشند؛ وجود صرف «فوت»، «تولد» یا
+   * «جمعیت» در توضیحات کافی نیست.
+   */
+  const identityInDescription =
+    STRONG_TERMS.some((term) =>
+      d.includes(
+        normalizePersianText(term)
+      )
+    ) ||
+    SECONDARY_TERMS.some((term) =>
+      d.includes(
+        normalizePersianText(term)
+      )
+    );
+
+  if (!identityInDescription) {
+    return false;
+  }
+
+  return true;
 }
 
 function extractArticleLinks(
@@ -1524,10 +1588,10 @@ async function fetchSpecialSource(
       );
 
     const candidates =
-  results.filter(
-    (item) =>
-      item !== null
-  );
+      results.filter(
+        (item) =>
+          item !== null
+      );
 
     diagnostics.parsedItems =
       candidates.length;
@@ -1938,14 +2002,6 @@ function formatNewsMessage(
     "━━━━━━━━━━━━━━"
   );
 
-  lines.push(
-    "🇮🇷 اخبار مرتبط با ثبت احوال از رسانه‌های معتبر داخلی"
-  );
-
-  lines.push(
-    "🤖 مدیر هوشمند گروه"
-  );
-
   return lines.join(
     "\n"
   );
@@ -2311,4 +2367,4 @@ export async function GET(
       }
     );
   }
-}
+  }
