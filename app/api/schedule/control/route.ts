@@ -2,7 +2,10 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
 
-type ScheduleKey = "calendar" | "news";
+type ScheduleKey =
+  | "calendar"
+  | "news"
+  | "kargozin";
 
 function getSupabaseConfig(env: CloudflareEnv) {
   return {
@@ -133,11 +136,19 @@ export async function GET() {
         true
       );
 
+    const kargozin =
+      await getSetting(
+        env,
+        "schedule_kargozin",
+        true
+      );
+
     return Response.json(
       {
         ok: true,
         calendar,
         news,
+        kargozin,
       },
       {
         headers: {
@@ -178,7 +189,8 @@ export async function POST(
 
     if (
       schedule !== "calendar" &&
-      schedule !== "news"
+      schedule !== "news" &&
+      schedule !== "kargozin"
     ) {
       return Response.json(
         {
@@ -210,7 +222,9 @@ export async function POST(
     const settingKey =
       schedule === "calendar"
         ? "schedule_calendar"
-        : "schedule_news";
+        : schedule === "news"
+        ? "schedule_news"
+        : "schedule_kargozin";
 
     await setSetting(
       env,
