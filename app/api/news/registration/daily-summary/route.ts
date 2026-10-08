@@ -818,7 +818,7 @@ function parseTasnimDateFromUrl(
 
     const match =
       path.match(
-        /\/news\/(1[2-5]\d{2})\/(0?[1-9]|1[0-2])\/(0?[1-9]|[12]\d|3[01])(?:\/|$)/i
+        /\/(?:fa\/)?news\/(1[2-5]\d{2})\/(0?[1-9]|1[0-2])\/(0?[1-9]|[12]\d|3[01])(?:\/|$)/i
       );
 
     if (!match) {
@@ -2607,4 +2607,4 @@ export async function GET(
       }
     );
   }
-    }
+  }
