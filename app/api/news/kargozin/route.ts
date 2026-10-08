@@ -568,6 +568,60 @@ function getSupabaseConfig(
   };
 }
 
+async function getScheduleEnabled(
+  env: CloudflareEnv
+): Promise<boolean> {
+  const { url, key } =
+    getSupabaseConfig(env);
+
+  if (!url || !key) {
+    throw new Error(
+      "Supabase configuration is missing"
+    );
+  }
+
+  const endpoint =
+    `${url}/rest/v1/settings` +
+    `?key=eq.${encodeURIComponent(
+      "schedule_kargozin"
+    )}` +
+    "&select=value" +
+    "&limit=1";
+
+  const response =
+    await fetchWithTimeout(
+      endpoint,
+      {
+        headers: {
+          apikey: key,
+          Authorization:
+            `Bearer ${key}`,
+          Accept:
+            "application/json",
+        },
+        cache: "no-store",
+      }
+    );
+
+  if (!response.ok) {
+    throw new Error(
+      `Supabase schedule GET failed: HTTP ${response.status}`
+    );
+  }
+
+  const rows =
+    await response.json();
+
+  if (
+    !Array.isArray(rows) ||
+    rows.length === 0
+  ) {
+    return true;
+  }
+
+  return rows[0]?.value !== "false";
+}
+
 async function getSeenUrls(
   env: CloudflareEnv
 ): Promise<string[]> {
@@ -1005,6 +1059,33 @@ export async function GET(
         async: true,
       });
 
+    /*
+     * وضعیت روشن/خاموش مجله کارگزینی
+     * از تنظیمات Supabase خوانده می‌شود.
+     *
+     * اگر این تنظیم وجود نداشته باشد،
+     * مقدار پیش‌فرض true است تا قابلیت فعلی
+     * بدون تغییر ادامه پیدا کند.
+     *
+     * وقتی خاموش باشد، Cron همچنان اجرا می‌شود
+     * اما هیچ مطلبی بررسی یا ارسال نمی‌شود.
+     */
+    const scheduleEnabled =
+      await getScheduleEnabled(env);
+
+    if (!scheduleEnabled) {
+      return NextResponse.json({
+        ok: true,
+        enabled: false,
+        sent: 0,
+        reason:
+          "kargozin_disabled",
+        runtime_ms:
+          Date.now() -
+          startedAt,
+      });
+    }
+
     const seen =
       await getSeenUrls(env);
 
@@ -1169,4 +1250,4 @@ export async function GET(
       }
     );
   }
-      }
+}
