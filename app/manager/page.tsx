@@ -145,12 +145,19 @@ export default function ManagerPage() {
     setMessage("");
 
     try {
+      const controlUrl =
+        `${window.location.origin}/api/schedule/control`;
+
       const response = await fetch(
-        "/api/schedule/control",
+        controlUrl,
         {
           method: "POST",
+          cache: "no-store",
+          credentials: "same-origin",
           headers: {
             "Content-Type":
+              "application/json",
+            Accept:
               "application/json",
           },
           body: JSON.stringify({
@@ -160,7 +167,21 @@ export default function ManagerPage() {
         }
       );
 
-      const data = await response.json();
+      const responseText =
+        await response.text();
+
+      let data: any = null;
+
+      try {
+        data =
+          responseText
+            ? JSON.parse(responseText)
+            : null;
+      } catch {
+        throw new Error(
+          `پاسخ نامعتبر از سرور دریافت شد. HTTP ${response.status}`
+        );
+      }
 
       if (
         !response.ok ||
@@ -168,7 +189,7 @@ export default function ManagerPage() {
       ) {
         throw new Error(
           data?.error ||
-            "ثبت وضعیت زمان‌بندی انجام نشد."
+            `ثبت وضعیت زمان‌بندی انجام نشد. HTTP ${response.status}`
         );
       }
 
@@ -183,6 +204,11 @@ export default function ManagerPage() {
           : `🛑 ${schedule?.title || "ارسال"} لغو شد.`
       );
     } catch (error: any) {
+      console.error(
+        "[manager] schedule toggle error:",
+        error
+      );
+
       setMessage(
         error?.message ||
           "خطا در ثبت وضعیت."
@@ -746,4 +772,4 @@ export default function ManagerPage() {
 
     </main>
   );
-          }
+                  }
