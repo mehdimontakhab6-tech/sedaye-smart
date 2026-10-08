@@ -524,23 +524,48 @@ function parseGregorianDate(
     return null;
   }
 
+  /*
+   * ابتدا فرمت‌های استاندارد ISO را بررسی می‌کنیم.
+   */
   const iso =
     normalized.match(
       /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/
     );
 
-  if (!iso) {
-    return null;
+  if (iso) {
+    const date =
+      new Date(normalized);
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return date;
+    }
   }
 
-  const date = new Date(normalized);
+  /*
+   * RSS معمولاً تاریخ را با فرمت
+   * RFC 822 / RFC 1123 ارسال می‌کند.
+   *
+   * نمونه:
+   * Wed, 07 Oct 2026 18:20:00 GMT
+   *
+   * Date.parse این فرمت را در
+   * Cloudflare Workers تشخیص می‌دهد.
+   */
+  const timestamp =
+    Date.parse(normalized);
 
-  return Number.isNaN(
-    date.getTime()
-  )
-    ? null
-    : date;
-}
+  if (
+    !Number.isNaN(timestamp)
+  ) {
+    return new Date(timestamp);
+  }
+
+  return null;
+    }
 
 function parseDate(
   value?: string
