@@ -1093,11 +1093,21 @@ function extractArticleDescription(
 function extractArticlePublishedDate(
   html: string
 ): Date | null {
+  /*
+   * ۱) متادیتای استاندارد صفحه
+   */
   const patterns = [
     /<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["']/i,
     /<meta[^>]+name=["']pubdate["'][^>]+content=["']([^"']+)["']/i,
     /<meta[^>]+name=["']date["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+itemprop=["']datePublished["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+property=["']og:published_time["'][^>]+content=["']([^"']+)["']/i,
+
+    /*
+     * JSON-LD
+     */
     /"datePublished"\s*:\s*"([^"]+)"/i,
+    /"dateCreated"\s*:\s*"([^"]+)"/i,
     /"published_time"\s*:\s*"([^"]+)"/i,
   ];
 
@@ -1106,19 +1116,20 @@ function extractArticlePublishedDate(
       html.match(regex);
 
     if (match?.[1]) {
-      const parsed =
-        parseDate(
+      const value =
+        decodeXml(
           match[1]
-        );
+        ).trim();
+
+      const parsed =
+        parseDate(value);
 
       if (parsed) {
         return parsed;
       }
 
       const direct =
-        new Date(
-          match[1]
-        );
+        new Date(value);
 
       if (
         !Number.isNaN(
@@ -1126,6 +1137,82 @@ function extractArticlePublishedDate(
         )
       ) {
         return direct;
+      }
+    }
+  }
+
+  /*
+   * ۲) تاریخ فارسی که داخل متن صفحه
+   * تسنیم نمایش داده می‌شود.
+   *
+   * نمونه:
+   * 16 مهر 1405 - 17:51
+   *
+   * یا:
+   * ۱۶ مهر ۱۴۰۵ - ۱۷:۵۱
+   */
+  const persianDatePatterns = [
+    /(\d{1,2})\s+(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s+(\d{4})\s*[-–]\s*(\d{1,2}):(\d{2})/i,
+
+    /(\d{1,2})\s+(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s+(\d{4})\s+(\d{1,2}):(\d{2})/i,
+  ];
+
+  for (const regex of persianDatePatterns) {
+    const match =
+      normalizeDigits(
+        cleanText(html)
+      ).match(regex);
+
+    if (!match) {
+      continue;
+    }
+
+    const months: Record<string, number> = {
+      فروردین: 1,
+      اردیبهشت: 2,
+      خرداد: 3,
+      تیر: 4,
+      مرداد: 5,
+      شهریور: 6,
+      مهر: 7,
+      آبان: 8,
+      آذر: 9,
+      دی: 10,
+      بهمن: 11,
+      اسفند: 12,
+    };
+
+    const day =
+      Number(match[1]);
+
+    const month =
+      months[match[2]];
+
+    const year =
+      Number(match[3]);
+
+    const hour =
+      Number(match[4] || 0);
+
+    const minute =
+      Number(match[5] || 0);
+
+    if (
+      month &&
+      year >= 1200 &&
+      year <= 1600
+    ) {
+      const parsed =
+        jalaliToGregorian(
+          year,
+          month,
+          day,
+          hour,
+          minute
+        );
+
+      if (parsed) {
+        return parsed;
       }
     }
   }
@@ -2413,4 +2500,4 @@ export async function GET(
       }
     );
   }
-}
+  }
