@@ -794,12 +794,59 @@ function parseDate(
 }
 
 /*
- * تاریخ URL تسنیم به تنهایی معتبر نیست.
+ * تاریخ جلالی موجود در URL تسنیم
+ *
+ * نمونه:
+ * /fa/news/1405/07/16/...
+ *
+ * اگر تاریخ واقعی داخل صفحه مقاله پیدا نشود،
+ * این تاریخ به عنوان fallback استفاده می‌شود.
  */
 function parseTasnimDateFromUrl(
-  _url: string
+  url: string
 ): Date | null {
-  return null;
+  try {
+    const parsedUrl =
+      new URL(url);
+
+    const path =
+      normalizeDigits(
+        decodeURIComponent(
+          parsedUrl.pathname
+        )
+      );
+
+    const match =
+      path.match(
+        /\/news\/(1[2-5]\d{2})\/(0?[1-9]|1[0-2])\/(0?[1-9]|[12]\d|3[01])(?:\/|$)/i
+      );
+
+    if (!match) {
+      return null;
+    }
+
+    const year =
+      Number(match[1]);
+
+    const month =
+      Number(match[2]);
+
+    const day =
+      Number(match[3]);
+
+    const date =
+      jalaliToGregorian(
+        year,
+        month,
+        day,
+        0,
+        0
+      );
+
+    return date;
+  } catch {
+    return null;
+  }
 }
 
 function parseFeed(
@@ -2560,4 +2607,4 @@ export async function GET(
       }
     );
   }
-}
+    }
