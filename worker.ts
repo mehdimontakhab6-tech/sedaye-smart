@@ -3,6 +3,7 @@ import { default as handler } from "./.open-next/worker.js";
 
 const CALENDAR_CRON = "45 4 * * *";
 const NEWS_CRON = "0 19 * * *";
+const KARGOZIN_CRON = "* * * * *";
 
 const BASE_URL =
   "https://sedaye-smart.mehdimontakhab6.workers.dev";
@@ -135,6 +136,63 @@ export default {
 
       console.log(
         "[cron] registration news completed successfully"
+      );
+
+      return;
+    }
+
+    /*
+     * ─────────────────────────────────────────────
+     * مجله کارگزینی
+     * Cron: هر دقیقه
+     *
+     * مسیر خودش بررسی می‌کند که آیا مقاله جدیدی
+     * در مجله کارگزینی منتشر شده است یا خیر.
+     *
+     * هر مقاله فقط یک بار ارسال می‌شود.
+     * ─────────────────────────────────────────────
+     */
+    if (event.cron === KARGOZIN_CRON) {
+      console.log(
+        "[cron] running Kargozin..."
+      );
+
+      const request = new Request(
+        `${BASE_URL}/api/news/kargozin`,
+        {
+          method: "GET",
+          headers: {
+            "User-Agent": "sedaye-smart-cron"
+          }
+        }
+      );
+
+      const response = await handler.fetch(
+        request,
+        env,
+        ctx
+      );
+
+      const body = await response.text();
+
+      console.log(
+        "[cron] Kargozin status:",
+        response.status
+      );
+
+      console.log(
+        "[cron] Kargozin response:",
+        body.slice(0, 4000)
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Kargozin cron failed: HTTP ${response.status}`
+        );
+      }
+
+      console.log(
+        "[cron] Kargozin completed successfully"
       );
 
       return;
