@@ -330,6 +330,7 @@ async function getEvents(persianYear: number) {
         headers: {
           Accept: "application/json",
         },
+        cache: "no-store",
       }
     );
 
@@ -337,28 +338,112 @@ async function getEvents(persianYear: number) {
 
     const data = await response.json();
 
-    if (Array.isArray(data)) {
-      return data;
-    }
-
     const events: any[] = [];
 
-    const yearData =
-      data?.[String(persianYear)];
+    function collectEvents(value: any) {
+      if (!value) {
+        return;
+      }
 
-    if (Array.isArray(yearData)) {
-      for (const monthData of yearData) {
-        if (Array.isArray(monthData?.events)) {
-          events.push(...monthData.events);
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          collectEvents(item);
         }
+
+        return;
+      }
+
+      if (
+        typeof value !== "object"
+      ) {
+        return;
+      }
+
+      const hasEventFields =
+        value.jDate !== undefined ||
+        value.jDay !== undefined ||
+        value.jMonth !== undefined ||
+        value.mDate !== undefined ||
+        value.text !== undefined ||
+        value.event !== undefined ||
+        value.title !== undefined ||
+        value.name !== undefined;
+
+      if (hasEventFields) {
+        events.push(value);
+      }
+
+      if (Array.isArray(value.events)) {
+        for (const event of value.events) {
+          collectEvents(event);
+        }
+      }
+
+      if (Array.isArray(value.data)) {
+        collectEvents(value.data);
+      }
+
+      if (
+        Array.isArray(value.items)
+      ) {
+        collectEvents(value.items);
       }
     }
 
-    if (Array.isArray(data?.events)) {
-      events.push(...data.events);
+    collectEvents(data);
+
+    const unique = new Map<
+      string,
+      any
+    >();
+
+    for (const event of events) {
+      const text = String(
+        event?.text ||
+        event?.event ||
+        event?.title ||
+        event?.name ||
+        event?.description ||
+        ""
+      ).trim();
+
+      const jDate = String(
+        event?.jDate ||
+        ""
+      ).trim();
+
+      const mDate = String(
+        event?.mDate ||
+        ""
+      ).trim();
+
+      const jMonth = String(
+        event?.jMonth ||
+        ""
+      ).trim();
+
+      const jDay = String(
+        event?.jDay ||
+        ""
+      ).trim();
+
+      const key =
+        `${jDate}|${mDate}|${jMonth}|${jDay}|${text}`;
+
+      if (
+        text &&
+        !unique.has(key)
+      ) {
+        unique.set(
+          key,
+          event
+        );
+      }
     }
 
-    return events;
+    return Array.from(
+      unique.values()
+    );
   } catch {
     return [];
   }
@@ -369,45 +454,157 @@ function getEventsForDay(
   month: number,
   day: number
 ) {
-  return events.filter((event) => {
-    const jDate = String(
-      event?.jDate ||
-        event?.date ||
-        ""
-    );
+  const result: any[] = [];
 
-    const normalized = normalize(jDate);
+  for (const event of events) {
+    const possibleJDates = [
+      event?.jDate,
+      event?.jalaliDate,
+      event?.persianDate,
+      event?.shamsiDate,
+      event?.date,
+    ];
 
-    const match = normalized.match(
-      /^(?:\d{4}[\/\-])?(\d{1,2})[\/\-](\d{1,2})$/
-    );
+    let matched = false;
 
-    if (match) {
-      return (
-        Number(match[1]) === month &&
-        Number(match[2]) === day
-      );
+    for (
+      const rawDate of possibleJDates
+    ) {
+      if (
+        rawDate === undefined ||
+        rawDate === null
+      ) {
+        continue;
+      }
+
+      const normalized =
+        normalize(
+          String(rawDate)
+        )
+          .replace(
+            /[\u200c\u200f]/g,
+            ""
+          )
+          .trim();
+
+      const match =
+        normalized.match(
+          /^(?:\d{4}\s*[\/\-]\s*)?(\d{1,2})\s*[\/\-]\s*(\d{1,2})$/
+        );
+
+      if (match) {
+        const eventMonth =
+          Number(match[1]);
+
+        const eventDay =
+          Number(match[2]);
+
+        if (
+          eventMonth === month &&
+          eventDay === day
+        ) {
+          matched = true;
+          break;
+        }
+      }
+
+      const fullMatch =
+        normalized.match(
+          /(?:^|\s)(?:\d{4}\s*[\/\-]\s*)?(\d{1,2})\s*[\/\-]\s*(\d{1,2})(?:\s|$)/
+        );
+
+      if (fullMatch) {
+        const eventMonth =
+          Number(fullMatch[1]);
+
+        const eventDay =
+          Number(fullMatch[2]);
+
+        if (
+          eventMonth === month &&
+          eventDay === day
+        ) {
+          matched = true;
+          break;
+        }
+      }
     }
 
-    const eventMonth = Number(
-      event?.jMonth ??
-        event?.month ??
-        event?.persianMonth ??
-        0
-    );
+    if (!matched) {
+      const eventMonth =
+        Number(
+          normalize(
+            String(
+              event?.jMonth ??
+              event?.persianMonth ??
+              event?.jalaliMonth ??
+              event?.month ??
+              ""
+            )
+          )
+        );
 
-    const eventDay = Number(
-      event?.jDay ??
-        event?.day ??
-        event?.persianDay ??
-        0
-    );
+      const eventDay =
+        Number(
+          normalize(
+            String(
+              event?.jDay ??
+              event?.persianDay ??
+              event?.jalaliDay ??
+              event?.day ??
+              ""
+            )
+          )
+        );
 
-    return (
-      eventMonth === month &&
-      eventDay === day
-    );
-  });
+      if (
+        eventMonth === month &&
+        eventDay === day
+      ) {
+        matched = true;
+      }
+    }
+
+    if (matched) {
+      result.push(event);
+    }
+  }
+
+  const unique = new Map<
+    string,
+    any
+  >();
+
+  for (const event of result) {
+    const text = String(
+      event?.text ||
+      event?.event ||
+      event?.title ||
+      event?.name ||
+      event?.description ||
+      ""
+    ).trim();
+
+    const key =
+      `${text}|` +
+      `${event?.jDate || ""}|` +
+      `${event?.jMonth || ""}|` +
+      `${event?.jDay || ""}`;
+
+    if (
+      text &&
+      !unique.has(key)
+    ) {
+      unique.set(
+        key,
+        event
+      );
+    }
+  }
+
+  return Array.from(
+    unique.values()
+  );
 }
 
 /* =====================================
@@ -2170,4 +2367,4 @@ export async function GET() {
       }
     );
   }
-}
+    }
