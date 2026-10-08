@@ -580,26 +580,72 @@ function parseDate(
     return null;
   }
 
-  const gregorian =
-    parseGregorianDate(normalized);
-
-  if (gregorian) {
-    return gregorian;
-  }
-
+  /*
+   * نکته بسیار مهم:
+   * بسیاری از رسانه‌های ایرانی، مخصوصاً تسنیم،
+   * تاریخ خبر را به صورت جلالی ارسال می‌کنند.
+   *
+   * Date.parse ممکن است تاریخ‌هایی مثل:
+   * 1405/07/16
+   *
+   * را به شکل میلادی تفسیر کند.
+   *
+   * بنابراین قبل از Date.parse،
+   * تاریخ‌های عددی با سال جلالی را تشخیص می‌دهیم.
+   */
   const numeric =
     normalized.match(
       /(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/
     );
 
   if (numeric) {
-    return jalaliToGregorian(
-      Number(numeric[1]),
-      Number(numeric[2]),
-      Number(numeric[3]),
-      Number(numeric[4] || 0),
-      Number(numeric[5] || 0)
-    );
+    const year =
+      Number(numeric[1]);
+
+    const month =
+      Number(numeric[2]);
+
+    const day =
+      Number(numeric[3]);
+
+    const hour =
+      Number(numeric[4] || 0);
+
+    const minute =
+      Number(numeric[5] || 0);
+
+    /*
+     * سال‌های ۱۲۰۰ تا ۱۶۰۰ در این مسیر
+     * به عنوان سال جلالی در نظر گرفته می‌شوند.
+     */
+    if (
+      year >= 1200 &&
+      year <= 1600
+    ) {
+      const jalali =
+        jalaliToGregorian(
+          year,
+          month,
+          day,
+          hour,
+          minute
+        );
+
+      if (jalali) {
+        return jalali;
+      }
+    }
+  }
+
+  /*
+   * بعد از بررسی جلالی، تاریخ‌های استاندارد
+   * میلادی و تاریخ‌های RSS را بررسی می‌کنیم.
+   */
+  const gregorian =
+    parseGregorianDate(normalized);
+
+  if (gregorian) {
+    return gregorian;
   }
 
   const months: Record<string, number> = {
@@ -2367,4 +2413,4 @@ export async function GET(
       }
     );
   }
-  }
+}
