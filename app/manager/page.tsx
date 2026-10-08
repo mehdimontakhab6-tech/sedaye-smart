@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 
-type ScheduleKind = "calendar" | "news";
+type ScheduleKind =
+  | "calendar"
+  | "news"
+  | "kargozin";
 
 const schedules = [
   {
@@ -23,6 +26,15 @@ const schedules = [
     cancelLabel: "🛑 لغو اخبار ثبت احوال",
     enableLabel: "▶️ فعال‌سازی اخبار ثبت احوال",
   },
+  {
+    kind: "kargozin" as ScheduleKind,
+    title: "📚 مجله کارگزینی",
+    time: "⏱ بررسی هر دقیقه",
+    description:
+      "بررسی خودکار مطالب جدید مجله کارگزینی و ارسال مطالب جدید به گروه",
+    cancelLabel: "🛑 خاموش کردن مجله کارگزینی",
+    enableLabel: "▶️ روشن کردن مجله کارگزینی",
+  },
 ];
 
 export default function ManagerPage() {
@@ -35,6 +47,7 @@ export default function ManagerPage() {
   >({
     calendar: true,
     news: true,
+    kargozin: true,
   });
 
   const [saving, setSaving] =
@@ -92,6 +105,8 @@ export default function ManagerPage() {
             data.calendar !== false,
           news:
             data.news !== false,
+          kargozin:
+            data.kargozin !== false,
         });
       }
     } catch {
@@ -731,4 +746,4 @@ export default function ManagerPage() {
 
     </main>
   );
-        }
+          }
