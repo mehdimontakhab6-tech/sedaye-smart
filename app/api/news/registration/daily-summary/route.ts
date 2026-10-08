@@ -179,12 +179,18 @@ const RSS_SOURCES: SourceConfig[] = [
 ];
 
 /*
- * منبع تخصصی تسنیم
+ * منابع تخصصی تسنیم
  */
 const SPECIAL_SOURCES: SourceConfig[] = [
   {
     url:
       "https://tasnimnews.ir/fa/keyword/4067/%D8%B3%D8%A7%D8%B2%D9%85%D8%A7%D9%86-%D8%AB%D8%A8%D8%AA-%D8%A7%D8%AD%D9%88%D8%A7%D9%84-%DA%A9%D8%B4%D9%88%D8%B1",
+    domain: "tasnimnews.ir",
+    source: "تسنیم",
+  },
+  {
+    url:
+      "https://www.tasnimnews.ir/fa/service/2/%D8%A7%D8%AC%D8%AA%D9%85%D8%A7%D8%B9%DB%8C",
     domain: "tasnimnews.ir",
     source: "تسنیم",
   },
@@ -2529,7 +2535,7 @@ export async function GET(
               ) =>
                 total +
                 item.relevantItems,
-              0
+                0
             ),
 
           selected:
@@ -2552,7 +2558,7 @@ export async function GET(
               ) =>
                 total +
                 item.windowItems,
-              0
+                0
             ),
         },
 
@@ -2607,4 +2613,4 @@ export async function GET(
       }
     );
   }
-  }
+      }
