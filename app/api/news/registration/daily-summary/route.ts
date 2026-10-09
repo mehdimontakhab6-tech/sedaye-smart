@@ -1112,60 +1112,123 @@ function isRelevantNews(
   return true;
 }
 
+/*
+ * استخراج لینک خبر از صفحه فهرست تسنیم
+ *
+ * اصلاحات:
+ * - پشتیبانی از href و data-url و data-href و data-link
+ * - پشتیبانی از لینک‌های نسبی و لینک‌های //...
+ * - پذیرش دامنه‌های رسمی tasnimnews.ir و tasnimnews.com
+ * - حذف پارامترها و بخش‌های غیرضروری URL
+ * - حفظ محدودیت دامنه برای جلوگیری از لینک خارجی
+ */
 function extractArticleLinks(
   html: string,
   sourceDomain: string
 ): string[] {
   const links: string[] = [];
 
-  const regex =
-    /(?:href|data-url)=["']([^"']+)["']/gi;
+  const normalizedSource =
+    normalizeDomain(sourceDomain);
+
+  const isTasnimSource =
+    normalizedSource === "tasnimnews.ir" ||
+    normalizedSource === "tasnimnews.com";
+
+  const attributeRegex =
+    /\b(?:href|data-url|data-href|data-link|data-article-url)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
 
   let match: RegExpExecArray | null;
 
   while (
-    (match = regex.exec(html)) !== null
+    (match = attributeRegex.exec(html)) !== null
   ) {
     let href =
-      match[1]?.trim();
-
-    if (!href) {
-      continue;
-    }
-
-    if (href.startsWith("/")) {
-      href =
-        `https://${sourceDomain}${href}`;
-    }
+      (
+        match[1] ||
+        match[2] ||
+        match[3] ||
+        ""
+      )
+        .trim()
+        .replace(/&amp;/gi, "&")
+        .replace(/&#38;/g, "&");
 
     if (
-      !/^https?:\/\//i.test(href)
+      !href ||
+      href.startsWith("#") ||
+      /^javascript:/i.test(href) ||
+      /^mailto:/i.test(href)
     ) {
       continue;
     }
 
     try {
-      const url =
-        new URL(href);
+      let url: URL;
+
+      if (href.startsWith("//")) {
+        url = new URL(`https:${href}`);
+      } else {
+        url = new URL(
+          href,
+          `https://${normalizedSource}/`
+        );
+      }
+
+      const host =
+        normalizeDomain(url.hostname);
+
+      const sameDomain =
+        host === normalizedSource;
+
+      const tasnimAlias =
+        isTasnimSource &&
+        (
+          host === "tasnimnews.ir" ||
+          host === "tasnimnews.com"
+        );
 
       if (
-        normalizeDomain(
-          url.hostname
-        ) !==
-        normalizeDomain(
-          sourceDomain
-        )
+        !sameDomain &&
+        !tasnimAlias
       ) {
         continue;
       }
 
       if (
-        !url.pathname.includes(
-          "/news/"
-        )
+        !isTrustedIranianMedia(host)
       ) {
         continue;
       }
+
+      /*
+       * فقط لینک مقاله‌ها پذیرفته می‌شوند.
+       * مسیرهای فهرست، کلیدواژه و دسته‌بندی
+       * به عنوان مقاله ارسال نمی‌شوند.
+       */
+      const path =
+        decodeURIComponent(
+          url.pathname
+        );
+
+      if (
+        !/\/(?:fa\/)?news\/\d{4}\/\d{1,2}\/\d{1,2}\//i.test(path) &&
+        !/\/(?:fa\/)?news\/\d{5,}\/?$/i.test(path)
+      ) {
+        continue;
+      }
+
+      url.hash = "";
+
+      /*
+       * پارامترهای رهگیری حذف می‌شوند،
+       * اما خود مسیر خبر حفظ می‌شود.
+       */
+      url.searchParams.delete("utm_source");
+      url.searchParams.delete("utm_medium");
+      url.searchParams.delete("utm_campaign");
+      url.searchParams.delete("utm_term");
+      url.searchParams.delete("utm_content");
 
       links.push(
         url.toString()
@@ -1180,25 +1243,88 @@ function extractArticleLinks(
   ];
 }
 
+/*
+ * استخراج عنوان خبر
+ *
+ * اصلاح: ترتیب property و content در meta
+ * ممکن است در HTML متفاوت باشد.
+ */
 function extractArticleTitle(
   html: string
 ): string {
   const patterns = [
-    /<h1[^>]*>([\s\S]*?)<\/h1>/i,
-    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
-    /<title[^>]*>([\s\S]*?)<\/title>/i,
+    /<h1\b[^>]*>([\s\S]*?)<\/h1>/i,
+    /<meta\b(?=[^>]*\bproperty=["']og:title["'])(?=[^>]*\bcontent=["']([^"']+)["'])[^>]*>/i,
+    /<meta\b(?=[^>]*\bname=["']twitter:title["'])(?=[^>]*\bcontent=["']([^"']+)["'])[^>]*>/i,
+    /<title\b[^>]*>([\s\S]*?)<\/title>/i,
   ];
 
-  for (const regex of patterns) {
+  for (let i = 0; i < patterns.length; i++) {
+    const match =
+      html.match(patterns[i]);
+
+    if (!match) {
+      continue;
+    }
+
+    let rawValue = "";
+
+    if (i === 1 || i === 2) {
+      /*
+       * برای metaها مقدار content
+       * مستقل از ترتیب ویژگی‌ها استخراج می‌شود.
+       */
+      const contentMatch =
+        match[0].match(
+          /\bcontent=["']([^"']+)["']/i
+        );
+
+      rawValue =
+        contentMatch?.[1] || "";
+    } else {
+      rawValue =
+        match[1] || "";
+    }
+
+    const value =
+      cleanText(
+        decodeXml(rawValue)
+      );
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+/*
+ * استخراج توضیحات خبر
+ *
+ * اصلاح: پشتیبانی از ترتیب‌های متفاوت
+ * ویژگی‌های meta و خلاصه‌های متداول HTML.
+ */
+function extractArticleDescription(
+  html: string
+): string {
+  const metaPatterns = [
+    /\bname=["']description["'][^>]*\bcontent=["']([^"']+)["']/i,
+    /\bcontent=["']([^"']+)["'][^>]*\bname=["']description["']/i,
+    /\bproperty=["']og:description["'][^>]*\bcontent=["']([^"']+)["']/i,
+    /\bcontent=["']([^"']+)["'][^>]*\bproperty=["']og:description["']/i,
+    /\bname=["']twitter:description["'][^>]*\bcontent=["']([^"']+)["']/i,
+    /\bcontent=["']([^"']+)["'][^>]*\bname=["']twitter:description["']/i,
+  ];
+
+  for (const regex of metaPatterns) {
     const match =
       html.match(regex);
 
     if (match?.[1]) {
       const value =
         cleanText(
-          decodeXml(
-            match[1]
-          )
+          decodeXml(match[1])
         );
 
       if (value) {
@@ -1207,48 +1333,51 @@ function extractArticleTitle(
     }
   }
 
-  return "";
-}
+  const descriptionMatch =
+    html.match(
+      /<p\b[^>]*class=["'][^"']*(?:lead|summary|subtitle|description|intro)[^"']*["'][^>]*>([\s\S]*?)<\/p>/i
+    );
 
-function extractArticleDescription(
-  html: string
-): string {
-  const patterns = [
-    /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
-  ];
-
-  for (const regex of patterns) {
-    const match =
-      html.match(regex);
-
-    if (match?.[1]) {
-      return cleanText(
-        decodeXml(
-          match[1]
-        )
-      );
-    }
+  if (descriptionMatch?.[1]) {
+    return cleanText(
+      decodeXml(
+        descriptionMatch[1]
+      )
+    );
   }
 
   return "";
 }
 
+/*
+ * استخراج تاریخ انتشار مقاله
+ *
+ * ترتیب ویژگی‌های meta در سایت‌ها یکسان نیست.
+ * ابتدا تاریخ ساختاریافته بررسی می‌شود و سپس
+ * تاریخ فارسی داخل متن صفحه.
+ */
 function extractArticlePublishedDate(
   html: string
 ): Date | null {
-  const patterns = [
-    /<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+name=["']pubdate["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+name=["']date["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+itemprop=["']datePublished["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+property=["']og:published_time["'][^>]+content=["']([^"']+)["']/i,
+  const metaPatterns = [
+    /\bproperty=["']article:published_time["'][^>]*\bcontent=["']([^"']+)["']/i,
+    /\bcontent=["']([^"']+)["'][^>]*\bproperty=["']article:published_time["']/i,
+    /\bname=["']pubdate["'][^>]*\bcontent=["']([^"']+)["']/i,
+    /\bcontent=["']([^"']+)["'][^>]*\bname=["']pubdate["']/i,
+    /\bname=["']date["'][^>]*\bcontent=["']([^"']+)["']/i,
+    /\bcontent=["']([^"']+)["'][^>]*\bname=["']date["']/i,
+    /\bitemprop=["']datePublished["'][^>]*\bcontent=["']([^"']+)["']/i,
+    /\bcontent=["']([^"']+)["'][^>]*\bitemprop=["']datePublished["']/i,
+    /\bproperty=["']og:published_time["'][^>]*\bcontent=["']([^"']+)["']/i,
+    /\bcontent=["']([^"']+)["'][^>]*\bproperty=["']og:published_time["']/i,
     /"datePublished"\s*:\s*"([^"]+)"/i,
     /"dateCreated"\s*:\s*"([^"]+)"/i,
     /"published_time"\s*:\s*"([^"]+)"/i,
+    /"dateModified"\s*:\s*"([^"]+)"/i,
+    /<time\b[^>]*\bdatetime=["']([^"']+)["']/i,
   ];
 
-  for (const regex of patterns) {
+  for (const regex of metaPatterns) {
     const match =
       html.match(regex);
 
@@ -1278,17 +1407,22 @@ function extractArticlePublishedDate(
     }
   }
 
-  const persianDatePatterns = [
-    /(\d{1,2})\s+(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s+(\d{4})\s*[-–]\s*(\d{1,2}):(\d{2})/i,
+  /*
+   * تاریخ فارسی داخل صفحه
+   */
+  const plainText =
+    normalizeDigits(
+      cleanText(html)
+    );
 
-    /(\d{1,2})\s+(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s+(\d{4})\s+(\d{1,2}):(\d{2})/i,
+  const persianDatePatterns = [
+    /(\d{1,2})\s+(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s+(\d{4})\s*[-–،,]?\s*(\d{1,2}):(\d{2})/i,
+    /(\d{1,2})\s+(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s+(\d{4})/i,
   ];
 
   for (const regex of persianDatePatterns) {
     const match =
-      normalizeDigits(
-        cleanText(html)
-      ).match(regex);
+      plainText.match(regex);
 
     if (!match) {
       continue;
@@ -1782,6 +1916,8 @@ async function fetchSpecialSource(
                     headers: {
                       "User-Agent":
                         "Mozilla/5.0 (compatible; SedayeSmart/6.0)",
+                      Accept:
+                        "text/html,application/xhtml+xml,*/*",
                     },
                     cache:
                       "no-store",
@@ -1812,6 +1948,10 @@ async function fetchSpecialSource(
                   article
                 );
 
+              /*
+               * اگر تاریخ داخل صفحه پیدا نشد،
+               * تاریخ موجود در URL تسنیم استفاده می‌شود.
+               */
               const date =
                 realDate ||
                 parseTasnimDateFromUrl(
@@ -1831,7 +1971,9 @@ async function fetchSpecialSource(
                 source:
                   source.source,
                 domain:
-                  source.domain,
+                  normalizeDomain(
+                    new URL(url).hostname
+                  ),
                 publishedAt:
                   date.toISOString(),
                 description,
@@ -2535,7 +2677,7 @@ export async function GET(
               ) =>
                 total +
                 item.relevantItems,
-                0
+              0
             ),
 
           selected:
@@ -2558,7 +2700,7 @@ export async function GET(
               ) =>
                 total +
                 item.windowItems,
-                0
+              0
             ),
         },
 
@@ -2613,4 +2755,4 @@ export async function GET(
       }
     );
   }
-      }
+  }
