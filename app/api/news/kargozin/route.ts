@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
@@ -56,14 +57,11 @@ function absoluteUrl(value: string): string {
   }
 }
 
-/**
- * URLها را برای مقایسه یکسان می‌کند.
- * پارامترهای رهگیری و fragment حذف می‌شوند.
- */
 function normalizeUrl(value: string): string {
   try {
     const url = new URL(value);
     url.hash = "";
+    url.hostname = url.hostname.toLowerCase();
 
     const trackingParams = [
       "utm_source",
@@ -80,8 +78,6 @@ function normalizeUrl(value: string): string {
       url.searchParams.delete(param);
     }
 
-    url.hostname = url.hostname.toLowerCase();
-
     if (
       url.pathname.length > 1 &&
       url.pathname.endsWith("/")
@@ -89,7 +85,6 @@ function normalizeUrl(value: string): string {
       url.pathname = url.pathname.replace(/\/+$/, "");
     }
 
-    // ترتیب پارامترهای باقی‌مانده را ثابت می‌کنیم.
     url.searchParams.sort();
 
     return url.toString();
@@ -244,9 +239,11 @@ function extractMainContent(html: string): string {
   candidates.push(
     ...(html.match(/<article\b[^>]*>[\s\S]*?<\/article>/gi) || [])
   );
+
   candidates.push(
     ...(html.match(/<main\b[^>]*>[\s\S]*?<\/main>/gi) || [])
   );
+
   candidates.push(
     ...(html.match(
       /<(?:div|section)\b[^>]+class=["'][^"']*(?:entry-content|post-content|article-content|single-content|content-area)[^"']*["'][^>]*>[\s\S]*?<\/(?:div|section)>/gi
@@ -272,6 +269,7 @@ function extractMainContent(html: string): string {
   }
 
   const uniqueParagraphs = [...new Set(paragraphs)];
+
   if (uniqueParagraphs.length > 0) {
     return uniqueParagraphs.join("\n\n");
   }
@@ -347,29 +345,35 @@ function extractHomepageLinks(html: string): string[] {
   return [...new Set(links)];
 }
 
-/**
- * RSS معمولاً مطالب جدید را در ابتدای فهرست قرار می‌دهد.
- */
 function extractFeedLinks(xml: string): string[] {
   const links: string[] = [];
-  const itemRegex = /<(?:item|entry)\b[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
+  const itemRegex =
+    /<(?:item|entry)\b[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
+
   let item: RegExpExecArray | null;
 
   while ((item = itemRegex.exec(xml)) !== null) {
     const block = item[1];
-
     const linkTag = block.match(/<link\b[^>]*\/?>/i);
     let link = "";
 
     if (linkTag) {
       link =
         extractAttribute(linkTag[0], "href") ||
-        cleanText(linkTag[0].replace(/<\/?link\b[^>]*>/gi, ""));
+        cleanText(
+          linkTag[0].replace(/<\/?link\b[^>]*>/gi, "")
+        );
     }
 
     if (!link) {
-      const guid = block.match(/<guid\b[^>]*>([\s\S]*?)<\/guid>/i);
-      if (guid?.[1] && /^https?:\/\//i.test(cleanText(guid[1]))) {
+      const guid = block.match(
+        /<guid\b[^>]*>([\s\S]*?)<\/guid>/i
+      );
+
+      if (
+        guid?.[1] &&
+        /^https?:\/\//i.test(cleanText(guid[1]))
+      ) {
         link = cleanText(guid[1]);
       }
     }
@@ -403,20 +407,20 @@ function extractSitemapLinks(xml: string): string[] {
 async function fetchOptionalText(url: string): Promise<string> {
   try {
     const response = await fetchWithTimeout(url);
+
     if (!response.ok) return "";
+
     return await response.text();
   } catch (error) {
-    console.warn("[kargozin] optional source unavailable:", url, error);
+    console.warn(
+      "[kargozin] optional source unavailable:",
+      url,
+      error
+    );
     return "";
   }
 }
 
-/**
- * ترتیب اولویت:
- * 1. RSS (معمولاً جدیدترین خبرها اول هستند)
- * 2. نقشه سایت
- * 3. لینک‌های صفحه اصلی
- */
 async function discoverArticles(): Promise<string[]> {
   const homepageResponse = await fetchWithTimeout(SOURCE_URL);
 
@@ -431,7 +435,9 @@ async function discoverArticles(): Promise<string[]> {
   const [feedXml, sitemapXml, wpSitemapXml] = await Promise.all([
     fetchOptionalText("https://kargozin.com/feed/"),
     fetchOptionalText("https://kargozin.com/sitemap.xml"),
-    fetchOptionalText("https://kargozin.com/wp-sitemap-posts-post-1.xml"),
+    fetchOptionalText(
+      "https://kargozin.com/wp-sitemap-posts-post-1.xml"
+    ),
   ]);
 
   const feedLinks = extractFeedLinks(feedXml);
@@ -439,7 +445,6 @@ async function discoverArticles(): Promise<string[]> {
   const wpSitemapLinks = extractSitemapLinks(wpSitemapXml);
   const homepageLinks = extractHomepageLinks(homepageHtml);
 
-  // ترتیب حفظ می‌شود: ابتدا RSS و سپس نقشه سایت و صفحه اصلی.
   return [
     ...new Set([
       ...feedLinks,
@@ -455,7 +460,11 @@ async function fetchArticle(url: string): Promise<Article | null> {
     const response = await fetchWithTimeout(url);
 
     if (!response.ok) {
-      console.warn("[kargozin] article HTTP error:", url, response.status);
+      console.warn(
+        "[kargozin] article HTTP error:",
+        url,
+        response.status
+      );
       return null;
     }
 
@@ -482,18 +491,26 @@ async function fetchArticle(url: string): Promise<Article | null> {
       videoUrl: extractVideoUrl(html) || undefined,
     };
   } catch (error) {
-    console.error("[kargozin] article fetch error:", url, error);
+    console.error(
+      "[kargozin] article fetch error:",
+      url,
+      error
+    );
     return null;
   }
 }
 
 function getSupabaseConfig(env: CloudflareEnv) {
   return {
-    url: env.NEXT_PUBLIC_SUPABASE_URL,
-    key: env.SUPABASE_SERVICE_ROLE_KEY,
+    url: env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, ""),
+    key: env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
   };
 }
 
+/**
+ * برای کلیدهای جدید sb_secret_ فقط apikey ارسال می‌شود.
+ * کلید محرمانه جدید، JWT نیست و نباید به عنوان Bearer ارسال شود.
+ */
 async function getSetting(
   env: CloudflareEnv,
   settingKey: string
@@ -512,16 +529,24 @@ async function getSetting(
   const response = await fetchWithTimeout(endpoint, {
     headers: {
       apikey: key,
-      Authorization: `Bearer ${key}`,
       Accept: "application/json",
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Supabase GET failed: HTTP ${response.status}`);
+    const detail = await response.text().catch(() => "");
+    console.error(
+      "[kargozin] Supabase GET error:",
+      response.status,
+      detail.slice(0, 500)
+    );
+
+    throw new Error(
+      `Supabase GET failed: HTTP ${response.status}`
+    );
   }
 
-  const rows = await response.json();
+  const rows: unknown = await response.json();
 
   if (!Array.isArray(rows) || rows.length === 0) {
     return null;
@@ -530,7 +555,9 @@ async function getSetting(
   return rows[0]?.value ?? null;
 }
 
-async function getScheduleEnabled(env: CloudflareEnv): Promise<boolean> {
+async function getScheduleEnabled(
+  env: CloudflareEnv
+): Promise<boolean> {
   const value = await getSetting(env, "schedule_kargozin");
 
   if (value === false || value === "false") return false;
@@ -539,14 +566,16 @@ async function getScheduleEnabled(env: CloudflareEnv): Promise<boolean> {
     try {
       if (JSON.parse(value) === false) return false;
     } catch {
-      // رشته‌ای غیر از false است؛ فعال می‌ماند.
+      // اگر مقدار رشته‌ای دیگری باشد، فعال فرض می‌شود.
     }
   }
 
   return true;
 }
 
-async function getSeenUrls(env: CloudflareEnv): Promise<string[]> {
+async function getSeenUrls(
+  env: CloudflareEnv
+): Promise<string[]> {
   const value = await getSetting(env, SETTINGS_KEY);
 
   let parsed: unknown = value;
@@ -578,22 +607,33 @@ async function saveSeenUrls(
 
   const uniqueUrls = [...new Set(urls)].slice(-1000);
 
-  const response = await fetchWithTimeout(`${url}/rest/v1/settings`, {
-    method: "POST",
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=minimal",
-    },
-    body: JSON.stringify({
-      key: SETTINGS_KEY,
-      value: uniqueUrls,
-    }),
-  });
+  const response = await fetchWithTimeout(
+    `${url}/rest/v1/settings`,
+    {
+      method: "POST",
+      headers: {
+        apikey: key,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify({
+        key: SETTINGS_KEY,
+        value: uniqueUrls,
+      }),
+    }
+  );
 
   if (!response.ok) {
-    throw new Error(`Supabase UPSERT failed: HTTP ${response.status}`);
+    const detail = await response.text().catch(() => "");
+    console.error(
+      "[kargozin] Supabase UPSERT error:",
+      response.status,
+      detail.slice(0, 500)
+    );
+
+    throw new Error(
+      `Supabase UPSERT failed: HTTP ${response.status}`
+    );
   }
 }
 
@@ -642,7 +682,10 @@ async function baleRequest(
 
   const data = await response.json();
 
-  if (!response.ok || (data as { ok?: boolean })?.ok === false) {
+  if (
+    !response.ok ||
+    (data as { ok?: boolean })?.ok === false
+  ) {
     throw new Error(
       `Bale ${method} failed: ${JSON.stringify(data)}`
     );
@@ -651,14 +694,16 @@ async function baleRequest(
   return data;
 }
 
-async function sendText(env: CloudflareEnv, text: string): Promise<void> {
+async function sendText(
+  env: CloudflareEnv,
+  text: string
+): Promise<void> {
   const chatId = env.BALE_GROUP_ID;
 
   if (!chatId) {
     throw new Error("BALE_GROUP_ID is missing");
   }
 
-  // متن بلند را به قطعات کوچک‌تر می‌فرستیم تا محدودیت پیام باعث شکست نشود.
   const chunks: string[] = [];
   const maxLength = 3500;
 
@@ -681,7 +726,10 @@ async function sendPhoto(
   caption: string
 ): Promise<void> {
   const chatId = env.BALE_GROUP_ID;
-  if (!chatId) throw new Error("BALE_GROUP_ID is missing");
+
+  if (!chatId) {
+    throw new Error("BALE_GROUP_ID is missing");
+  }
 
   await baleRequest(env, "sendPhoto", {
     chat_id: chatId,
@@ -696,7 +744,10 @@ async function sendVideo(
   caption: string
 ): Promise<void> {
   const chatId = env.BALE_GROUP_ID;
-  if (!chatId) throw new Error("BALE_GROUP_ID is missing");
+
+  if (!chatId) {
+    throw new Error("BALE_GROUP_ID is missing");
+  }
 
   await baleRequest(env, "sendVideo", {
     chat_id: chatId,
@@ -743,7 +794,7 @@ async function initializeBaseline(
   await saveSeenUrls(env, links.slice(0, 200));
 }
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   const startedAt = Date.now();
 
   try {
@@ -779,7 +830,6 @@ export async function GET(request: Request) {
       });
     }
 
-    // مقایسه با URL نرمال‌شده، نه رشته خام.
     const seenKeys = new Set(seen.map(normalizeUrl));
 
     const newLinks = links.filter(
@@ -795,7 +845,6 @@ export async function GET(request: Request) {
       const article = await fetchArticle(url);
 
       if (!article) {
-        // URL نامعتبر را به عنوان ارسال‌شده علامت نمی‌زنیم.
         skippedArticles.push(url);
         continue;
       }
@@ -804,12 +853,15 @@ export async function GET(request: Request) {
         await sendArticle(env, article);
         sentArticles.push(normalizeUrl(article.url));
       } catch (error) {
-        console.error("[kargozin] send failed:", article.url, error);
+        console.error(
+          "[kargozin] send failed:",
+          article.url,
+          error
+        );
         failedArticles.push(article.url);
       }
     }
 
-    // فقط ارسال‌های موفق به سابقه اضافه می‌شوند.
     if (sentArticles.length > 0) {
       await saveSeenUrls(env, [...seen, ...sentArticles]);
     }
