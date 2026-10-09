@@ -509,7 +509,7 @@ function getSupabaseConfig(env: CloudflareEnv) {
 
 /**
  * برای کلیدهای جدید sb_secret_ فقط apikey ارسال می‌شود.
- * کلید محرمانه جدید، JWT نیست و نباید به عنوان Bearer ارسال شود.
+ * درخواست‌های Supabase از User-Agent اختصاصی Worker استفاده می‌کنند.
  */
 async function getSetting(
   env: CloudflareEnv,
@@ -530,6 +530,7 @@ async function getSetting(
     headers: {
       apikey: key,
       Accept: "application/json",
+      "User-Agent": "sedaye-smart-worker/1.0",
     },
   });
 
@@ -613,6 +614,7 @@ async function saveSeenUrls(
       method: "POST",
       headers: {
         apikey: key,
+        "User-Agent": "sedaye-smart-worker/1.0",
         "Content-Type": "application/json",
         Prefer: "resolution=merge-duplicates,return=minimal",
       },
