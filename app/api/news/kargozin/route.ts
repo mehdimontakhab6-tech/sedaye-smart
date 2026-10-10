@@ -4,500 +4,184 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
 
-const SOURCE_URL = "https://kargozin.com/";
-const SETTINGS_KEY = "kargozin_seen_urls";
-const MAX_ARTICLES_PER_RUN = 3;
-const MAX_CONTENT_LENGTH = 12000;
-const REQUEST_TIMEOUT_MS = 10000;
-
+const CHANNEL_URL = "https://t.me/s/kargozinonline";
+const SEEN_KEY = "kargozin_telegram_seen_ids";
 const NOTICE =
-  "🤖 این مطلب به صورت اتوماتیک از مجله کارگزینی ارسال شده است.";
+  "🤖 این مطلب به صورت اتوماتیک از کانال کارگزین آنلاین ارسال شده است";
 
-type Article = {
-  url: string;
-  title: string;
-  content: string;
-  imageUrl?: string;
-  videoUrl?: string;
+const MAX_POSTS_PER_RUN = 10;
+const MAX_SEEN = 2000;
+const TIMEOUT_MS = 12000;
+const MAX_MESSAGE_LENGTH = 3500;
+
+type TelegramPost = {
+  id: string;
+  text: string;
 };
 
+async function fetchText(url: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      cache: "no-store",
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} for ${url}`);
+    }
+
+    return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function decodeHtml(value: string): string {
-  return String(value || "")
-    .replace(/<!\[CDATA\[/gi, "")
-    .replace(/\]\]>/g, "")
+  return value
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&#(\d+);/g, (_, n) =>
-      String.fromCharCode(Number(n))
-    )
     .replace(/&#x([0-9a-f]+);/gi, (_, n) =>
-      String.fromCharCode(parseInt(n, 16))
+      String.fromCodePoint(parseInt(n, 16))
+    )
+    .replace(/&#(\d+);/g, (_, n) =>
+      String.fromCodePoint(Number(n))
     );
 }
 
-function cleanText(value: string): string {
-  return decodeHtml(value)
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
+function cleanPostText(html: string): string {
+  let text = html
+    // حذف عناصر غیرمتنی و رسانه‌ها
+    .replace(/<(script|style|svg|video|audio|iframe)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<img\b[^>]*>/gi, " ")
+    .replace(/<video\b[^>]*>/gi, " ")
+    .replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, " ")
+    .replace(/<[^>]+>/g, "\n");
+
+  text = decodeHtml(text)
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
 
-function absoluteUrl(value: string): string {
-  try {
-    return new URL(value, SOURCE_URL).toString();
-  } catch {
-    return "";
-  }
-}
+  const lines = text.split("\n");
+  const kept: string[] = [];
 
-function normalizeUrl(value: string): string {
-  try {
-    const url = new URL(value);
-    url.hash = "";
-    url.hostname = url.hostname.toLowerCase();
-
-    const trackingParams = [
-      "utm_source",
-      "utm_medium",
-      "utm_campaign",
-      "utm_term",
-      "utm_content",
-      "fbclid",
-      "gclid",
-      "ref",
-    ];
-
-    for (const param of trackingParams) {
-      url.searchParams.delete(param);
-    }
-
-    if (
-      url.pathname.length > 1 &&
-      url.pathname.endsWith("/")
-    ) {
-      url.pathname = url.pathname.replace(/\/+$/, "");
-    }
-
-    url.searchParams.sort();
-
-    return url.toString();
-  } catch {
-    return value;
-  }
-}
-
-function isKargozinUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      (
-        url.hostname === "kargozin.com" ||
-        url.hostname === "www.kargozin.com"
-      )
-    );
-  } catch {
-    return false;
-  }
-}
-
-function isClearlyNonArticleUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    const path = url.pathname.toLowerCase();
-
-    const blockedPaths = [
-      "/wp-admin",
-      "/wp-login",
-      "/feed",
-      "/tag/",
-      "/category/",
-      "/author/",
-      "/page/",
-      "/search/",
-      "/cart",
-      "/checkout",
-      "/my-account",
-      "/shop/",
-      "/product/",
-      "/products/",
-      "/download/",
-      "/downloads/",
-    ];
-
-    if (blockedPaths.some((item) => path.includes(item))) {
-      return true;
-    }
-
-    return /\.(jpg|jpeg|png|gif|webp|svg|mp4|webm|pdf|zip|rar|docx?|xlsx?)$/i.test(path);
-  } catch {
-    return true;
-  }
-}
-
-function isAdvertisingText(value: string): boolean {
-  const text = cleanText(value).toLowerCase();
-
-  const blockedTerms = [
-    "sponsored",
-    "advertorial",
-    "advertisement",
-    "تبلیغات",
-    "تبلیغاتی",
-    "رپورتاژ",
-    "رپورتاژ آگهی",
-    "اسپانسر",
-    "خرید آنلاین",
-    "فروشگاه",
-    "فروش ویژه",
-    "کد تخفیف",
-    "ثبت سفارش",
-    "سفارش آنلاین",
-    "همین حالا بخرید",
+  const promotionalPatterns = [
+    /تبلیغات/,
+    /تبلیغاتی/,
+    /رپورتاژ/,
+    /اسپانسر/,
+    /کد تخفیف/,
+    /خرید آنلاین/,
+    /فروش ویژه/,
+    /ثبت سفارش/,
+    /سفارش آنلاین/,
+    /برای تبلیغ/,
+    /جهت تبلیغات/,
+    /ارتباط با ادمین/,
+    /تبلیغ در کانال/,
+    /همکاری تبلیغاتی/,
+    /آگهی پذیرفته می‌شود/,
+    /آگهی پذیرفته می شود/,
   ];
 
-  return blockedTerms.some((term) => text.includes(term));
-}
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
 
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit = {}
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    REQUEST_TIMEOUT_MS
-  );
-
-  try {
-    return await fetch(url, {
-      ...init,
-      signal: controller.signal,
-      redirect: "follow",
-      cache: "no-store",
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; SedayeSmart-Kargozin/2.0)",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml,text/xml,application/rss+xml,*/*",
-        ...init.headers,
-      },
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function extractAttribute(
-  tag: string,
-  attribute: string
-): string {
-  const escaped = attribute.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(
-    `${escaped}\\s*=\\s*["']([^"']+)["']`,
-    "i"
-  );
-  const match = tag.match(regex);
-  return match?.[1] ? decodeHtml(match[1]) : "";
-}
-
-function extractMeta(
-  html: string,
-  attribute: string,
-  value: string
-): string {
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(
-    `<meta\\b[^>]*${attribute}\\s*=\\s*["']${escaped}["'][^>]*>`,
-    "i"
-  );
-  const match = html.match(regex);
-  return match ? extractAttribute(match[0], "content") : "";
-}
-
-function extractTitle(html: string): string {
-  const ogTitle = extractMeta(html, "property", "og:title");
-  if (ogTitle) return cleanText(ogTitle);
-
-  const h1 = html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
-  if (h1?.[1]) return cleanText(h1[1]);
-
-  const title = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
-  return title?.[1] ? cleanText(title[1]) : "";
-}
-
-function extractMainContent(html: string): string {
-  const candidates: string[] = [];
-
-  candidates.push(
-    ...(html.match(/<article\b[^>]*>[\s\S]*?<\/article>/gi) || [])
-  );
-
-  candidates.push(
-    ...(html.match(/<main\b[^>]*>[\s\S]*?<\/main>/gi) || [])
-  );
-
-  candidates.push(
-    ...(html.match(
-      /<(?:div|section)\b[^>]+class=["'][^"']*(?:entry-content|post-content|article-content|single-content|content-area)[^"']*["'][^>]*>[\s\S]*?<\/(?:div|section)>/gi
-    ) || [])
-  );
-
-  candidates.sort((a, b) => b.length - a.length);
-  const source = candidates[0] || html;
-
-  const paragraphs: string[] = [];
-  const paragraphRegex = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
-  let match: RegExpExecArray | null;
-
-  while ((match = paragraphRegex.exec(source)) !== null) {
-    const paragraph = cleanText(match[1]);
-
-    if (
-      paragraph.length >= 20 &&
-      !isAdvertisingText(paragraph)
-    ) {
-      paragraphs.push(paragraph);
-    }
-  }
-
-  const uniqueParagraphs = [...new Set(paragraphs)];
-
-  if (uniqueParagraphs.length > 0) {
-    return uniqueParagraphs.join("\n\n");
-  }
-
-  return cleanText(source);
-}
-
-function extractImageUrl(html: string): string {
-  const ogImage = extractMeta(html, "property", "og:image");
-  if (ogImage) return absoluteUrl(ogImage);
-
-  const twitterImage = extractMeta(html, "name", "twitter:image");
-  if (twitterImage) return absoluteUrl(twitterImage);
-
-  const imageMatch = html.match(
-    /<img\b[^>]+(?:src|data-src)=["']([^"']+)["'][^>]*>/i
-  );
-
-  return imageMatch?.[1] ? absoluteUrl(imageMatch[1]) : "";
-}
-
-function extractVideoUrl(html: string): string {
-  const ogVideo = extractMeta(html, "property", "og:video");
-  if (ogVideo) return absoluteUrl(ogVideo);
-
-  const videoMatch = html.match(
-    /<video\b[^>]*>[\s\S]*?<source\b[^>]+src=["']([^"']+)["']/i
-  );
-
-  if (videoMatch?.[1]) return absoluteUrl(videoMatch[1]);
-
-  const sourceMatch = html.match(
-    /<source\b[^>]+src=["']([^"']+)["'][^>]*>/i
-  );
-
-  return sourceMatch?.[1] ? absoluteUrl(sourceMatch[1]) : "";
-}
-
-function looksLikeArticleLink(value: string): boolean {
-  try {
-    const url = new URL(value);
-    const path = url.pathname;
-
-    if (path === "/" || path.length < 5) return false;
-    if (!isKargozinUrl(url.toString())) return false;
-    if (isClearlyNonArticleUrl(url.toString())) return false;
-
-    if (
-      /^\/(?:category|tag|author|page|search|wp-json)\b/i.test(path)
-    ) {
-      return false;
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function extractHomepageLinks(html: string): string[] {
-  const links: string[] = [];
-  const regex = /<a\b[^>]+href\s*=\s*["']([^"']+)["'][^>]*>/gi;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(html)) !== null) {
-    const url = absoluteUrl(match[1]);
-
-    if (url && looksLikeArticleLink(url)) {
-      links.push(normalizeUrl(url));
-    }
-  }
-
-  return [...new Set(links)];
-}
-
-function extractFeedLinks(xml: string): string[] {
-  const links: string[] = [];
-  const itemRegex =
-    /<(?:item|entry)\b[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
-
-  let item: RegExpExecArray | null;
-
-  while ((item = itemRegex.exec(xml)) !== null) {
-    const block = item[1];
-    const linkTag = block.match(/<link\b[^>]*\/?>/i);
-    let link = "";
-
-    if (linkTag) {
-      link =
-        extractAttribute(linkTag[0], "href") ||
-        cleanText(
-          linkTag[0].replace(/<\/?link\b[^>]*>/gi, "")
-        );
-    }
-
-    if (!link) {
-      const guid = block.match(
-        /<guid\b[^>]*>([\s\S]*?)<\/guid>/i
-      );
-
-      if (
-        guid?.[1] &&
-        /^https?:\/\//i.test(cleanText(guid[1]))
-      ) {
-        link = cleanText(guid[1]);
+    if (!line) {
+      if (kept.length && kept[kept.length - 1] !== "") {
+        kept.push("");
       }
+      continue;
     }
 
-    const url = absoluteUrl(link);
-
-    if (url && looksLikeArticleLink(url)) {
-      links.push(normalizeUrl(url));
-    }
-  }
-
-  return [...new Set(links)];
-}
-
-function extractSitemapLinks(xml: string): string[] {
-  const links: string[] = [];
-  const regex = /<loc\b[^>]*>([\s\S]*?)<\/loc>/gi;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(xml)) !== null) {
-    const url = absoluteUrl(cleanText(match[1]));
-
-    if (url && looksLikeArticleLink(url)) {
-      links.push(normalizeUrl(url));
-    }
-  }
-
-  return [...new Set(links)];
-}
-
-async function fetchOptionalText(url: string): Promise<string> {
-  try {
-    const response = await fetchWithTimeout(url);
-
-    if (!response.ok) return "";
-
-    return await response.text();
-  } catch (error) {
-    console.warn(
-      "[kargozin] optional source unavailable:",
-      url,
-      error
-    );
-    return "";
-  }
-}
-
-async function discoverArticles(): Promise<string[]> {
-  const homepageResponse = await fetchWithTimeout(SOURCE_URL);
-
-  if (!homepageResponse.ok) {
-    throw new Error(
-      `Kargozin homepage failed: HTTP ${homepageResponse.status}`
-    );
-  }
-
-  const homepageHtml = await homepageResponse.text();
-
-  const [feedXml, sitemapXml, wpSitemapXml] = await Promise.all([
-    fetchOptionalText("https://kargozin.com/feed/"),
-    fetchOptionalText("https://kargozin.com/sitemap.xml"),
-    fetchOptionalText(
-      "https://kargozin.com/wp-sitemap-posts-post-1.xml"
-    ),
-  ]);
-
-  const feedLinks = extractFeedLinks(feedXml);
-  const sitemapLinks = extractSitemapLinks(sitemapXml);
-  const wpSitemapLinks = extractSitemapLinks(wpSitemapXml);
-  const homepageLinks = extractHomepageLinks(homepageHtml);
-
-  return [
-    ...new Set([
-      ...feedLinks,
-      ...wpSitemapLinks,
-      ...sitemapLinks,
-      ...homepageLinks,
-    ]),
-  ];
-}
-
-async function fetchArticle(url: string): Promise<Article | null> {
-  try {
-    const response = await fetchWithTimeout(url);
-
-    if (!response.ok) {
-      console.warn(
-        "[kargozin] article HTTP error:",
-        url,
-        response.status
-      );
-      return null;
-    }
-
-    const html = await response.text();
-    const title = extractTitle(html);
-
-    if (!title || isAdvertisingText(title)) return null;
-
-    const content = extractMainContent(html);
-
+    // حذف خط‌هایی که لینک یا دعوت تبلیغاتی‌اند
     if (
-      !content ||
-      content.length < 40 ||
-      isAdvertisingText(`${title} ${content.slice(0, 1500)}`)
+      /^https?:\/\//i.test(line) ||
+      /^www\./i.test(line) ||
+      /t\.me\//i.test(line) ||
+      /telegram\.me\//i.test(line) ||
+      /ble\.ir\//i.test(line) ||
+      /eitaa\.com\//i.test(line) ||
+      /rubika\.ir\//i.test(line)
     ) {
-      return null;
+      continue;
     }
 
-    return {
-      url,
-      title,
-      content: content.slice(0, MAX_CONTENT_LENGTH),
-      imageUrl: extractImageUrl(html) || undefined,
-      videoUrl: extractVideoUrl(html) || undefined,
-    };
-  } catch (error) {
-    console.error(
-      "[kargozin] article fetch error:",
-      url,
-      error
+    if (promotionalPatterns.some((pattern) => pattern.test(line))) {
+      continue;
+    }
+
+    // حذف خط‌های دارای فقط ایموجی، نماد یا علائم
+    const meaningful = line.replace(
+      /[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Mark}\p{P}\p{S}\s]/gu,
+      ""
     );
-    return null;
+
+    if (!meaningful) continue;
+
+    kept.push(line);
   }
+
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function extractPosts(html: string): TelegramPost[] {
+  const posts: TelegramPost[] = [];
+
+  // پیام‌های عمومی کانال تلگرام معمولاً شناسه‌ای مثل
+  // data-post="kargozinonline/12345" دارند.
+  const wrapperRegex =
+    /<div\b(?=[^>]*class="[^"]*\btgme_widget_message_wrap\b)[\s\S]*?(?=<div\b(?=[^>]*class="[^"]*\btgme_widget_message_wrap\b)|$)/gi;
+
+  const wrappers = html.match(wrapperRegex) || [];
+
+  for (const wrapper of wrappers) {
+    const postMatch = wrapper.match(
+      /data-post=["']kargozinonline\/(\d+)["']/i
+    );
+
+    if (!postMatch) continue;
+
+    const messageMatch = wrapper.match(
+      /<div\b(?=[^>]*class="[^"]*\btgme_widget_message_text\b)[^>]*>([\s\S]*?)<\/div>/i
+    );
+
+    // پست‌های صرفاً تصویری یا ویدئویی ارسال نمی‌شوند.
+    if (!messageMatch?.[1]) continue;
+
+    const text = cleanPostText(messageMatch[1]);
+
+    // متن خیلی کوتاه یا خالی ارسال نشود.
+    if (text.length < 15) continue;
+
+    posts.push({
+      id: postMatch[1],
+      text,
+    });
+  }
+
+  const unique = new Map<string, TelegramPost>();
+
+  for (const post of posts) {
+    unique.set(post.id, post);
+  }
+
+  return [...unique.values()].sort(
+    (a, b) => Number(a.id) - Number(b.id)
+  );
 }
 
 function getSupabaseConfig(env: CloudflareEnv) {
@@ -507,58 +191,51 @@ function getSupabaseConfig(env: CloudflareEnv) {
   };
 }
 
-/**
- * برای کلیدهای جدید sb_secret_ فقط apikey ارسال می‌شود.
- * درخواست‌های Supabase از User-Agent اختصاصی Worker استفاده می‌کنند.
- */
-async function getSetting(
+async function supabaseRequest(
   env: CloudflareEnv,
-  settingKey: string
-): Promise<unknown> {
+  path: string,
+  init: RequestInit = {}
+): Promise<Response> {
   const { url, key } = getSupabaseConfig(env);
 
   if (!url || !key) {
     throw new Error("Supabase configuration is missing");
   }
 
-  const endpoint =
-    `${url}/rest/v1/settings` +
-    `?key=eq.${encodeURIComponent(settingKey)}` +
-    "&select=value&limit=1";
-
-  const response = await fetchWithTimeout(endpoint, {
+  return fetch(`${url}/rest/v1/${path}`, {
+    ...init,
+    cache: "no-store",
     headers: {
       apikey: key,
+      "Content-Type": "application/json",
       Accept: "application/json",
       "User-Agent": "sedaye-smart-worker/1.0",
+      ...init.headers,
     },
   });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    console.error(
-      "[kargozin] Supabase GET error:",
-      response.status,
-      detail.slice(0, 500)
-    );
-
-    throw new Error(
-      `Supabase GET failed: HTTP ${response.status}`
-    );
-  }
-
-  const rows: unknown = await response.json();
-
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return null;
-  }
-
-  return rows[0]?.value ?? null;
 }
 
-async function getScheduleEnabled(
-  env: CloudflareEnv
-): Promise<boolean> {
+async function getSetting(
+  env: CloudflareEnv,
+  settingKey: string
+): Promise<unknown> {
+  const response = await supabaseRequest(
+    env,
+    `settings?key=eq.${encodeURIComponent(settingKey)}&select=value&limit=1`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Supabase GET failed: HTTP ${response.status}`);
+  }
+
+  const rows: any = await response.json();
+
+  return Array.isArray(rows) && rows.length
+    ? rows[0]?.value ?? null
+    : null;
+}
+
+async function isScheduleEnabled(env: CloudflareEnv): Promise<boolean> {
   const value = await getSetting(env, "schedule_kargozin");
 
   if (value === false || value === "false") return false;
@@ -567,325 +244,191 @@ async function getScheduleEnabled(
     try {
       if (JSON.parse(value) === false) return false;
     } catch {
-      // اگر مقدار رشته‌ای دیگری باشد، فعال فرض می‌شود.
+      // مقدارهای غیر بولی مطابق رفتار قبلی فعال در نظر گرفته می‌شوند.
     }
   }
 
   return true;
 }
 
-async function getSeenUrls(
-  env: CloudflareEnv
-): Promise<string[]> {
-  const value = await getSetting(env, SETTINGS_KEY);
+async function getSeenIds(env: CloudflareEnv): Promise<string[]> {
+  const value = await getSetting(env, SEEN_KEY);
 
-  let parsed: unknown = value;
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string =>
+      typeof item === "string"
+    );
+  }
 
   if (typeof value === "string") {
     try {
-      parsed = JSON.parse(value);
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (item): item is string => typeof item === "string"
+        );
+      }
     } catch {
-      parsed = value ? [value] : [];
+      return [];
     }
   }
 
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.filter(
-    (item): item is string => typeof item === "string"
-  );
+  return [];
 }
 
-async function saveSeenUrls(
+async function saveSeenIds(
   env: CloudflareEnv,
-  urls: string[]
+  ids: string[]
 ): Promise<void> {
-  const { url, key } = getSupabaseConfig(env);
+  const unique = [...new Set(ids)].slice(-MAX_SEEN);
 
-  if (!url || !key) {
-    throw new Error("Supabase configuration is missing");
-  }
-
-  const uniqueUrls = [...new Set(urls)].slice(-1000);
-
-  const response = await fetchWithTimeout(
-    `${url}/rest/v1/settings`,
-    {
-      method: "POST",
-      headers: {
-        apikey: key,
-        "User-Agent": "sedaye-smart-worker/1.0",
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=minimal",
-      },
-      body: JSON.stringify({
-        key: SETTINGS_KEY,
-        value: uniqueUrls,
-      }),
-    }
-  );
+  const response = await supabaseRequest(env, "settings", {
+    method: "POST",
+    headers: {
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify({
+      key: SEEN_KEY,
+      value: unique,
+    }),
+  });
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    console.error(
-      "[kargozin] Supabase UPSERT error:",
-      response.status,
-      detail.slice(0, 500)
-    );
-
     throw new Error(
-      `Supabase UPSERT failed: HTTP ${response.status}`
+      `Supabase save failed: HTTP ${response.status} ${detail.slice(0, 300)}`
     );
   }
-}
-
-function buildMessage(article: Article): string {
-  return [
-    NOTICE,
-    "",
-    `📰 ${article.title}`,
-    "",
-    article.content,
-    "",
-    "🔗 منبع:",
-    article.url,
-  ].join("\n");
-}
-
-function buildMediaCaption(article: Article): string {
-  return [
-    NOTICE,
-    "",
-    `📰 ${article.title}`,
-    "",
-    `🔗 ${article.url}`,
-  ].join("\n").slice(0, 1000);
-}
-
-async function baleRequest(
-  env: CloudflareEnv,
-  method: string,
-  payload: Record<string, unknown>
-): Promise<unknown> {
-  const token = env.BALE_SMART_TOKEN;
-
-  if (!token) {
-    throw new Error("BALE_SMART_TOKEN is missing");
-  }
-
-  const response = await fetch(
-    `https://tapi.bale.ai/bot${token}/${method}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  const data = await response.json();
-
-  if (
-    !response.ok ||
-    (data as { ok?: boolean })?.ok === false
-  ) {
-    throw new Error(
-      `Bale ${method} failed: ${JSON.stringify(data)}`
-    );
-  }
-
-  return data;
 }
 
 async function sendText(
   env: CloudflareEnv,
   text: string
 ): Promise<void> {
+  const token = env.BALE_SMART_TOKEN;
   const chatId = env.BALE_GROUP_ID;
 
-  if (!chatId) {
-    throw new Error("BALE_GROUP_ID is missing");
-  }
+  if (!token) throw new Error("BALE_SMART_TOKEN is missing");
+  if (!chatId) throw new Error("BALE_GROUP_ID is missing");
 
+  // ارسال تکه‌های متن با رعایت محدودیت طول پیام
   const chunks: string[] = [];
-  const maxLength = 3500;
-
-  for (let i = 0; i < text.length; i += maxLength) {
-    chunks.push(text.slice(i, i + maxLength));
+  for (let i = 0; i < text.length; i += MAX_MESSAGE_LENGTH) {
+    chunks.push(text.slice(i, i + MAX_MESSAGE_LENGTH));
   }
 
   for (const chunk of chunks) {
-    await baleRequest(env, "sendMessage", {
-      chat_id: chatId,
-      text: chunk,
-      disable_web_page_preview: false,
-    });
-  }
-}
+    const response = await fetch(
+      `https://tapi.bale.ai/bot${token}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: chunk,
+          disable_web_page_preview: true,
+        }),
+      }
+    );
 
-async function sendPhoto(
-  env: CloudflareEnv,
-  photoUrl: string,
-  caption: string
-): Promise<void> {
-  const chatId = env.BALE_GROUP_ID;
+    const data: any = await response.json();
 
-  if (!chatId) {
-    throw new Error("BALE_GROUP_ID is missing");
-  }
-
-  await baleRequest(env, "sendPhoto", {
-    chat_id: chatId,
-    photo: photoUrl,
-    caption,
-  });
-}
-
-async function sendVideo(
-  env: CloudflareEnv,
-  videoUrl: string,
-  caption: string
-): Promise<void> {
-  const chatId = env.BALE_GROUP_ID;
-
-  if (!chatId) {
-    throw new Error("BALE_GROUP_ID is missing");
-  }
-
-  await baleRequest(env, "sendVideo", {
-    chat_id: chatId,
-    video: videoUrl,
-    caption,
-  });
-}
-
-async function sendArticle(
-  env: CloudflareEnv,
-  article: Article
-): Promise<void> {
-  const caption = buildMediaCaption(article);
-  const message = buildMessage(article);
-
-  if (article.videoUrl) {
-    try {
-      await sendVideo(env, article.videoUrl, caption);
-      await sendText(env, message);
-      return;
-    } catch (error) {
-      console.warn("[kargozin] video send failed:", error);
+    if (!response.ok || data?.ok === false) {
+      throw new Error(
+        `Bale sendMessage failed: ${JSON.stringify(data)}`
+      );
     }
   }
-
-  if (article.imageUrl) {
-    try {
-      await sendPhoto(env, article.imageUrl, caption);
-      await sendText(env, message);
-      return;
-    } catch (error) {
-      console.warn("[kargozin] photo send failed:", error);
-    }
-  }
-
-  await sendText(env, message);
 }
 
-async function initializeBaseline(
-  env: CloudflareEnv,
-  links: string[]
-): Promise<void> {
-  // در اولین اجرا، خبرهای فعلی فقط ثبت می‌شوند و ارسال نمی‌شوند.
-  await saveSeenUrls(env, links.slice(0, 200));
-}
-
-export async function GET(_request: Request) {
+export async function GET() {
   const startedAt = Date.now();
 
   try {
     const { env } = await getCloudflareContext({ async: true });
 
-    const scheduleEnabled = await getScheduleEnabled(env);
-
-    if (!scheduleEnabled) {
+    // تنظیم فعلی پنل حفظ می‌شود؛ اتصال دکمه را بعداً بررسی می‌کنیم.
+    if (!(await isScheduleEnabled(env))) {
       return NextResponse.json({
         ok: true,
         enabled: false,
         sent: 0,
         reason: "kargozin_disabled",
+      });
+    }
+
+    const html = await fetchText(CHANNEL_URL);
+    const posts = extractPosts(html);
+
+    if (!posts.length) {
+      return NextResponse.json({
+        ok: true,
+        sent: 0,
+        discovered: 0,
+        reason: "no_text_posts_found",
         runtime_ms: Date.now() - startedAt,
       });
     }
 
-    const [seen, links] = await Promise.all([
-      getSeenUrls(env),
-      discoverArticles(),
-    ]);
+    const seen = await getSeenIds(env);
 
-    if (seen.length === 0) {
-      await initializeBaseline(env, links);
+    // در اولین اجرا فقط وضعیت فعلی ثبت می‌شود تا مطالب قدیمی
+    // ناگهان به گروه ارسال نشوند.
+    if (!seen.length) {
+      await saveSeenIds(
+        env,
+        posts.map((post) => post.id)
+      );
 
       return NextResponse.json({
         ok: true,
-        initialized: true,
         sent: 0,
+        initialized: true,
+        discovered: posts.length,
         reason: "baseline_created",
-        discovered: links.length,
         runtime_ms: Date.now() - startedAt,
       });
     }
 
-    const seenKeys = new Set(seen.map(normalizeUrl));
+    const seenSet = new Set(seen);
+    const newPosts = posts
+      .filter((post) => !seenSet.has(post.id))
+      .slice(0, MAX_POSTS_PER_RUN);
 
-    const newLinks = links.filter(
-      (url) => !seenKeys.has(normalizeUrl(url))
-    );
+    const sentIds: string[] = [];
+    const failedIds: string[] = [];
 
-    const candidates = newLinks.slice(0, MAX_ARTICLES_PER_RUN);
-    const sentArticles: string[] = [];
-    const failedArticles: string[] = [];
-    const skippedArticles: string[] = [];
-
-    for (const url of candidates) {
-      const article = await fetchArticle(url);
-
-      if (!article) {
-        skippedArticles.push(url);
-        continue;
-      }
+    for (const post of newPosts) {
+      const message = `${NOTICE}\n\n${post.text}`;
 
       try {
-        await sendArticle(env, article);
-        sentArticles.push(normalizeUrl(article.url));
+        await sendText(env, message);
+        sentIds.push(post.id);
       } catch (error) {
         console.error(
-          "[kargozin] send failed:",
-          article.url,
+          "[kargozin] failed to send Telegram post",
+          post.id,
           error
         );
-        failedArticles.push(article.url);
+        failedIds.push(post.id);
       }
     }
 
-    if (sentArticles.length > 0) {
-      await saveSeenUrls(env, [...seen, ...sentArticles]);
+    // فقط پیام‌هایی که با موفقیت ارسال شده‌اند ثبت می‌شوند.
+    if (sentIds.length) {
+      await saveSeenIds(env, [...seen, ...sentIds]);
     }
 
     return NextResponse.json({
       ok: true,
-      initialized: false,
-      sent: sentArticles.length,
-      failed: failedArticles.length,
-      skipped: skippedArticles.length,
-      discovered: links.length,
-      new_candidates: newLinks.length,
-      sent_urls: sentArticles,
-      failed_urls: failedArticles,
-      skipped_urls: skippedArticles,
-      checked: candidates.length,
-      sources_checked: [
-        "https://kargozin.com/feed/",
-        "https://kargozin.com/sitemap.xml",
-        "https://kargozin.com/wp-sitemap-posts-post-1.xml",
-        SOURCE_URL,
-      ],
+      enabled: true,
+      discovered: posts.length,
+      new_candidates: newPosts.length,
+      sent: sentIds.length,
+      failed: failedIds.length,
+      sent_ids: sentIds,
+      failed_ids: failedIds,
+      source: CHANNEL_URL,
       runtime_ms: Date.now() - startedAt,
     });
   } catch (error) {
@@ -896,9 +439,7 @@ export async function GET(_request: Request) {
         ok: false,
         sent: 0,
         error:
-          error instanceof Error
-            ? error.message
-            : String(error),
+          error instanceof Error ? error.message : String(error),
         runtime_ms: Date.now() - startedAt,
       },
       { status: 500 }
