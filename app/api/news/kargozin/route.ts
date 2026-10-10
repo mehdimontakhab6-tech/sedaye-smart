@@ -67,7 +67,8 @@ function decodeHtml(value: string): string {
 function htmlToText(html: string): string {
   return decodeHtml(
     html
-      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "")
+      .replace(/<br\b[^>]*>/gi, "\n")
       .replace(/<\/(?:p|div|li|blockquote|h[1-6])\s*>/gi, "\n")
       .replace(/<[^>]*>/g, ""),
   )
@@ -79,8 +80,8 @@ function htmlToText(html: string): string {
 }
 
 /**
- * پست‌هایی که نشانه‌های تبلیغاتی دارند رد می‌شوند.
- * لینک‌ها و تبلیغات انتهای متن نیز حذف می‌شوند.
+ * تبلیغات انتهایی را قطع می‌کند، اما وجود لینک در وسط خبر
+ * باعث حذف تمام متن بعد از لینک نمی‌شود.
  */
 function cleanPostText(input: string): string {
   let text = input
@@ -88,28 +89,24 @@ function cleanPostText(input: string): string {
     .replace(/\r/g, "")
     .trim();
 
-  const adMarkers = [
+  const footerMarkers = [
     /با\s+کانال\s+کارگزین\s+آنلاین\s+به\s+روز\s+باشید/i,
     /برای\s+سفارش\s+تبلیغات/i,
     /جهت\s+تبلیغات/i,
     /تبلیغات\s+در\s+کانال/i,
     /عضویت\s+در\s+کانال/i,
     /کانال\s+کارگزین\s+آنلاین\s+را\s+دنبال\s+کنید/i,
+    /اخبار\s+بیشتر\s+در/i,
+    /ما\s+را\s+در\s+(?:تلگرام|بله|ایتا|روبیکا)\s+دنبال\s+کنید/i,
     /تلگرام\s*📍/i,
     /بله\s*📍/i,
     /ایتا\s*📍/i,
     /روبیکا\s*📍/i,
-    /https?:\/\/t\.me\//i,
-    /https?:\/\/ble\.ir\//i,
-    /https?:\/\/eitaa\.com\//i,
-    /https?:\/\/rubika\.ir\//i,
-    /https?:\/\/www\./i,
-    /https?:\/\//i,
   ];
 
   let cutAt = text.length;
 
-  for (const marker of adMarkers) {
+  for (const marker of footerMarkers) {
     const match = marker.exec(text);
     if (match && match.index < cutAt) {
       cutAt = match.index;
@@ -118,78 +115,84 @@ function cleanPostText(input: string): string {
 
   text = text.slice(0, cutAt);
 
-  // لینک‌های متنی رایج، حتی بدون http، حذف شوند.
+  // همه لینک‌ها حذف می‌شوند، ولی متن پس از لینک حفظ می‌شود.
   text = text
-    .replace(/\b(?:t\.me|telegram\.me|ble\.ir|eitaa\.com|rubika\.ir)\/\S*/gi, "")
-    .replace(/\bwww\.\S+/gi, "")
+    .replace(/https?:\/\/[^\s]+/gi, "")
+    .replace(
+      /\b(?:www\.)?(?:t\.me|telegram\.me|ble\.ir|eitaa\.com|rubika\.ir)\/[^\s]*/gi,
+      "",
+    )
+    .replace(/\bwww\.[^\s]+/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
     .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
   return text;
 }
 
-/**
- * حداقل یک حرف یا عدد باید وجود داشته باشد.
- * متن‌های صرفاً ایموجی و علائم ارسال نمی‌شوند.
- */
 function hasUsefulText(text: string): boolean {
   return /[\p{L}\p{N}]/u.test(text);
 }
 
 /**
- * هر پست دارای عکس، ویدئو، گیف یا محتوای رسانه‌ای رد می‌شود،
- * حتی اگر کپشن متنی داشته باشد.
+ * توجه: عکس کوچک پروفایل فرستنده، رسانهٔ پست نیست.
+ * بنابراین وجود هر تگ img به‌تنهایی دلیل رد پست نیست.
  */
 function containsMedia(block: string): boolean {
   const mediaPatterns = [
-    /tgme_widget_message_photo_wrap/i,
-    /tgme_widget_message_video_player/i,
-    /tgme_widget_message_document_wrap/i,
-    /tgme_widget_message_voice_player/i,
-    /tgme_widget_message_sticker_wrap/i,
-    /tgme_widget_message_roundvideo/i,
+    /\btgme_widget_message_photo_wrap\b/i,
+    /\btgme_widget_message_video_player\b/i,
+    /\btgme_widget_message_document_wrap\b/i,
+    /\btgme_widget_message_voice_player\b/i,
+    /\btgme_widget_message_sticker_wrap\b/i,
+    /\btgme_widget_message_roundvideo\b/i,
+    /\btgme_widget_message_audio_player\b/i,
+    /\btgme_widget_message_poll\b/i,
     /<video\b/i,
     /<audio\b/i,
-    /<img\b/i,
-    /class=["'][^"']*\bvideo_player\b/i,
-    /class=["'][^"']*\bphoto_wrap\b/i,
-    /class=["'][^"']*\bsticker_wrap\b/i,
-    /data-roundvideo=/i,
+    /<source\b[^>]*\bsrc=/i,
+    /\bdata-roundvideo=/i,
+    /\bvideo_player\b/i,
+    /\bphoto_wrap\b/i,
+    /\bsticker_wrap\b/i,
   ];
 
   return mediaPatterns.some((pattern) => pattern.test(block));
 }
 
+/**
+ * استخراج پست‌ها با تحمل تفاوت در ترتیب attributeها و کلاس‌های HTML.
+ */
 function parseTelegramPosts(html: string): TelegramPost[] {
   const posts: TelegramPost[] = [];
-  const ids = new Set<string>();
+  const seenIds = new Set<string>();
 
-  const blocks =
-    html.match(
-      /<div class="tgme_widget_message_wrap\b[\s\S]*?(?=<div class="tgme_widget_message_wrap\b|$)/gi,
-    ) ?? [];
+  const wrapRegex =
+    /<div\b(?=[^>]*\bclass=["'][^"']*\btgme_widget_message_wrap\b)[^>]*>[\s\S]*?(?=<div\b(?=[^>]*\bclass=["'][^"']*\btgme_widget_message_wrap\b)|$)/gi;
+
+  const blocks = html.match(wrapRegex) ?? [];
 
   for (const block of blocks) {
     const postMatch = block.match(
-      /data-post=["']kargozinonline\/(\d+)["']/i,
+      /\bdata-post=["']kargozinonline\/(\d+)["']/i,
     );
 
     if (!postMatch) continue;
 
     const id = postMatch[1];
 
-    if (ids.has(id)) continue;
-    ids.add(id);
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
 
-    // هر نوع پست رسانه‌ای، حتی دارای کپشن، رد می‌شود.
+    // پست رسانه‌ای حتی اگر کپشن داشته باشد ارسال نمی‌شود.
     if (containsMedia(block)) continue;
 
     const textMatch = block.match(
-      /<div class="tgme_widget_message_text\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div\b(?=[^>]*\bclass=["'][^"']*\btgme_widget_message_text\b)[^>]*>([\s\S]*?)<\/div>/i,
     );
 
-    // پست فاقد متن رد می‌شود.
     if (!textMatch) continue;
 
     const text = cleanPostText(htmlToText(textMatch[1]));
@@ -207,25 +210,54 @@ function parseTelegramPosts(html: string): TelegramPost[] {
 }
 
 async function fetchTelegramPosts(): Promise<TelegramPost[]> {
-  const response = await fetch(SOURCE_URL, {
-    method: "GET",
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; KargozinForwarder/1.0)",
-      Accept: "text/html,application/xhtml+xml",
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(15000),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(SOURCE_URL, {
+      method: "GET",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "fa,en-US;q=0.9,en;q=0.8",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Telegram fetch failed: ${detail}`);
+  }
 
   if (!response.ok) {
     throw new Error(`Telegram HTTP ${response.status}`);
   }
 
   const html = await response.text();
+
+  if (!html.trim()) {
+    throw new Error("Telegram returned an empty HTML response.");
+  }
+
   const posts = parseTelegramPosts(html);
 
   if (posts.length === 0) {
-    throw new Error("No valid text-only posts found on Telegram preview.");
+    const hasPostIds =
+      /\bdata-post=["']kargozinonline\/\d+["']/i.test(html);
+    const hasMessageText =
+      /\btgme_widget_message_text\b/i.test(html);
+    const looksBlocked =
+      /captcha|too many requests|access denied|please enable javascript/i.test(
+        html,
+      );
+
+    throw new Error(
+      `No valid text-only posts found. HTTP ${response.status}; ` +
+        `htmlLength=${html.length}; ` +
+        `hasPostIds=${hasPostIds}; ` +
+        `hasMessageText=${hasMessageText}; ` +
+        `looksBlocked=${looksBlocked}`,
+    );
   }
 
   return posts;
@@ -320,7 +352,7 @@ function isEnabled(value: unknown): boolean {
       const parsed = JSON.parse(normalized);
       if (parsed === false || parsed === 0) return false;
     } catch {
-      // مقدار رشته‌ای معمولی تنظیمات
+      // مقدار متنی عادی تنظیمات
     }
   }
 
@@ -345,9 +377,7 @@ function parseSeenIds(value: unknown): string[] {
   if (!Array.isArray(parsed)) return [];
 
   return [
-    ...new Set(
-      parsed.map(String).filter((id) => /^\d+$/.test(id)),
-    ),
+    ...new Set(parsed.map(String).filter((id) => /^\d+$/.test(id))),
   ].slice(-MAX_SEEN_IDS);
 }
 
@@ -389,7 +419,6 @@ async function sendBaleMessage(
 }
 
 function buildMessage(post: TelegramPost): string {
-  // فقط متن خبر؛ هیچ لینک منبعی به گروه ارسال نمی‌شود.
   return `${NOTICE}\n\n${post.text}`;
 }
 
@@ -404,7 +433,6 @@ export async function GET(): Promise<Response> {
   try {
     const env = getEnv();
 
-    // فقط تنظیم مجله کارگزینی بررسی می‌شود.
     if (!(await isScheduleEnabled(env))) {
       return Response.json({
         ok: true,
@@ -416,7 +444,7 @@ export async function GET(): Promise<Response> {
     const posts = await fetchTelegramPosts();
     const saved = await getSetting(env, SETTINGS_KEY);
 
-    // اجرای اول: سابقه‌سازی بدون ارسال پست‌های قدیمی
+    // اجرای اول: ثبت پست‌های موجود بدون ارسال آن‌ها
     if (saved === null) {
       const baseline = posts
         .map((post) => post.id)
