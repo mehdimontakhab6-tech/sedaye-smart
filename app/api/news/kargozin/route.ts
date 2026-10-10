@@ -1,7 +1,6 @@
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 const SOURCE_URL = "https://t.me/s/kargozinonline";
