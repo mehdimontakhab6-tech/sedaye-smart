@@ -353,10 +353,6 @@ function jalaliToGregorian(
 
   if (Number.isNaN(date.getTime())) return null;
 
-  // تأیید اعتبار روز ماه و جلوگیری از پذیرش تاریخ نامعتبر جلالی
-  const checkDate = new Date(date.getTime());
-  checkDate.setUTCDate(checkDate.getUTCDate() - dayOfYear);
-
   const maxDay = jm <= 6 ? 31 : jm <= 11 ? 30 : 30;
   if (jd > maxDay) return null;
 
@@ -594,6 +590,15 @@ async function fetchWithTimeout(
   }
 }
 
+/**
+ * بازه گزارش روزانه:
+ * از ساعت ۲۲:۳۰ روز قبل تا ساعت ۲۲:۳۰ روز جاری به وقت تهران.
+ *
+ * اگر endpoint پیش از ساعت ۲۲:۳۰ اجرا شود، بازه آخرین گزارش کامل را
+ * برمی‌گرداند؛ پس اجرای دستی در طول روز نیز بازه ناقص ایجاد نمی‌کند.
+ *
+ * ایران در حال حاضر از UTC+03:30 استفاده می‌کند.
+ */
 function getReportWindow() {
   const now = new Date();
 
@@ -617,8 +622,10 @@ function getReportWindow() {
   const hour = get("hour");
   const minute = get("minute");
 
+  // ساعت ۱۹:۰۰ UTC برابر با ساعت ۲۲:۳۰ تهران است.
   let end = new Date(Date.UTC(year, month - 1, day, 19, 0, 0));
 
+  // پیش از ۲۲:۳۰، آخرین گزارش کامل متعلق به روز قبل است.
   if (hour < 22 || (hour === 22 && minute < 30)) {
     end = new Date(end.getTime() - 24 * 60 * 60 * 1000);
   }
@@ -645,14 +652,22 @@ function getReportWindow() {
   };
 }
 
+/**
+ * هر دو مرز بازه شامل هستند:
+ * start <= publishedAt <= end
+ *
+ * بنابراین خبری که دقیقاً ساعت ۲۲:۳۰:۰۰ منتشر شده است حذف نمی‌شود.
+ */
 function isInsideWindow(
   date: Date | null,
   start: Date,
   end: Date
 ): boolean {
   if (!date || Number.isNaN(date.getTime())) return false;
+
   const time = date.getTime();
-  return time >= start.getTime() && time < end.getTime();
+
+  return time >= start.getTime() && time <= end.getTime();
 }
 
 function normalizeTitle(title: string): string {
@@ -669,6 +684,7 @@ function dedupeNews(items: NewsItem[]): NewsItem[] {
   for (const item of items) {
     const key = normalizeTitle(item.title);
     if (!key || seen.has(key)) continue;
+
     seen.add(key);
     result.push(item);
   }
@@ -791,7 +807,9 @@ async function fetchSource(
 
     const dated = relevant.filter((item) => {
       const date = parseDate(item.publishedAt);
+
       if (!date) diagnostics.noDateItems++;
+
       return Boolean(date);
     });
 
@@ -800,6 +818,7 @@ async function fetchSource(
     );
 
     diagnostics.windowItems = windowItems.length;
+
     return { candidates: windowItems, diagnostics };
   } catch (error) {
     diagnostics.error =
@@ -956,7 +975,6 @@ async function fetchSpecialSource(
 
     diagnostics.relevantItems = relevant.length;
 
-    // اصلاح: نمونه‌های منابع HTML نیز در خروجی diagnostics ثبت می‌شوند.
     diagnostics.sampleItems = relevant.map((item) => {
       const date = parseDate(item.publishedAt);
 
@@ -985,6 +1003,7 @@ async function fetchSpecialSource(
     }
 
     diagnostics.windowItems = inWindow.length;
+
     return { candidates: inWindow, diagnostics };
   } catch (error) {
     diagnostics.error =
@@ -1022,6 +1041,7 @@ async function getNews(start: Date, end: Date) {
   selected.sort((a, b) => {
     const da = parseDate(a.publishedAt)?.getTime() || 0;
     const db = parseDate(b.publishedAt)?.getTime() || 0;
+
     return db - da;
   });
 
@@ -1069,6 +1089,7 @@ async function getScheduleState(env: CloudflareEnv): Promise<boolean> {
     }
 
     const rows: unknown = await response.json();
+
     if (!Array.isArray(rows) || rows.length === 0) return true;
 
     const value = (rows[0] as { value?: unknown })?.value;
@@ -1148,6 +1169,7 @@ function formatNewsMessage(news: NewsItem[], sentAt: Date): string {
   });
 
   lines.push("━━━━━━━━━━━━━━");
+
   return lines.join("\n");
 }
 
@@ -1157,8 +1179,7 @@ export async function GET(_request: Request) {
   try {
     const { env } = await getCloudflareContext({ async: true });
 
-    // اصلاح مهم: diagnostics پیش از بررسی زمان‌بندی مشخص می‌شود.
-    // در حالت diagnostics هیچ پیام بله‌ای ارسال نخواهد شد.
+    // در حالت diagnostics هیچ پیامی به بله ارسال نمی‌شود.
     const diagnosticsOnly =
       new URL(_request.url).searchParams.get("diagnostics") === "1";
 
@@ -1230,12 +1251,9 @@ export async function GET(_request: Request) {
           diagnosticsOnly: true,
           news: newsStats,
           sources: result.diagnostics,
-
-          // اصلاح: نمونه‌های همه منابع، از جمله منابع ویژه، یکجا ارائه می‌شوند.
           samples: result.diagnostics.flatMap(
             (item) => item.sampleItems || []
           ),
-
           report_window: reportWindow,
           runtime_ms: Date.now() - startedAt,
         },
@@ -1315,4 +1333,4 @@ export async function GET(_request: Request) {
       { status: 500 }
     );
   }
-      }
+  }
