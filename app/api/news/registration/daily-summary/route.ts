@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 const MAX_NEWS = 20;
 const MIN_MEDIA = 1;
 const REQUEST_TIMEOUT_MS = 7000;
+
 const USER_AGENT =
   "Mozilla/5.0 (compatible; SedayeSmart/1.0; +https://sedaye-smart.mehdimontakhab6.workers.dev)";
 
@@ -35,6 +35,7 @@ type Candidate = {
 type SourceConfig = {
   name: string;
   url: string;
+  kind?: "rss" | "html";
 };
 
 type SourceResult = {
@@ -44,6 +45,8 @@ type SourceResult = {
   rawItems: number;
   parsedItems: number;
   relevantItems: number;
+  missingDate: number;
+  outsideWindow: number;
   error?: string;
   samples: Array<{
     title: string;
@@ -56,24 +59,49 @@ const RSS_SOURCES: SourceConfig[] = [
   { name: "ایسنا", url: "https://www.isna.ir/rss" },
   { name: "مهر", url: "https://www.mehrnews.com/rss" },
   { name: "ایلنا", url: "https://www.ilna.ir/rss" },
-  { name: "باشگاه خبرنگاران جوان", url: "https://www.yjc.ir/fa/rss/allnews" },
+  {
+    name: "باشگاه خبرنگاران جوان",
+    url: "https://www.yjc.ir/fa/rss/allnews",
+  },
   { name: "خبرآنلاین", url: "https://www.khabaronline.ir/rss" },
   { name: "تابناک", url: "https://www.tabnak.ir/fa/rss/allnews" },
-  { name: "عصر ایران", url: "https://www.asriran.com/fa/rss/allnews" },
-  { name: "همشهری آنلاین", url: "https://www.hamshahrionline.ir/rss" },
-  { name: "جام جم آنلاین", url: "https://jamejamonline.ir/fa/rss/allnews" },
-  { name: "میزان", url: "https://www.mizanonline.ir/fa/rss/allnews" },
-  { name: "شبکه خبر", url: "https://www.iribnews.ir/fa/rss/allnews" },
+  {
+    name: "عصر ایران",
+    url: "https://www.asriran.com/fa/rss/allnews",
+  },
+  {
+    name: "همشهری آنلاین",
+    url: "https://www.hamshahrionline.ir/rss",
+  },
+  {
+    name: "جام جم آنلاین",
+    url: "https://jamejamonline.ir/fa/rss/allnews",
+  },
+  {
+    name: "میزان",
+    url: "https://www.mizanonline.ir/fa/rss/allnews",
+  },
+  {
+    name: "شبکه خبر",
+    url: "https://www.iribnews.ir/fa/rss/allnews",
+  },
   { name: "شانا", url: "https://www.shana.ir/rss" },
   { name: "ایکنا", url: "https://iqna.ir/fa/rss" },
-  { name: "انتخاب", url: "https://www.entekhab.ir/fa/rss/allnews" },
-  { name: "تسنیم", url: "https://www.tasnimnews.ir/fa/rss" },
+  {
+    name: "انتخاب",
+    url: "https://www.entekhab.ir/fa/rss/allnews",
+  },
+  {
+    name: "تسنیم",
+    url: "https://www.tasnimnews.ir/fa/rss",
+  },
 ];
 
 const SPECIAL_SOURCES: SourceConfig[] = [
   {
     name: "تسنیم - ثبت احوال",
     url: "https://www.tasnimnews.ir/fa/keyword/4067",
+    kind: "html",
   },
 ];
 
@@ -197,8 +225,12 @@ function normalizeText(value: unknown): string {
   return String(value ?? "")
     .replace(/ي/g, "ی")
     .replace(/ك/g, "ک")
-    .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
-    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+    .replace(/[۰-۹]/g, (d) =>
+      String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))
+    )
+    .replace(/[٠-٩]/g, (d) =>
+      String("٠١٢٣٤٥٦٧٨٩".indexOf(d))
+    )
     .replace(/\u200c/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -214,12 +246,34 @@ function decodeXml(value: string): string {
     .replace(/&apos;|&#39;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&#(\d+);/g, (_, n: string) =>
-      String.fromCodePoint(Number(n))
-    )
-    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) =>
-      String.fromCodePoint(parseInt(n, 16))
-    );
+    .replace(/&#(\d+);/g, (_, digits: string) => {
+      const code = Number(digits);
+
+      if (
+        !Number.isInteger(code) ||
+        code < 0 ||
+        code > 0x10ffff ||
+        (code >= 0xd800 && code <= 0xdfff)
+      ) {
+        return "";
+      }
+
+      return String.fromCodePoint(code);
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, digits: string) => {
+      const code = parseInt(digits, 16);
+
+      if (
+        !Number.isInteger(code) ||
+        code < 0 ||
+        code > 0x10ffff ||
+        (code >= 0xd800 && code <= 0xdfff)
+      ) {
+        return "";
+      }
+
+      return String.fromCodePoint(code);
+    });
 }
 
 function cleanText(value: unknown): string {
@@ -232,23 +286,40 @@ function cleanText(value: unknown): string {
     .trim();
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function extractTag(block: string, tag: string): string {
-  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegExp(tag);
+
   const re = new RegExp(
     `<${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escaped}\\s*>`,
     "i"
   );
+
   const match = block.match(re);
+
   return match ? cleanText(match[1]) : "";
 }
 
 function extractLink(block: string): string {
-  const atomLink = block.match(
-    /<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*\/?\s*>/i
-  );
+  const links =
+    block.match(/<link\b[^>]*\/?>/gi) || [];
 
-  if (atomLink?.[1]) {
-    return decodeXml(atomLink[1]).trim();
+  for (const tag of links) {
+    const href = tag.match(
+      /\bhref\s*=\s*["']([^"']+)["']/i
+    );
+
+    if (!href?.[1]) continue;
+
+    const rel = tag.match(/\brel\s*=\s*["']([^"']+)["']/i);
+    const relValue = (rel?.[1] || "").toLowerCase();
+
+    if (relValue && relValue !== "alternate") continue;
+
+    return decodeXml(href[1]).trim();
   }
 
   const rssLink = block.match(
@@ -265,7 +336,10 @@ function extractLink(block: string): string {
 
   if (guid?.[1]) {
     const value = cleanText(guid[1]);
-    if (/^https?:\/\//i.test(value)) return value;
+
+    if (/^https?:\/\//i.test(value)) {
+      return value;
+    }
   }
 
   return "";
@@ -278,8 +352,11 @@ function normalizeDomain(host: string): string {
 function isBlockedDomain(url: string): boolean {
   try {
     const hostname = normalizeDomain(new URL(url).hostname);
+
     return BLOCKED_DOMAINS.some(
-      (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+      (domain) =>
+        hostname === domain ||
+        hostname.endsWith(`.${domain}`)
     );
   } catch {
     return true;
@@ -289,9 +366,13 @@ function isBlockedDomain(url: string): boolean {
 function isIranianNewsLink(url: string): boolean {
   try {
     const parsed = new URL(url);
-    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return false;
+    }
 
     const host = normalizeDomain(parsed.hostname);
+
     if (isBlockedDomain(url)) return false;
 
     return (
@@ -304,28 +385,46 @@ function isIranianNewsLink(url: string): boolean {
   }
 }
 
-function includesAny(text: string, terms: string[]): boolean {
+function includesAny(
+  text: string,
+  terms: string[]
+): boolean {
   const normalized = normalizeText(text);
-  return terms.some((term) => normalized.includes(normalizeText(term)));
+
+  return terms.some((term) =>
+    normalized.includes(normalizeText(term))
+  );
 }
 
-function isRelevantNews(title: string, description = ""): boolean {
+function isRelevantNews(
+  title: string,
+  description = ""
+): boolean {
   const normalizedTitle = normalizeText(title);
   const normalizedDescription = normalizeText(description);
-  const combined = `${normalizedTitle} ${normalizedDescription}`;
+  const combined =
+    `${normalizedTitle} ${normalizedDescription}`;
 
   if (!normalizedTitle) return false;
 
-  // ابتدا مواردی را که معمولاً موضوع ثبت احوال نیستند رد می‌کنیم.
-  if (includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)) return false;
-
-  if (includesAny(normalizedTitle, NON_REGISTRATION_CONTEXT_TERMS)) {
+  if (
+    includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)
+  ) {
     return false;
   }
 
-  // عبارت‌های قوی باید در عنوان باشند؛ وجود آن‌ها در توضیحات
-  // نیز وقتی عنوان مرتبط است می‌تواند خبر را معتبر کند.
-  if (includesAny(normalizedTitle, STRONG_TERMS)) return true;
+  if (
+    includesAny(
+      normalizedTitle,
+      NON_REGISTRATION_CONTEXT_TERMS
+    )
+  ) {
+    return false;
+  }
+
+  if (includesAny(normalizedTitle, STRONG_TERMS)) {
+    return true;
+  }
 
   if (
     includesAny(normalizedDescription, STRONG_TERMS) &&
@@ -334,9 +433,15 @@ function isRelevantNews(title: string, description = ""): boolean {
     return true;
   }
 
-  // واژه‌های عمومی مانند «هویت» به‌تنهایی کافی نیستند.
-  const hasSecondary = includesAny(combined, SECONDARY_TERMS);
-  const hasContext = includesAny(combined, CONTEXT_TERMS);
+  const hasSecondary = includesAny(
+    combined,
+    SECONDARY_TERMS
+  );
+
+  const hasContext = includesAny(
+    combined,
+    CONTEXT_TERMS
+  );
 
   return hasSecondary && hasContext;
 }
@@ -347,7 +452,10 @@ async function fetchWithTimeout(
   timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    timeoutMs
+  );
 
   try {
     return await fetch(url, {
@@ -367,10 +475,14 @@ async function fetchWithTimeout(
 
 function parseGregorianDate(value: string): Date | null {
   const input = value.trim();
+
   if (!input) return null;
 
-  const date = new Date(input);
-  if (!Number.isNaN(date.getTime())) return date;
+  const direct = new Date(input);
+
+  if (!Number.isNaN(direct.getTime())) {
+    return direct;
+  }
 
   const match = input.match(
     /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/
@@ -378,7 +490,9 @@ function parseGregorianDate(value: string): Date | null {
 
   if (!match) return null;
 
-  const [, y, m, d, h = "0", min = "0", sec = "0"] = match;
+  const [, y, m, d, h = "0", min = "0", sec = "0"] =
+    match;
+
   const result = new Date(
     Date.UTC(
       Number(y),
@@ -409,10 +523,9 @@ function jalaliToGregorian(
     return null;
   }
 
-  // تبدیل تاریخ شمسی به میلادی با الگوریتم روز ژولیوسی.
   let year = jy - 979;
-  let month = jm - 1;
-  let day = jd - 1;
+  const month = jm - 1;
+  const day = jd - 1;
 
   let days =
     365 * year +
@@ -420,7 +533,8 @@ function jalaliToGregorian(
     Math.floor(((year % 33) + 3) / 4);
 
   const jalaliMonthDays = [
-    31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29,
+    31, 31, 31, 31, 31, 31,
+    30, 30, 30, 30, 30, 29,
   ];
 
   for (let i = 0; i < month; i++) {
@@ -431,6 +545,7 @@ function jalaliToGregorian(
 
   let gDays = days + 79;
   let gy = 1600 + 400 * Math.floor(gDays / 146097);
+
   gDays %= 146097;
 
   let leap = true;
@@ -440,8 +555,11 @@ function jalaliToGregorian(
     gy += 100 * Math.floor(gDays / 36524);
     gDays %= 36524;
 
-    if (gDays >= 365) gDays++;
-    else leap = false;
+    if (gDays >= 365) {
+      gDays++;
+    } else {
+      leap = false;
+    }
   }
 
   gy += 4 * Math.floor(gDays / 1461);
@@ -470,7 +588,11 @@ function jalaliToGregorian(
   ];
 
   let gm = 0;
-  while (gm < 12 && gDays >= gregorianMonthDays[gm]) {
+
+  while (
+    gm < 12 &&
+    gDays >= gregorianMonthDays[gm]
+  ) {
     gDays -= gregorianMonthDays[gm];
     gm++;
   }
@@ -482,9 +604,11 @@ function jalaliToGregorian(
 
 function parseDate(value: string): Date | null {
   const input = cleanText(value);
+
   if (!input) return null;
 
   const gregorian = parseGregorianDate(input);
+
   if (gregorian) return gregorian;
 
   const normalized = normalizeText(input);
@@ -531,36 +655,46 @@ function parseDate(value: string): Date | null {
   return null;
 }
 
-function getReportWindow(now = new Date()): {
-  start: Date;
-  end: Date;
-} {
-  // گزارش روزانه از ساعت ۲۲:۳۰ تهران تا ساعت ۲۲:۳۰ روز بعد است.
+function getReportWindow(
+  now = new Date()
+): { start: Date; end: Date } {
+  // ساعت ۲۲:۳۰ ایران، برابر با ۱۹:۰۰ UTC است.
   const iranOffsetMs = 3.5 * 60 * 60 * 1000;
-  const iranNow = new Date(now.getTime() + iranOffsetMs);
+  const iranNow = new Date(
+    now.getTime() + iranOffsetMs
+  );
 
-  const iranYear = iranNow.getUTCFullYear();
-  const iranMonth = iranNow.getUTCMonth();
-  const iranDay = iranNow.getUTCDate();
-  const iranHour = iranNow.getUTCHours();
-  const iranMinute = iranNow.getUTCMinutes();
+  const year = iranNow.getUTCFullYear();
+  const month = iranNow.getUTCMonth();
+  const day = iranNow.getUTCDate();
+  const hour = iranNow.getUTCHours();
+  const minute = iranNow.getUTCMinutes();
 
-  const localCutoff = Date.UTC(
-    iranYear,
-    iranMonth,
-    iranDay,
+  let endLocal = Date.UTC(
+    year,
+    month,
+    day,
     22,
     30,
     0
   );
 
-  let endLocal = localCutoff;
-
-  if (iranHour < 22 || (iranHour === 22 && iranMinute < 30)) {
-    endLocal = Date.UTC(iranYear, iranMonth, iranDay - 1, 22, 30, 0);
+  if (
+    hour < 22 ||
+    (hour === 22 && minute < 30)
+  ) {
+    endLocal = Date.UTC(
+      year,
+      month,
+      day - 1,
+      22,
+      30,
+      0
+    );
   }
 
-  const startLocal = endLocal - 24 * 60 * 60 * 1000;
+  const startLocal =
+    endLocal - 24 * 60 * 60 * 1000;
 
   return {
     start: new Date(startLocal - iranOffsetMs),
@@ -569,7 +703,11 @@ function getReportWindow(now = new Date()): {
 }
 
 function parseFeed(xml: string): Candidate[] {
-  const blocks = xml.match(/<(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:item|entry)\s*>/gi) || [];
+  const blocks =
+    xml.match(
+      /<(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:item|entry)\s*>/gi
+    ) || [];
+
   const result: Candidate[] = [];
 
   for (const block of blocks) {
@@ -592,7 +730,8 @@ function parseFeed(xml: string): Candidate[] {
       extractTag(block, "dc:date") ||
       extractTag(block, "date");
 
-    if (!title || !link || !isIranianNewsLink(link)) continue;
+    if (!title || !link) continue;
+    if (!isIranianNewsLink(link)) continue;
 
     result.push({
       title,
@@ -605,7 +744,95 @@ function parseFeed(xml: string): Candidate[] {
   return result;
 }
 
-async function fetchSource(
+function extractHtmlCandidates(
+  html: string,
+  baseUrl: string
+): Candidate[] {
+  const result: Candidate[] = [];
+  const seen = new Set<string>();
+
+  const anchors =
+    html.match(/<a\b[^>]*>[\s\S]*?<\/a\s*>/gi) || [];
+
+  for (const anchor of anchors) {
+    const hrefMatch = anchor.match(
+      /\bhref\s*=\s*["']([^"']+)["']/i
+    );
+
+    if (!hrefMatch?.[1]) continue;
+
+    let link: string;
+
+    try {
+      link = new URL(
+        decodeXml(hrefMatch[1]),
+        baseUrl
+      ).toString();
+    } catch {
+      continue;
+    }
+
+    if (!isIranianNewsLink(link)) continue;
+
+    const title = cleanText(anchor);
+
+    if (!title || title.length < 12) continue;
+
+    const normalizedLink = link.split("#")[0];
+
+    if (seen.has(normalizedLink)) continue;
+    seen.add(normalizedLink);
+
+    result.push({
+      title,
+      link: normalizedLink,
+      description: "",
+      publishedAt: "",
+    });
+  }
+
+  return result;
+}
+
+function extractArticleDate(html: string): string {
+  const metaPatterns = [
+    /<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:published_time["'][^>]*>/i,
+    /<meta[^>]+name=["']datePublished["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']datePublished["'][^>]*>/i,
+    /<meta[^>]+property=["']og:updated_time["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+  ];
+
+  for (const pattern of metaPatterns) {
+    const match = html.match(pattern);
+
+    if (match?.[1]) return cleanText(match[1]);
+  }
+
+  const jsonDate = html.match(
+    /["']datePublished["']\s*:\s*["']([^"']+)["']/i
+  );
+
+  if (jsonDate?.[1]) return cleanText(jsonDate[1]);
+
+  const timeTag = html.match(
+    /<time\b[^>]*\bdatetime=["']([^"']+)["'][^>]*>/i
+  );
+
+  if (timeTag?.[1]) return cleanText(timeTag[1]);
+
+  const publishedText = html.match(
+    /(?:تاریخ انتشار|انتشار)\s*[:：]?\s*([^<\n\r]{5,60})/i
+  );
+
+  if (publishedText?.[1]) {
+    return cleanText(publishedText[1]);
+  }
+
+  return "";
+}
+
+async function fetchSpecialSource(
   source: SourceConfig,
   window: { start: Date; end: Date }
 ): Promise<{
@@ -619,6 +846,148 @@ async function fetchSource(
     rawItems: 0,
     parsedItems: 0,
     relevantItems: 0,
+    missingDate: 0,
+    outsideWindow: 0,
+    samples: [],
+  };
+
+  try {
+    const response = await fetchWithTimeout(
+      source.url,
+      {},
+      REQUEST_TIMEOUT_MS
+    );
+
+    diagnostics.status = response.status;
+
+    if (!response.ok) {
+      diagnostics.error = `HTTP ${response.status}`;
+      return { items: [], diagnostics };
+    }
+
+    const html = await response.text();
+    const candidates = extractHtmlCandidates(
+      html,
+      source.url
+    );
+
+    diagnostics.rawItems = candidates.length;
+    diagnostics.parsedItems = candidates.length;
+
+    const relevant = candidates
+      .filter((item) =>
+        isRelevantNews(item.title, item.description)
+      )
+      .slice(0, 15);
+
+    diagnostics.relevantItems = relevant.length;
+
+    const articleResults = await Promise.all(
+      relevant.map(async (candidate) => {
+        try {
+          const articleResponse = await fetchWithTimeout(
+            candidate.link,
+            {},
+            REQUEST_TIMEOUT_MS
+          );
+
+          if (!articleResponse.ok) {
+            return {
+              candidate,
+              date: "",
+              description: "",
+            };
+          }
+
+          const articleHtml =
+            await articleResponse.text();
+
+          const date = extractArticleDate(articleHtml);
+
+          const description =
+            extractTag(articleHtml, "meta") ||
+            "";
+
+          return {
+            candidate,
+            date,
+            description,
+          };
+        } catch {
+          return {
+            candidate,
+            date: "",
+            description: "",
+          };
+        }
+      })
+    );
+
+    const items: NewsItem[] = [];
+
+    for (const result of articleResults) {
+      const parsedDate = parseDate(result.date);
+
+      if (!parsedDate) {
+        diagnostics.missingDate++;
+        continue;
+      }
+
+      if (
+        parsedDate < window.start ||
+        parsedDate >= window.end
+      ) {
+        diagnostics.outsideWindow++;
+        continue;
+      }
+
+      items.push({
+        title: result.candidate.title,
+        link: result.candidate.link,
+        description: result.description,
+        source: source.name,
+        publishedAt: parsedDate.toISOString(),
+      });
+    }
+
+    diagnostics.samples = articleResults
+      .slice(0, 5)
+      .map((result) => ({
+        title: result.candidate.title,
+        publishedAt: result.date,
+      }));
+
+    return { items, diagnostics };
+  } catch (error) {
+    diagnostics.error =
+      error instanceof Error
+        ? error.message
+        : "Unknown fetch error";
+
+    return { items: [], diagnostics };
+  }
+}
+
+async function fetchSource(
+  source: SourceConfig,
+  window: { start: Date; end: Date }
+): Promise<{
+  items: NewsItem[];
+  diagnostics: SourceResult;
+}> {
+  if (source.kind === "html") {
+    return fetchSpecialSource(source, window);
+  }
+
+  const diagnostics: SourceResult = {
+    source: source.name,
+    url: source.url,
+    status: null,
+    rawItems: 0,
+    parsedItems: 0,
+    relevantItems: 0,
+    missingDate: 0,
+    outsideWindow: 0,
     samples: [],
   };
 
@@ -633,10 +1002,10 @@ async function fetchSource(
     }
 
     const body = await response.text();
-    const rawBlocks =
-      body.match(/<(?:item|entry)\b/gi) || [];
 
-    diagnostics.rawItems = rawBlocks.length;
+    diagnostics.rawItems = (
+      body.match(/<(?:item|entry)\b/gi) || []
+    ).length;
 
     const candidates = parseFeed(body);
     diagnostics.parsedItems = candidates.length;
@@ -644,16 +1013,33 @@ async function fetchSource(
     const items: NewsItem[] = [];
 
     for (const candidate of candidates) {
-      if (!isRelevantNews(candidate.title, candidate.description)) {
+      if (
+        !isRelevantNews(
+          candidate.title,
+          candidate.description
+        )
+      ) {
         continue;
       }
 
       diagnostics.relevantItems++;
 
-      const parsedDate = parseDate(candidate.publishedAt);
+      const parsedDate = parseDate(
+        candidate.publishedAt
+      );
 
-      if (!parsedDate) continue;
-      if (parsedDate < window.start || parsedDate >= window.end) continue;
+      if (!parsedDate) {
+        diagnostics.missingDate++;
+        continue;
+      }
+
+      if (
+        parsedDate < window.start ||
+        parsedDate >= window.end
+      ) {
+        diagnostics.outsideWindow++;
+        continue;
+      }
 
       items.push({
         title: candidate.title,
@@ -664,27 +1050,35 @@ async function fetchSource(
       });
     }
 
-    diagnostics.samples = candidates.slice(0, 5).map((item) => ({
-      title: item.title,
-      publishedAt: item.publishedAt,
-    }));
+    diagnostics.samples = candidates
+      .slice(0, 5)
+      .map((item) => ({
+        title: item.title,
+        publishedAt: item.publishedAt,
+      }));
 
     return { items, diagnostics };
   } catch (error) {
     diagnostics.error =
-      error instanceof Error ? error.message : "Unknown fetch error";
+      error instanceof Error
+        ? error.message
+        : "Unknown fetch error";
 
     return { items: [], diagnostics };
   }
 }
 
-function deduplicate(items: NewsItem[]): NewsItem[] {
+function deduplicate(
+  items: NewsItem[]
+): NewsItem[] {
   const seen = new Set<string>();
   const result: NewsItem[] = [];
 
   for (const item of items) {
-    const key = normalizeText(item.title)
-      .replace(/[^\p{L}\p{N}]+/gu, "");
+    const key = normalizeText(item.title).replace(
+      /[^\p{L}\p{N}]+/gu,
+      ""
+    );
 
     if (!key || seen.has(key)) continue;
 
@@ -695,16 +1089,30 @@ function deduplicate(items: NewsItem[]): NewsItem[] {
   return result;
 }
 
-async function getNews(window: { start: Date; end: Date }): Promise<{
+async function getNews(
+  window: { start: Date; end: Date }
+): Promise<{
   items: NewsItem[];
   diagnostics: SourceResult[];
 }> {
+  const sources = [
+    ...RSS_SOURCES,
+    ...SPECIAL_SOURCES,
+  ];
+
   const results = await Promise.all(
-    RSS_SOURCES.map((source) => fetchSource(source, window))
+    sources.map((source) =>
+      fetchSource(source, window)
+    )
   );
 
-  const diagnostics = results.map((result) => result.diagnostics);
-  const allItems = results.flatMap((result) => result.items);
+  const diagnostics = results.map(
+    (result) => result.diagnostics
+  );
+
+  const allItems = results.flatMap(
+    (result) => result.items
+  );
 
   const items = deduplicate(allItems)
     .sort(
@@ -734,7 +1142,9 @@ async function sendBaleMessage(
     `https://tapi.bale.ai/bot${token}/sendMessage`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         chat_id: chatId,
         text,
@@ -757,7 +1167,9 @@ async function sendBaleMessage(
   }
 
   if (!response.ok) {
-    throw new Error(`Bale sendMessage failed (HTTP ${response.status})`);
+    throw new Error(
+      `Bale sendMessage failed (HTTP ${response.status})`
+    );
   }
 
   if (
@@ -766,7 +1178,9 @@ async function sendBaleMessage(
     !("ok" in data) ||
     (data as { ok?: unknown }).ok !== true
   ) {
-    throw new Error("Bale did not confirm successful message delivery");
+    throw new Error(
+      "Bale did not confirm successful message delivery"
+    );
   }
 
   return data;
@@ -776,14 +1190,17 @@ function formatNewsMessage(
   items: NewsItem[],
   window: { start: Date; end: Date }
 ): string {
-  const formatter = new Intl.DateTimeFormat("fa-IR", {
-    timeZone: "Asia/Tehran",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const formatter = new Intl.DateTimeFormat(
+    "fa-IR",
+    {
+      timeZone: "Asia/Tehran",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
 
   const lines = [
     "📰 خلاصه اخبار مرتبط با ثبت احوال",
@@ -796,32 +1213,39 @@ function formatNewsMessage(
     lines.push(
       `${index + 1}. ${item.title}`,
       `🗞 منبع: ${item.source}`,
-      `🕒 ${formatter.format(new Date(item.publishedAt))}`,
+      `🕒 ${formatter.format(
+        new Date(item.publishedAt)
+      )}`,
       item.link,
       ""
     );
   });
 
   lines.push("—", "صدای هوشمند");
+
   return lines.join("\n");
 }
 
 function noCacheHeaders() {
   return {
-    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "Cache-Control":
+      "no-store, no-cache, must-revalidate",
   };
 }
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const diagnosticsOnly = url.searchParams.get("diagnostics") === "1";
+
+    const diagnosticsOnly =
+      url.searchParams.get("diagnostics") === "1";
 
     const { env } = await getCloudflareContext();
     const cloudflareEnv = env as CloudflareEnv;
 
     const window = getReportWindow();
-    const { items, diagnostics } = await getNews(window);
+    const { items, diagnostics } =
+      await getNews(window);
 
     const stats = {
       totalFetched: diagnostics.reduce(
@@ -837,15 +1261,19 @@ export async function GET(request: Request) {
         0
       ),
       selected: items.length,
-      mediaCount: new Set(items.map((item) => item.source)).size,
+      mediaCount: new Set(
+        items.map((item) => item.source)
+      ).size,
       minimumMedia: MIN_MEDIA,
       maximumNews: MAX_NEWS,
       windowStart: window.start.toISOString(),
       windowEnd: window.end.toISOString(),
       noDate: diagnostics.reduce(
-        (sum, item) =>
-          sum +
-          item.samples.filter((sample) => !sample.publishedAt).length,
+        (sum, item) => sum + item.missingDate,
+        0
+      ),
+      outsideWindow: diagnostics.reduce(
+        (sum, item) => sum + item.outsideWindow,
         0
       ),
       windowItems: items.length,
@@ -868,7 +1296,7 @@ export async function GET(request: Request) {
         {
           ok: true,
           sent: false,
-          reason: "no_relevant_iranian_media",
+          reason: "no_relevant_news_in_window",
           stats,
           sources: diagnostics,
         },
@@ -876,8 +1304,27 @@ export async function GET(request: Request) {
       );
     }
 
-    const message = formatNewsMessage(items, window);
-    await sendBaleMessage(cloudflareEnv, message);
+    if (stats.mediaCount < MIN_MEDIA) {
+      return NextResponse.json(
+        {
+          ok: true,
+          sent: false,
+          reason: "not_enough_media",
+          stats,
+        },
+        { headers: noCacheHeaders() }
+      );
+    }
+
+    const message = formatNewsMessage(
+      items,
+      window
+    );
+
+    await sendBaleMessage(
+      cloudflareEnv,
+      message
+    );
 
     return NextResponse.json(
       {
@@ -904,4 +1351,4 @@ export async function GET(request: Request) {
       }
     );
   }
-    }
+             }
