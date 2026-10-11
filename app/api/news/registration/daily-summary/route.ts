@@ -895,6 +895,23 @@ async function fetchSource(
 
     diagnostics.relevantItems = relevant.length;
 
+    console.log(
+  "[NEWS-DIAGNOSTICS]",
+  JSON.stringify(
+    relevant.map((item) => ({
+      title: item.title,
+      url: item.url,
+      publishedAt: item.publishedAt,
+      parsedDate: parseDate(item.publishedAt)?.toISOString() ?? null,
+      inWindow: isInsideWindow(
+        parseDate(item.publishedAt) ?? new Date(0),
+        start,
+        end
+      ),
+    }))
+  )
+);
+    
     const dated = relevant.filter((item) => {
       const date = parseDate(item.publishedAt);
       if (!date) diagnostics.noDateItems++;
