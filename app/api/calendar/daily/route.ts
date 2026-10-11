@@ -514,7 +514,7 @@ function getEventsForDay(
 }
 
 /* =====================================
-   حذف تاریخ ابتدای متن مناسبت
+   حذف تاریخ از متن مناسبت‌ها
    ===================================== */
 
 function cleanEventText(value: string) {
@@ -525,6 +525,39 @@ function cleanEventText(value: string) {
     )
     .replace(
       /^\s*[۰-۹0-9]{1,2}\s*[\/\-]\s*[۰-۹0-9]{1,2}\s*/,
+      ""
+    )
+    .trim();
+}
+
+function cleanInternationalEventText(value: string) {
+  return String(value || "")
+    .replace(/[\u200c\u200f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    // حذف تاریخ شمسی از ابتدای متن
+    .replace(
+      /^\s*[۰-۹0-9]{1,2}\s+(?:فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s*(?:[:：،,\-–—|]\s*)?/,
+      ""
+    )
+    // حذف تاریخ عددی از ابتدای متن
+    .replace(
+      /^\s*(?:[۰-۹0-9]{4}\s*[\/\-]\s*)?[۰-۹0-9]{1,2}\s*[\/\-]\s*[۰-۹0-9]{1,2}\s*(?:[:：،,\-–—|]\s*)?/,
+      ""
+    )
+    // حذف تاریخ میلادی متنی از انتهای عنوان
+    .replace(
+      /\s*(?:[,،|–—-]\s*)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+[۰-۹0-9]{1,2}(?:st|nd|rd|th)?(?:,?\s+[۰-۹0-9]{4})?\s*$/i,
+      ""
+    )
+    // حذف تاریخ میلادی عددی از انتهای عنوان
+    .replace(
+      /\s*(?:[,،|–—-]\s*)?[۰-۹0-9]{1,2}\s*[\/\-]\s*[۰-۹0-9]{1,2}(?:\s*[\/\-]\s*[۰-۹0-9]{2,4})?\s*$/,
+      ""
+    )
+    // حذف تاریخ شمسی از انتهای عنوان
+    .replace(
+      /\s*(?:[,،|–—-]\s*)?[۰-۹0-9]{1,2}\s+(?:فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s*$/,
       ""
     )
     .trim();
@@ -1401,7 +1434,7 @@ body {
 
     <section class="quote glass">
       <div class="quote-title">
-        🌟 سخن بزرگان
+        🌟 سخن مشاهیر
       </div>
       <div class="quote-text">
         «${escapeHtml(data.quote)}»
@@ -1609,19 +1642,22 @@ export async function GET() {
       .filter((item) => item.text)
       .filter((item) => !isInternationalEvent(item.text));
 
-    // مناسبت‌های بین‌المللی موجود در منبع تقویم
+        // مناسبت‌های بین‌المللی موجود در منبع تقویم
     const discoveredInternationalEvents = rawTodayEvents
       .map((event: any) => getEventText(event))
       .filter(Boolean)
-      .filter(isInternationalEvent);
+      .filter(isInternationalEvent)
+      .map((event: string) => cleanInternationalEventText(event))
+      .filter(Boolean);
 
     // مناسبت‌های بین‌المللی فهرست ثابت
     const fixedInternationalEvents = getInternationalEvents(
       tehran.month,
       tehran.day
-    );
+    ).map((event) => cleanInternationalEventText(event))
+      .filter(Boolean);
 
-    // ترکیب فهرست‌ها و حذف موارد تکراری
+    // ترکیب فهرست‌ها، حذف تاریخ‌ها و حذف موارد تکراری
     const internationalEvents = Array.from(
       new Set([
         ...fixedInternationalEvents,
