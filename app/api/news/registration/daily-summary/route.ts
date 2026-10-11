@@ -35,6 +35,15 @@ type SourceResult = {
   relevantItems: number;
   windowItems: number;
   noDateItems: number;
+
+  sampleItems?: Array<{
+    title: string;
+    url: string;
+    publishedAt: string;
+    parsedDate: string | null;
+    inWindow: boolean;
+  }>;
+
   error: string | null;
 };
 
@@ -894,6 +903,19 @@ async function fetchSource(
     );
 
     diagnostics.relevantItems = relevant.length;
+
+    
+diagnostics.sampleItems = relevant.map((item) => {
+  const date = parseDate(item.publishedAt);
+
+  return {
+    title: item.title,
+    url: item.url,
+    publishedAt: item.publishedAt,
+    parsedDate: date?.toISOString() ?? null,
+    inWindow: isInsideWindow(date, start, end),
+  };
+});
 
     console.log(
   "[NEWS-DIAGNOSTICS]",
