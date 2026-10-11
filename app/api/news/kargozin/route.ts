@@ -90,7 +90,7 @@ function cleanPostText(input: string): string {
     .trim();
 
   const footerMarkers = [
-    /با\s+کانال\s+کارگزین\s+آنلاین\s+به\s+روز\s+باشید/i,
+    /با\s*[\(（]?\s*کانال\s*[\)）]?\s*کارگزین\s*آنلاین\s*به\s*روز\s*باشید/i,
     /برای\s+سفارش\s+تبلیغات/i,
     /جهت\s+تبلیغات/i,
     /تبلیغات\s+در\s+کانال/i,
