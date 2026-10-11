@@ -9,7 +9,8 @@ const SCHEDULE_KEY = "schedule_kargozin";
 const MAX_POSTS_PER_RUN = 3;
 const MAX_SEEN_IDS = 1500;
 
-const NOTICE = "🔴 این مطلب به صورت خودکار از کانال کارگزین آنلاین ارسال شده است";
+const NOTICE =
+  "🔴 این مطلب به صورت خودکار از کانال کارگزین آنلاین ارسال شده است";
 
 type TelegramPost = {
   id: string;
@@ -45,9 +46,17 @@ function decodeHtml(value: string): string {
     (match, entity: string) => {
       if (entity.startsWith("#")) {
         const hex = entity[1]?.toLowerCase() === "x";
-        const code = parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
+        const code = parseInt(
+          entity.slice(hex ? 2 : 1),
+          hex ? 16 : 10,
+        );
 
-        if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) {
+        if (
+          !Number.isFinite(code) ||
+          code < 0 ||
+          code > 0x10ffff ||
+          (code >= 0xd800 && code <= 0xdfff)
+        ) {
           return match;
         }
 
@@ -63,9 +72,143 @@ function decodeHtml(value: string): string {
   );
 }
 
+/**
+ * بررسی وجود یک کلاس در تگ HTML.
+ * ترتیب attributeها اهمیتی ندارد.
+ */
+function hasClass(tag: string, className: string): boolean {
+  const match = tag.match(/\bclass\s*=\s*(["'])(.*?)\1/i);
+
+  if (!match) return false;
+
+  return match[2]
+    .split(/\s+/)
+    .some((name) => name === className);
+}
+
+/**
+ * انتهای یک عنصر div را با درنظرگرفتن divهای تو‌در‌تو پیدا می‌کند.
+ * خروجی، موقعیت انتهای تگ بسته‌شدن است.
+ */
+function findDivEnd(
+  html: string,
+  contentStart: number,
+): number {
+  const tags = /<\/?div\b[^>]*>/gi;
+  tags.lastIndex = contentStart;
+
+  let depth = 1;
+  let match: RegExpExecArray | null;
+
+  while ((match = tags.exec(html)) !== null) {
+    if (/^<\/div/i.test(match[0])) {
+      depth--;
+
+      if (depth === 0) {
+        return tags.lastIndex;
+      }
+    } else if (!/\/\s*>$/.test(match[0])) {
+      depth++;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * محتوای کامل اولین div دارای کلاس مشخص را استخراج می‌کند.
+ * برخلاف Regex ساده، با divهای داخلی متوقف نمی‌شود.
+ */
+function extractDivInnerByClass(
+  html: string,
+  className: string,
+): string | null {
+  const tags = /<div\b[^>]*>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = tags.exec(html)) !== null) {
+    if (!hasClass(match[0], className)) continue;
+
+    const contentStart = tags.lastIndex;
+    const end = findDivEnd(html, contentStart);
+
+    if (end < 0) return null;
+
+    // تگ بسته‌شدن div را از خروجی حذف می‌کنیم.
+    return html.slice(contentStart, end).replace(/<\/div>\s*$/i, "");
+  }
+
+  return null;
+}
+
+/**
+ * عناصر div دارای کلاس‌های مشخص را حذف می‌کند.
+ * divهای تو‌در‌تو نیز به‌طور کامل حذف می‌شوند.
+ */
+function removeDivElementsByClass(
+  html: string,
+  classNames: string[],
+): string {
+  let result = html;
+
+  for (const className of classNames) {
+    // برای جلوگیری از حلقه بی‌نهایت در HTML نامعتبر
+    // تعداد تلاش‌ها محدود شده است.
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const tags = /<div\b[^>]*>/gi;
+      let match: RegExpExecArray | null;
+      let removed = false;
+
+      while ((match = tags.exec(result)) !== null) {
+        if (!hasClass(match[0], className)) continue;
+
+        const start = match.index;
+        const contentStart = tags.lastIndex;
+        const end = findDivEnd(result, contentStart);
+
+        if (end < 0) {
+          // HTML ناقص است؛ باقی محتوا را حدسی حذف نکن.
+          return result;
+        }
+
+        result =
+          result.slice(0, start) +
+          result.slice(end);
+
+        removed = true;
+        break;
+      }
+
+      if (!removed) break;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * حذف عناصر ریپلای و نقل‌قول در صورتی که داخل HTML
+ * متن پیام قرار گرفته باشند.
+ *
+ * کادر ریپلای که بیرون از عنصر متن پیام قرار دارد،
+ * اصلاً وارد متن استخراج‌شده نمی‌شود.
+ */
+function removeReplyElements(html: string): string {
+  return removeDivElementsByClass(html, [
+    "tgme_widget_message_reply",
+    "tgme_widget_message_text_reply",
+    "tgme_widget_message_reply_text",
+    "tgme_widget_message_reply_quote",
+  ]);
+}
+
+/**
+ * تبدیل HTML به متن ساده با حفظ شکست خطوط.
+ */
 function htmlToText(html: string): string {
   return decodeHtml(
     html
+      .replace(/<!--[\s\S]*?-->/g, "")
       .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "")
       .replace(/<br\b[^>]*>/gi, "\n")
       .replace(/<\/(?:p|div|li|blockquote|h[1-6])\s*>/gi, "\n")
@@ -79,8 +222,8 @@ function htmlToText(html: string): string {
 }
 
 /**
- * تبلیغات انتهایی را قطع می‌کند، اما وجود لینک در وسط خبر
- * باعث حذف تمام متن بعد از لینک نمی‌شود.
+ * تبلیغات انتهایی را حذف می‌کند، بدون اینکه وجود لینک
+ * در وسط خبر باعث حذف ادامه متن شود.
  */
 function cleanPostText(input: string): string {
   let text = input
@@ -107,6 +250,7 @@ function cleanPostText(input: string): string {
 
   for (const marker of footerMarkers) {
     const match = marker.exec(text);
+
     if (match && match.index < cutAt) {
       cutAt = match.index;
     }
@@ -114,14 +258,15 @@ function cleanPostText(input: string): string {
 
   text = text.slice(0, cutAt);
 
-      // حذف خط‌های تزئینی مستقل شامل لوزی‌ها و دایره‌های رنگی
+  // حذف خط‌های تزئینی مستقل شامل لوزی‌ها و دایره‌های رنگی
   text = text
     .replace(
       /(?:^|\n)[ \t\u200c]*(?:(?:🔹|🔸|🔷|🔶|🔴|🔵|⚫️?|⚪️?|♦️?|◆|◇|💠)[ \t\u200c]*)+(?=\n|$)/gu,
       "\n",
     )
     .replace(/(?:^|\n)[ \t\u200c]+(?=\n|$)/g, "\n");
-  // همه لینک‌ها حذف می‌شوند، ولی متن پس از لینک حفظ می‌شود.
+
+  // حذف URLها بدون حذف ادامه خبر
   text = text
     .replace(/https?:\/\/[^\s]+/gi, "")
     .replace(
@@ -143,8 +288,9 @@ function hasUsefulText(text: string): boolean {
 }
 
 /**
- * توجه: عکس کوچک پروفایل فرستنده، رسانهٔ پست نیست.
- * بنابراین وجود هر تگ img به‌تنهایی دلیل رد پست نیست.
+ * عکس کوچک پروفایل، رسانه پست محسوب نمی‌شود.
+ * پست‌های دارای عکس، فیلم، فایل، صوت، استیکر یا نظرسنجی
+ * مانند نسخه قبلی از ارسال کنار گذاشته می‌شوند.
  */
 function containsMedia(block: string): boolean {
   const mediaPatterns = [
@@ -169,7 +315,11 @@ function containsMedia(block: string): boolean {
 }
 
 /**
- * استخراج پست‌ها با تحمل تفاوت در ترتیب attributeها و کلاس‌های HTML.
+ * استخراج پست‌های کانال تلگرام.
+ *
+ * متن اصلی فقط از tgme_widget_message_text استخراج می‌شود.
+ * کادر ریپلای بیرون از این عنصر وارد متن نمی‌شود؛
+ * اگر درون آن باشد، عناصر شناخته‌شده ریپلای حذف می‌شوند.
  */
 function parseTelegramPosts(html: string): TelegramPost[] {
   const posts: TelegramPost[] = [];
@@ -195,13 +345,18 @@ function parseTelegramPosts(html: string): TelegramPost[] {
     // پست رسانه‌ای حتی اگر کپشن داشته باشد ارسال نمی‌شود.
     if (containsMedia(block)) continue;
 
-    const textMatch = block.match(
-      /<div\b(?=[^>]*\bclass=["'][^"']*\btgme_widget_message_text\b)[^>]*>([\s\S]*?)<\/div>/i,
+    // استخراج کل محتوای عنصر متن، با پشتیبانی از divهای تو‌در‌تو
+    const messageHtml = extractDivInnerByClass(
+      block,
+      "tgme_widget_message_text",
     );
 
-    if (!textMatch) continue;
+    if (messageHtml === null) continue;
 
-    const text = cleanPostText(htmlToText(textMatch[1]));
+    // حذف ریپلای پیش از تبدیل HTML به متن
+    const mainHtml = removeReplyElements(messageHtml);
+
+    const text = cleanPostText(htmlToText(mainHtml));
 
     if (!hasUsefulText(text)) continue;
 
@@ -231,7 +386,9 @@ async function fetchTelegramPosts(): Promise<TelegramPost[]> {
       signal: AbortSignal.timeout(15000),
     });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail =
+      error instanceof Error ? error.message : String(error);
+
     throw new Error(`Telegram fetch failed: ${detail}`);
   }
 
@@ -250,8 +407,10 @@ async function fetchTelegramPosts(): Promise<TelegramPost[]> {
   if (posts.length === 0) {
     const hasPostIds =
       /\bdata-post=["']kargozinonline\/\d+["']/i.test(html);
+
     const hasMessageText =
       /\btgme_widget_message_text\b/i.test(html);
+
     const looksBlocked =
       /captcha|too many requests|access denied|please enable javascript/i.test(
         html,
@@ -316,7 +475,10 @@ async function getSetting(
     throw new Error(`Supabase read failed: ${response.status}`);
   }
 
-  const rows = (await response.json()) as Array<{ value: unknown }>;
+  const rows = (await response.json()) as Array<{
+    value: unknown;
+  }>;
+
   return rows.length ? rows[0].value : null;
 }
 
@@ -350,12 +512,15 @@ function isEnabled(value: unknown): boolean {
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
 
-    if (["false", "off", "0", "disabled"].includes(normalized)) {
+    if (
+      ["false", "off", "0", "disabled"].includes(normalized)
+    ) {
       return false;
     }
 
     try {
       const parsed = JSON.parse(normalized);
+
       if (parsed === false || parsed === 0) return false;
     } catch {
       // مقدار متنی عادی تنظیمات
@@ -383,7 +548,9 @@ function parseSeenIds(value: unknown): string[] {
   if (!Array.isArray(parsed)) return [];
 
   return [
-    ...new Set(parsed.map(String).filter((id) => /^\d+$/.test(id))),
+    ...new Set(
+      parsed.map(String).filter((id) => /^\d+$/.test(id)),
+    ),
   ].slice(-MAX_SEEN_IDS);
 }
 
@@ -402,7 +569,9 @@ async function sendBaleMessage(
     `https://tapi.bale.ai/bot${token}/sendMessage`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         chat_id: chatId,
         text,
@@ -428,7 +597,10 @@ function buildMessage(post: TelegramPost): string {
   return `${NOTICE}\n\n${post.text}`;
 }
 
-function compareIds(a: TelegramPost, b: TelegramPost): number {
+function compareIds(
+  a: TelegramPost,
+  b: TelegramPost,
+): number {
   const first = BigInt(a.id);
   const second = BigInt(b.id);
 
@@ -475,7 +647,10 @@ export async function GET(): Promise<Response> {
 
     const batch = newPosts.slice(0, MAX_POSTS_PER_RUN);
     const sentIds: string[] = [];
-    const errors: Array<{ id: string; error: string }> = [];
+    const errors: Array<{
+      id: string;
+      error: string;
+    }> = [];
 
     for (const post of batch) {
       try {
@@ -484,8 +659,12 @@ export async function GET(): Promise<Response> {
       } catch (error) {
         errors.push({
           id: post.id,
-          error: error instanceof Error ? error.message : String(error),
+          error:
+            error instanceof Error
+              ? error.message
+              : String(error),
         });
+
         break;
       }
     }
@@ -494,7 +673,9 @@ export async function GET(): Promise<Response> {
       await saveSetting(
         env,
         SETTINGS_KEY,
-        [...new Set([...seenIds, ...sentIds])].slice(-MAX_SEEN_IDS),
+        [...new Set([...seenIds, ...sentIds])].slice(
+          -MAX_SEEN_IDS,
+        ),
       );
     }
 
@@ -510,7 +691,10 @@ export async function GET(): Promise<Response> {
     return Response.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 },
     );
