@@ -531,35 +531,59 @@ function cleanEventText(value: string) {
 }
 
 function cleanInternationalEventText(value: string) {
-  return String(value || "")
+  let text = String(value || "")
     .replace(/[\u200c\u200f]/g, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    // حذف تاریخ شمسی از ابتدای متن
-    .replace(
-      /^\s*[۰-۹0-9]{1,2}\s+(?:فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s*(?:[:：،,\-–—|]\s*)?/,
-      ""
-    )
-    // حذف تاریخ عددی از ابتدای متن
-    .replace(
-      /^\s*(?:[۰-۹0-9]{4}\s*[\/\-]\s*)?[۰-۹0-9]{1,2}\s*[\/\-]\s*[۰-۹0-9]{1,2}\s*(?:[:：،,\-–—|]\s*)?/,
-      ""
-    )
-    // حذف تاریخ میلادی متنی از انتهای عنوان
-    .replace(
-      /\s*(?:[,،|–—-]\s*)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+[۰-۹0-9]{1,2}(?:st|nd|rd|th)?(?:,?\s+[۰-۹0-9]{4})?\s*$/i,
-      ""
-    )
-    // حذف تاریخ میلادی عددی از انتهای عنوان
-    .replace(
-      /\s*(?:[,،|–—-]\s*)?[۰-۹0-9]{1,2}\s*[\/\-]\s*[۰-۹0-9]{1,2}(?:\s*[\/\-]\s*[۰-۹0-9]{2,4})?\s*$/,
-      ""
-    )
-    // حذف تاریخ شمسی از انتهای عنوان
-    .replace(
-      /\s*(?:[,،|–—-]\s*)?[۰-۹0-9]{1,2}\s+(?:فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s*$/,
-      ""
-    )
+    .trim();
+
+  const persianMonths =
+    "فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند";
+
+  const englishMonths =
+    "January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec";
+
+  // حذف تاریخ شمسی از ابتدای متن
+  text = text.replace(
+    new RegExp(
+      `^\\s*[۰-۹0-9]{1,2}\\s+(?:${persianMonths})\\s*[:：،,\\-–—|]?\\s*`,
+      "i"
+    ),
+    ""
+  );
+
+  // حذف تاریخ عددی از ابتدای متن
+  text = text.replace(
+    /^\s*(?:[۰-۹0-9]{4}\s*[\/.\-]\s*)?[۰-۹0-9]{1,2}\s*[\/.\-]\s*[۰-۹0-9]{1,2}\s*[:：،,\-–—|]?\s*/,
+    ""
+  );
+
+  // حذف تاریخ میلادی مثل 11 October یا October 11
+  text = text.replace(
+    new RegExp(
+      `\\s*(?:[,،|;:\\-–—]\\s*)?(?:(?:${englishMonths})\\.?\\s+[۰-۹0-9]{1,2}(?:st|nd|rd|th)?|[۰-۹0-9]{1,2}(?:st|nd|rd|th)?\\s+(?:${englishMonths})\\.?)(?:,?\\s+[۰-۹0-9]{4})?\\s*$`,
+      "i"
+    ),
+    ""
+  );
+
+  // حذف تاریخ میلادی عددی از انتهای متن
+  text = text.replace(
+    /\s*(?:[,،|;:\-–—]\s*)?[۰-۹0-9]{1,2}\s*[\/.\-]\s*[۰-۹0-9]{1,2}(?:\s*[\/.\-]\s*[۰-۹0-9]{2,4})?\s*$/,
+    ""
+  );
+
+  // حذف تاریخ شمسی از انتهای متن
+  text = text.replace(
+    new RegExp(
+      `\\s*(?:[,،|;:\\-–—]\\s*)?[۰-۹0-9]{1,2}\\s+(?:${persianMonths})\\s*$`,
+      "i"
+    ),
+    ""
+  );
+
+  // حذف جداکننده باقی‌مانده در انتهای عنوان
+  return text
+    .replace(/\s*[,،|;:\-–—]+\s*$/, "")
     .trim();
 }
 
