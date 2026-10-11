@@ -1331,6 +1331,24 @@ export async function GET(_request: Request) {
       end_tehran: endTehran,
     };
 
+    if (new URL(_request.url).searchParams.get("diagnostics") === "1") {
+  return NextResponse.json(
+    {
+      ok: true,
+      diagnosticsOnly: true,
+      news: newsStats,
+      sources: result.diagnostics,
+      report_window: reportWindow,
+      runtime_ms: Date.now() - startedAt,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    }
+  );
+    }
+    
     /*
      * هیچ پیام «خبر جدیدی نیست» هم به بله ارسال نمی‌شود.
      */
