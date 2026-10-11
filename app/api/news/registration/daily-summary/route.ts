@@ -347,8 +347,11 @@ function isRelevantNews(title: string, description = ""): boolean {
   }
 
   // عبارت دقیق ثبت احوال بر فهرست عمومی واژه‌های مسدود اولویت دارد.
-  if (containsAny(t, STRONG_TERMS)) {
-    return true;
+  if (
+  containsAny(t, STRONG_TERMS) ||
+  containsAny(d, STRONG_TERMS)
+) {
+  return true;
   }
 
   if (containsAny(t, BLOCKED_TITLE_TERMS)) {
@@ -1005,7 +1008,7 @@ async function fetchSpecialSource(
     }
 
     const html = await response.text();
-    const links = extractArticleLinks(html, source.domain).slice(0, 30);
+    const links = extractArticleLinks(html, source.domain).slice(0, 6);
 
     diagnostics.rawItems = links.length;
 
