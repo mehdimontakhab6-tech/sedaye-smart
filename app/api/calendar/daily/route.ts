@@ -828,8 +828,18 @@ function createInfographicHtml(data: {
     .map((x) => cleanEventText(x))
     .filter(Boolean);
 
-  const internationalEvents =
-    data.internationalEvents.filter(Boolean);
+  const internationalEvents = data.internationalEvents
+  .map((event) =>
+    cleanInternationalEventText(
+      String(event)
+        .replace(/\s*[|｜\\[\](){}]+\s*/g, " ")
+        .replace(/\s+\d{1,2}\s+(?:October|Oct)\b.*$/i, "")
+        .replace(/\s+(?:October|Oct)\s+\d{1,2}\b.*$/i, "")
+        .replace(/\s+\d{1,2}\s*\/\s*\d{1,2}(?:\s*\/\s*\d{2,4})?\s*$/, "")
+        .trim()
+    )
+  )
+  .filter(Boolean);
 
   const internalEventsHtml = internalEvents.length
     ? internalEvents
