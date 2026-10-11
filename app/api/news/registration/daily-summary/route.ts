@@ -59,6 +59,7 @@ const TRUSTED_MEDIA: Record<string, string> = {
   "ana.ir": "خبرگزاری آنا",
   "shana.ir": "شانا",
   "iqna.ir": "ایکنا",
+ "iribnews.ir": "خبرگزاری صدا و سیما",
   "entekhab.ir": "انتخاب",
   "fararu.com": "فرارو",
 };
@@ -78,6 +79,11 @@ const RSS_SOURCES: SourceConfig[] = [
   { url: "https://www.mizanonline.ir/fa/rss", domain: "mizanonline.ir", source: "میزان" },
   { url: "https://snn.ir/fa/rss", domain: "snn.ir", source: "خبرگزاری دانشجو" },
   { url: "https://ana.ir/fa/rss", domain: "ana.ir", source: "خبرگزاری آنا" },
+ {
+  url: "https://www.iribnews.ir/fa/rss/allnews",
+  domain: "iribnews.ir",
+  source: "خبرگزاری صدا و سیما",
+},
   { url: "https://www.shana.ir/rss", domain: "shana.ir", source: "شانا" },
   { url: "https://iqna.ir/fa/rss", domain: "iqna.ir", source: "ایکنا" },
   { url: "https://www.tasnimnews.ir/fa/rss", domain: "tasnimnews.ir", source: "تسنیم" },
