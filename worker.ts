@@ -48,11 +48,7 @@ export default {
         }
       );
 
-      const response = await handler.fetch(
-        request,
-        env,
-        ctx
-      );
+      const response = await fetch(request);
 
       const body = await response.text();
 
