@@ -1268,13 +1268,6 @@ function noCacheHeaders() {
   };
 }
 
-function noCacheHeaders() {
-  return {
-    "Cache-Control":
-      "no-store, no-cache, must-revalidate",
-  };
-}
-
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -1393,4 +1386,4 @@ export async function GET(request: Request) {
       }
     );
   }
- 
+}
