@@ -52,6 +52,11 @@ type SourceResult = {
     title: string;
     publishedAt: string;
   }>;
+  keywordSamples?: Array<{
+    title: string;
+    publishedAt: string;
+    description: string;
+  }>;
 };
 
 const RSS_SOURCES: SourceConfig[] = [
@@ -121,7 +126,6 @@ const BLOCKED_DOMAINS = [
 const STRONG_TERMS = [
   "ثبت احوال",
   "سازمان ثبت احوال",
-  "ثبت‌احوال",
   "کارت ملی",
   "کارت هوشمند ملی",
   "شناسنامه",
@@ -232,6 +236,7 @@ function normalizeText(value: unknown): string {
       String("٠١٢٣٤٥٦٧٨٩".indexOf(d))
     )
     .replace(/\u200c/g, " ")
+    .replace(/[\u200b-\u200f\uFEFF]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -303,9 +308,35 @@ function extractTag(block: string, tag: string): string {
   return match ? cleanText(match[1]) : "";
 }
 
+/**
+ * استخراج محتوای متاتگ HTML.
+ * برخلاف extractTag، این تابع با تگ‌های بدون تگ پایانی مانند meta کار می‌کند.
+ */
+function extractMetaContent(html: string, key: string): string {
+  const tags = html.match(/<meta\b[^>]*>/gi) || [];
+
+  for (const tag of tags) {
+    const name =
+      tag.match(/\bname\s*=\s*["']([^"']+)["']/i)?.[1] ||
+      tag.match(/\bproperty\s*=\s*["']([^"']+)["']/i)?.[1];
+
+    const content = tag.match(
+      /\bcontent\s*=\s*["']([^"']*)["']/i
+    )?.[1];
+
+    if (
+      name?.toLowerCase() === key.toLowerCase() &&
+      content !== undefined
+    ) {
+      return cleanText(content);
+    }
+  }
+
+  return "";
+}
+
 function extractLink(block: string): string {
-  const links =
-    block.match(/<link\b[^>]*\/?>/gi) || [];
+  const links = block.match(/<link\b[^>]*\/?>/gi) || [];
 
   for (const tag of links) {
     const href = tag.match(
@@ -314,7 +345,10 @@ function extractLink(block: string): string {
 
     if (!href?.[1]) continue;
 
-    const rel = tag.match(/\brel\s*=\s*["']([^"']+)["']/i);
+    const rel = tag.match(
+      /\brel\s*=\s*["']([^"']+)["']/i
+    );
+
     const relValue = (rel?.[1] || "").toLowerCase();
 
     if (relValue && relValue !== "alternate") continue;
@@ -396,7 +430,6 @@ function includesAny(
   );
 }
 
-
 function isRelevantNews(
   title: string,
   description = ""
@@ -410,76 +443,62 @@ function isRelevantNews(
     return false;
   }
 
-  const unrelatedTerms = [
-    "سازمان امور مالیاتی",
-    "مودیان مالیاتی",
-    "هویت اقتصادی",
-    "فرار مالیاتی",
-    "مالیات بر ارزش افزوده",
-    "اظهارنامه مالیاتی",
-    "درگاه ملی خدمات مالیاتی",
-    "هویت بصری",
-    "هویت فرهنگی",
-    "هویت تاریخی",
-    "هویت سیاسی",
-    "هویت برند",
-    "هویت شهری",
-    "هویت باشگاه",
-  ];
-
-  if (includesAny(normalizedTitle, unrelatedTerms)) {
+  if (
+    includesAny(normalizedTitle, [
+      ...NON_REGISTRATION_CONTEXT_TERMS,
+      "سازمان امور مالیاتی",
+      "مودیان مالیاتی",
+      "هویت اقتصادی",
+      "فرار مالیاتی",
+      "مالیات بر ارزش افزوده",
+      "اظهارنامه مالیاتی",
+      "درگاه ملی خدمات مالیاتی",
+    ])
+  ) {
     return false;
   }
 
-  const directRegistrationTerms = [
-    "ثبت احوال",
-    "سازمان ثبت احوال",
-    "ثبت‌احوال",
-    "کارت ملی",
-    "کارت هوشمند ملی",
-    "شناسنامه",
-    "صدور شناسنامه",
-    "تعویض شناسنامه",
-    "ثبت ولادت",
-    "ثبت وفات",
-    "ثبت فوت",
-    "ثبت ازدواج",
-    "ثبت طلاق",
-    "پایگاه اطلاعات جمعیت",
-    "سامانه سهیم",
-    "درگاه هویت",
-    "خدمات هویتی ثبت احوال",
-    "رئیس سازمان ثبت احوال",
-    "رییس سازمان ثبت احوال",
-    "مدیرکل ثبت احوال",
-  ];
-
-  // اگر عنوان مستقیماً به ثبت احوال مربوط باشد، خبر پذیرفته می‌شود.
-  if (includesAny(normalizedTitle, directRegistrationTerms)) {
+  // اصطلاحات مستقیم و قوی در عنوان خبر
+  if (includesAny(normalizedTitle, STRONG_TERMS)) {
     return true;
   }
 
-  // واژه‌های عمومی مثل «جمعیت» و «هویت» به‌تنهایی کافی نیستند.
-  const titleHasRegistrationContext = includesAny(
+  // اصطلاحات ثانویه تنها زمانی پذیرفته می‌شوند که
+  // عنوان یا توضیحات، زمینه‌ای روشن از ثبت احوال داشته باشد.
+  const titleHasContext = includesAny(
     normalizedTitle,
-    [
-      "ثبت احوال",
-      "شناسنامه",
-      "کارت ملی",
-      "سامانه سهیم",
-      "ثبت ولادت",
-      "ثبت وفات",
-      "ثبت ازدواج",
-      "ثبت طلاق",
-    ]
+    CONTEXT_TERMS
   );
 
-  const descriptionHasDirectContext = includesAny(
+  const descriptionHasStrongContext = includesAny(
     normalizedDescription,
-    directRegistrationTerms
+    STRONG_TERMS
   );
 
-  return titleHasRegistrationContext && descriptionHasDirectContext;
+  const descriptionHasSecondaryContext = includesAny(
+    normalizedDescription,
+    SECONDARY_TERMS
+  );
+
+  if (titleHasContext && descriptionHasStrongContext) {
+    return true;
+  }
+
+  // نمونه: عنوان «آمار جدید ولادت در کشور» با توضیحی که
+  // به سازمان ثبت احوال اشاره دارد، می‌تواند پذیرفته شود.
+  return (
+    includesAny(normalizedTitle, SECONDARY_TERMS) &&
+    descriptionHasStrongContext &&
+    !includesAny(normalizedTitle, [
+      "هویت بصری",
+      "هویت فرهنگی",
+      "هویت تاریخی",
+      "هویت سیاسی",
+      "هویت برند",
+      "هویت شهری",
+      "هویت باشگاه",
+    ])
+  );
 }
 
 async function fetchWithTimeout(
@@ -488,6 +507,7 @@ async function fetchWithTimeout(
   timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController();
+
   const timeout = setTimeout(
     () => controller.abort(),
     timeoutMs
@@ -514,6 +534,7 @@ function parseGregorianDate(value: string): Date | null {
 
   if (!input) return null;
 
+  // تاریخ‌های استاندارد RSS مانند RFC 822 و ISO 8601
   const direct = new Date(input);
 
   if (!Number.isNaN(direct.getTime())) {
@@ -540,6 +561,15 @@ function parseGregorianDate(value: string): Date | null {
     )
   );
 
+  // جلوگیری از پذیرش تاریخ نامعتبر مثل 2026-02-31
+  if (
+    result.getUTCFullYear() !== Number(y) ||
+    result.getUTCMonth() !== Number(m) - 1 ||
+    result.getUTCDate() !== Number(d)
+  ) {
+    return null;
+  }
+
   return Number.isNaN(result.getTime()) ? null : result;
 }
 
@@ -559,6 +589,15 @@ function jalaliToGregorian(
     return null;
   }
 
+  const jalaliMonthDays = [
+    31, 31, 31, 31, 31, 31,
+    30, 30, 30, 30, 30, 29,
+  ];
+
+  if (jm <= 6 && jd > 31) return null;
+  if (jm >= 7 && jm <= 11 && jd > 30) return null;
+  if (jm === 12 && jd > 30) return null;
+
   let year = jy - 979;
   const month = jm - 1;
   const day = jd - 1;
@@ -567,11 +606,6 @@ function jalaliToGregorian(
     365 * year +
     Math.floor(year / 33) * 8 +
     Math.floor(((year % 33) + 3) / 4);
-
-  const jalaliMonthDays = [
-    31, 31, 31, 31, 31, 31,
-    30, 30, 30, 30, 30, 29,
-  ];
 
   for (let i = 0; i < month; i++) {
     days += jalaliMonthDays[i];
@@ -643,22 +677,23 @@ function parseDate(value: string): Date | null {
 
   if (!input) return null;
 
-  const gregorian = parseGregorianDate(input);
-
-  if (gregorian) return gregorian;
-
   const normalized = normalizeText(input);
 
+  // اول تاریخ عددی شمسی را بررسی می‌کنیم.
+  // اگر ابتدا new Date اجرا شود، سال ۱۴۰۵ ممکن است
+  // به اشتباه به‌عنوان سال میلادی تفسیر شود.
   const numericJalali = normalized.match(
-    /(?:^|\D)(14\d{2})[/-](\d{1,2})[/-](\d{1,2})(?:\D|$)/
+    /(?:^|\D)(14\d{2})[/-](\d{1,2})[/-](\d{1,2})(?=$|\D)/
   );
 
   if (numericJalali) {
-    return jalaliToGregorian(
+    const date = jalaliToGregorian(
       Number(numericJalali[1]),
       Number(numericJalali[2]),
       Number(numericJalali[3])
     );
+
+    if (date) return date;
   }
 
   const months: Record<string, number> = {
@@ -676,19 +711,22 @@ function parseDate(value: string): Date | null {
     اسفند: 12,
   };
 
-  const textual = normalized.match(
+  const textualJalali = normalized.match(
     /(\d{1,2})\s+(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s+(14\d{2})/
   );
 
-  if (textual) {
-    return jalaliToGregorian(
-      Number(textual[3]),
-      months[textual[2]],
-      Number(textual[1])
+  if (textualJalali) {
+    const date = jalaliToGregorian(
+      Number(textualJalali[3]),
+      months[textualJalali[2]],
+      Number(textualJalali[1])
     );
+
+    if (date) return date;
   }
 
-  return null;
+  // در پایان سراغ تاریخ میلادی می‌رویم.
+  return parseGregorianDate(input);
 }
 
 function getReportWindow(
@@ -696,6 +734,7 @@ function getReportWindow(
 ): { start: Date; end: Date } {
   // ساعت ۲۲:۳۰ ایران، برابر با ۱۹:۰۰ UTC است.
   const iranOffsetMs = 3.5 * 60 * 60 * 1000;
+
   const iranNow = new Date(
     now.getTime() + iranOffsetMs
   );
@@ -817,6 +856,7 @@ function extractHtmlCandidates(
     const normalizedLink = link.split("#")[0];
 
     if (seen.has(normalizedLink)) continue;
+
     seen.add(normalizedLink);
 
     result.push({
@@ -868,6 +908,46 @@ function extractArticleDate(html: string): string {
   return "";
 }
 
+function getKeywordSamples(
+  candidates: Candidate[]
+): SourceResult["keywordSamples"] {
+  const keywords = [
+    ...STRONG_TERMS,
+    ...SECONDARY_TERMS,
+    "ثبت",
+    "شناسنامه",
+    "کارت ملی",
+    "کد ملی",
+    "هویت",
+    "جمعیت",
+    "ولادت",
+    "تولد",
+    "وفات",
+    "فوت",
+    "ازدواج",
+    "طلاق",
+    "سهیم",
+  ];
+
+  return candidates
+    .filter((item) =>
+      includesAny(
+        `${item.title} ${item.description}`,
+        keywords
+      )
+    )
+    .slice(0, 10)
+    .map((item) => ({
+      title: item.title,
+      publishedAt: item.publishedAt,
+      description: item.description.slice(0, 240),
+    }));
+}
+
+function isHtmlDocument(body: string): boolean {
+  return /^\s*(?:<!doctype\s+html\b|<html\b)/i.test(body);
+}
+
 async function fetchSpecialSource(
   source: SourceConfig,
   window: { start: Date; end: Date }
@@ -885,6 +965,7 @@ async function fetchSpecialSource(
     missingDate: 0,
     outsideWindow: 0,
     samples: [],
+    keywordSamples: [],
   };
 
   try {
@@ -902,6 +983,12 @@ async function fetchSpecialSource(
     }
 
     const html = await response.text();
+
+    if (!isHtmlDocument(html)) {
+      diagnostics.error =
+        "Expected an HTML page but received a non-HTML response";
+    }
+
     const candidates = extractHtmlCandidates(
       html,
       source.url
@@ -909,6 +996,8 @@ async function fetchSpecialSource(
 
     diagnostics.rawItems = candidates.length;
     diagnostics.parsedItems = candidates.length;
+    diagnostics.keywordSamples =
+      getKeywordSamples(candidates);
 
     const relevant = candidates
       .filter((item) =>
@@ -941,8 +1030,18 @@ async function fetchSpecialSource(
           const date = extractArticleDate(articleHtml);
 
           const description =
-            extractTag(articleHtml, "meta") ||
-            "";
+            extractMetaContent(
+              articleHtml,
+              "description"
+            ) ||
+            extractMetaContent(
+              articleHtml,
+              "og:description"
+            ) ||
+            extractMetaContent(
+              articleHtml,
+              "twitter:description"
+            );
 
           return {
             candidate,
@@ -1025,6 +1124,7 @@ async function fetchSource(
     missingDate: 0,
     outsideWindow: 0,
     samples: [],
+    keywordSamples: [],
   };
 
   try {
@@ -1039,12 +1139,20 @@ async function fetchSource(
 
     const body = await response.text();
 
+    if (isHtmlDocument(body)) {
+      diagnostics.error =
+        "Expected RSS/XML but received HTML";
+    }
+
     diagnostics.rawItems = (
       body.match(/<(?:item|entry)\b/gi) || []
     ).length;
 
     const candidates = parseFeed(body);
+
     diagnostics.parsedItems = candidates.length;
+    diagnostics.keywordSamples =
+      getKeywordSamples(candidates);
 
     const items: NewsItem[] = [];
 
@@ -1104,9 +1212,7 @@ async function fetchSource(
   }
 }
 
-function deduplicate(
-  items: NewsItem[]
-): NewsItem[] {
+function deduplicate(items: NewsItem[]): NewsItem[] {
   const seen = new Set<string>();
   const result: NewsItem[] = [];
 
@@ -1245,7 +1351,6 @@ function formatNewsMessage(
     "",
   ];
 
-  
   items.forEach((item, index) => {
     lines.push(
       `${index + 1}. ${item.title}`,
@@ -1258,7 +1363,8 @@ function formatNewsMessage(
     );
   });
 
-  return lines.join("\n");
+  // در انتهای پیام هیچ خط تیره یا امضای اضافی اضافه نمی‌شود.
+  return lines.join("\n").trimEnd();
 }
 
 function noCacheHeaders() {
@@ -1279,38 +1385,50 @@ export async function GET(request: Request) {
     const cloudflareEnv = env as CloudflareEnv;
 
     const window = getReportWindow();
+
     const { items, diagnostics } =
       await getNews(window);
 
     const stats = {
+      // مجموع تعداد item/entryهای موجود در پاسخ منابع است،
+      // نه تعداد درخواست‌های HTTP.
       totalFetched: diagnostics.reduce(
         (sum, item) => sum + item.rawItems,
         0
       ),
+
       parsedItems: diagnostics.reduce(
         (sum, item) => sum + item.parsedItems,
         0
       ),
+
       relevantBeforeWindow: diagnostics.reduce(
         (sum, item) => sum + item.relevantItems,
         0
       ),
+
       selected: items.length,
+
       mediaCount: new Set(
         items.map((item) => item.source)
       ).size,
+
       minimumMedia: MIN_MEDIA,
       maximumNews: MAX_NEWS,
+
       windowStart: window.start.toISOString(),
       windowEnd: window.end.toISOString(),
+
       noDate: diagnostics.reduce(
         (sum, item) => sum + item.missingDate,
         0
       ),
+
       outsideWindow: diagnostics.reduce(
         (sum, item) => sum + item.outsideWindow,
         0
       ),
+
       windowItems: items.length,
     };
 
@@ -1386,4 +1504,4 @@ export async function GET(request: Request) {
       }
     );
   }
-}
+  }
