@@ -396,54 +396,90 @@ function includesAny(
   );
 }
 
+
 function isRelevantNews(
   title: string,
   description = ""
 ): boolean {
   const normalizedTitle = normalizeText(title);
   const normalizedDescription = normalizeText(description);
-  const combined =
-    `${normalizedTitle} ${normalizedDescription}`;
 
   if (!normalizedTitle) return false;
 
-  if (
-    includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)
-  ) {
+  if (includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)) {
     return false;
   }
 
-  if (
-    includesAny(
-      normalizedTitle,
-      NON_REGISTRATION_CONTEXT_TERMS
-    )
-  ) {
+  const unrelatedTerms = [
+    "سازمان امور مالیاتی",
+    "مودیان مالیاتی",
+    "هویت اقتصادی",
+    "فرار مالیاتی",
+    "مالیات بر ارزش افزوده",
+    "اظهارنامه مالیاتی",
+    "درگاه ملی خدمات مالیاتی",
+    "هویت بصری",
+    "هویت فرهنگی",
+    "هویت تاریخی",
+    "هویت سیاسی",
+    "هویت برند",
+    "هویت شهری",
+    "هویت باشگاه",
+  ];
+
+  if (includesAny(normalizedTitle, unrelatedTerms)) {
     return false;
   }
 
-  if (includesAny(normalizedTitle, STRONG_TERMS)) {
+  const directRegistrationTerms = [
+    "ثبت احوال",
+    "سازمان ثبت احوال",
+    "ثبت‌احوال",
+    "کارت ملی",
+    "کارت هوشمند ملی",
+    "شناسنامه",
+    "صدور شناسنامه",
+    "تعویض شناسنامه",
+    "ثبت ولادت",
+    "ثبت وفات",
+    "ثبت فوت",
+    "ثبت ازدواج",
+    "ثبت طلاق",
+    "پایگاه اطلاعات جمعیت",
+    "سامانه سهیم",
+    "درگاه هویت",
+    "خدمات هویتی ثبت احوال",
+    "رئیس سازمان ثبت احوال",
+    "رییس سازمان ثبت احوال",
+    "مدیرکل ثبت احوال",
+  ];
+
+  // اگر عنوان مستقیماً به ثبت احوال مربوط باشد، خبر پذیرفته می‌شود.
+  if (includesAny(normalizedTitle, directRegistrationTerms)) {
     return true;
   }
 
-  if (
-    includesAny(normalizedDescription, STRONG_TERMS) &&
-    includesAny(normalizedTitle, CONTEXT_TERMS)
-  ) {
-    return true;
-  }
-
-  const hasSecondary = includesAny(
-    combined,
-    SECONDARY_TERMS
+  // واژه‌های عمومی مثل «جمعیت» و «هویت» به‌تنهایی کافی نیستند.
+  const titleHasRegistrationContext = includesAny(
+    normalizedTitle,
+    [
+      "ثبت احوال",
+      "شناسنامه",
+      "کارت ملی",
+      "سامانه سهیم",
+      "ثبت ولادت",
+      "ثبت وفات",
+      "ثبت ازدواج",
+      "ثبت طلاق",
+    ]
   );
 
-  const hasContext = includesAny(
-    combined,
-    CONTEXT_TERMS
+  const descriptionHasDirectContext = includesAny(
+    normalizedDescription,
+    directRegistrationTerms
   );
 
-  return hasSecondary && hasContext;
+  return titleHasRegistrationContext && descriptionHasDirectContext;
 }
 
 async function fetchWithTimeout(
@@ -1220,11 +1256,6 @@ function formatNewsMessage(
       ""
     );
   });
-
-  lines.push("—", "صدای هوشمند");
-
-  return lines.join("\n");
-}
 
 function noCacheHeaders() {
   return {
