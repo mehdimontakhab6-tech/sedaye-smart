@@ -258,49 +258,85 @@ function getMoonPhase(date: Date) {
 
 async function getHijriDate(gregorian: string) {
   try {
+    // ورودی باید به شکل DD-MM-YYYY باشد.
+    // تاریخ روز قبل را محاسبه نمی‌کنیم.
     const [day, month, year] = gregorian.split("-").map(Number);
 
-    const previousDate = new Date(
-      Date.UTC(year, month - 1, day)
-    );
+    if (
+      !Number.isInteger(day) ||
+      !Number.isInteger(month) ||
+      !Number.isInteger(year) ||
+      day < 1 ||
+      day > 31 ||
+      month < 1 ||
+      month > 12 ||
+      year < 1900
+    ) {
+      return null;
+    }
 
-    previousDate.setUTCDate(previousDate.getUTCDate() - 1);
-
-    const previousDay = String(
-      previousDate.getUTCDate()
-    ).padStart(2, "0");
-
-    const previousMonth = String(
-      previousDate.getUTCMonth() + 1
-    ).padStart(2, "0");
-
-    const previousYear = previousDate.getUTCFullYear();
-
-    const previousGregorian =
-      `${previousDay}-${previousMonth}-${previousYear}`;
+    const gregorianDate =
+      `${String(day).padStart(2, "0")}-` +
+      `${String(month).padStart(2, "0")}-` +
+      `${year}`;
 
     const response = await fetch(
-      `https://api.aladhan.com/v1/gToH?date=${previousGregorian}`,
+      `https://api.aladhan.com/v1/gToH/${gregorianDate}`,
       {
         headers: {
           Accept: "application/json",
         },
+        cache: "no-store",
       }
     );
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error(
+        "[calendar] Hijri API error:",
+        response.status
+      );
+      return null;
+    }
 
     const json = await response.json();
     const hijri = json?.data?.hijri;
 
-    if (!hijri) return null;
+    if (
+      !hijri?.day ||
+      !hijri?.month ||
+      !hijri?.year
+    ) {
+      return null;
+    }
+
+    const monthNames: Record<number, string> = {
+      1: "محرم",
+      2: "صفر",
+      3: "ربیع‌الاول",
+      4: "ربیع‌الثانی",
+      5: "جمادی‌الاول",
+      6: "جمادی‌الثانی",
+      7: "رجب",
+      8: "شعبان",
+      9: "رمضان",
+      10: "شوال",
+      11: "ذی‌القعده",
+      12: "ذی‌الحجه",
+    };
+
+    const hijriMonthNumber = Number(hijri.month.number);
 
     return {
-      day: hijri.day,
-      month: hijri.month?.ar || hijri.month?.en || "",
-      year: hijri.year,
+      day: String(hijri.day),
+      month:
+        monthNames[hijriMonthNumber] ||
+        hijri.month.ar ||
+        hijri.month.en ||
+        "",
+      year: String(hijri.year),
     };
-  } catch {
+  } catch (error) {
+    console.error("[calendar] Hijri date error:", error);
     return null;
   }
 }
