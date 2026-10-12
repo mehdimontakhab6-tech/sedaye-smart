@@ -1245,6 +1245,7 @@ function formatNewsMessage(
     "",
   ];
 
+  
   items.forEach((item, index) => {
     lines.push(
       `${index + 1}. ${item.title}`,
@@ -1256,6 +1257,16 @@ function formatNewsMessage(
       ""
     );
   });
+
+  return lines.join("\n");
+}
+
+function noCacheHeaders() {
+  return {
+    "Cache-Control":
+      "no-store, no-cache, must-revalidate",
+  };
+}
 
 function noCacheHeaders() {
   return {
@@ -1382,4 +1393,4 @@ export async function GET(request: Request) {
       }
     );
   }
-             }
+ 
