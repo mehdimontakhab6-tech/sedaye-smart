@@ -39,18 +39,22 @@ export default {
       );
 
       const request = new Request(
-        `${BASE_URL}/api/calendar/daily`,
-        {
-          method: "GET",
-          headers: {
-            "User-Agent": "sedaye-smart-cron"
-          }
-        }
-      );
+  `${BASE_URL}/api/calendar/daily`,
+  {
+    method: "GET",
+    headers: {
+      "User-Agent": "sedaye-smart-cron"
+    }
+  }
+);
 
-      const response = await fetch(request);
+const response = await handler.fetch(
+  request,
+  env,
+  ctx
+);
 
-      const body = await response.text();
+const body = await response.text();
 
       console.log(
         "[cron] calendar status:",
