@@ -189,9 +189,6 @@ function removeDivElementsByClass(
 /**
  * حذف عناصر ریپلای و نقل‌قول در صورتی که داخل HTML
  * متن پیام قرار گرفته باشند.
- *
- * کادر ریپلای که بیرون از عنصر متن پیام قرار دارد،
- * اصلاً وارد متن استخراج‌شده نمی‌شود.
  */
 function removeReplyElements(html: string): string {
   return removeDivElementsByClass(html, [
@@ -200,6 +197,34 @@ function removeReplyElements(html: string): string {
     "tgme_widget_message_reply_text",
     "tgme_widget_message_reply_quote",
   ]);
+}
+
+/**
+ * تشخیص پستی که خودش پاسخ (Reply) به پست دیگری است.
+ * کل بلوک پست بررسی می‌شود، نه فقط متن آن.
+ *
+ * این فیلتر به کلاس‌های موجود در HTML تلگرام متکی است.
+ */
+function isReplyPost(block: string): boolean {
+  const replyClasses = [
+    "tgme_widget_message_reply",
+    "tgme_widget_message_text_reply",
+    "tgme_widget_message_reply_text",
+    "tgme_widget_message_reply_quote",
+  ];
+
+  const tags = /<[a-z][^>]*>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = tags.exec(block)) !== null) {
+    for (const className of replyClasses) {
+      if (hasClass(match[0], className)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -317,9 +342,8 @@ function containsMedia(block: string): boolean {
 /**
  * استخراج پست‌های کانال تلگرام.
  *
- * متن اصلی فقط از tgme_widget_message_text استخراج می‌شود.
- * کادر ریپلای بیرون از این عنصر وارد متن نمی‌شود؛
- * اگر درون آن باشد، عناصر شناخته‌شده ریپلای حذف می‌شوند.
+ * پست‌های ریپلای پیش از استخراج متن کنار گذاشته می‌شوند.
+ * فقط پست‌های متنی مستقل و بدون رسانه به خروجی اضافه می‌شوند.
  */
 function parseTelegramPosts(html: string): TelegramPost[] {
   const posts: TelegramPost[] = [];
@@ -339,6 +363,9 @@ function parseTelegramPosts(html: string): TelegramPost[] {
 
     const id = postMatch[1];
 
+    // مهم: پست ریپلای نباید به بله ارسال شود.
+    if (isReplyPost(block)) continue;
+
     if (seenIds.has(id)) continue;
     seenIds.add(id);
 
@@ -353,7 +380,7 @@ function parseTelegramPosts(html: string): TelegramPost[] {
 
     if (messageHtml === null) continue;
 
-    // حذف ریپلای پیش از تبدیل HTML به متن
+    // حذف عناصر شناخته‌شده ریپلای از متن
     const mainHtml = removeReplyElements(messageHtml);
 
     const text = cleanPostText(htmlToText(mainHtml));
