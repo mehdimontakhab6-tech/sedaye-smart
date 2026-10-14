@@ -10,7 +10,7 @@ const MAX_POSTS_PER_RUN = 2;
 const MAX_SEEN_IDS = 1500;
 
 const NOTICE =
-  "🔴 این مطلب به صورت خودکار از کانال کارگزین آنلاین ارسال شده است";
+  "🔴 نبض خبر";
 
 type TelegramPost = {
   id: string;
