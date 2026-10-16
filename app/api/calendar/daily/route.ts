@@ -957,7 +957,7 @@ function createInfographicHtml(data: {
         <div class="event-item">
           <span class="event-dot">-</span>
           <span class="event-text">
-            مناسبت بین‌المللی برای امروز ثبت نشده است.
+            مناسبتی برای امروز ثبت نشده است.
           </span>
         </div>
       `;
@@ -1765,13 +1765,33 @@ export async function GET() {
     ).map((event) => cleanInternationalEventText(event))
       .filter(Boolean);
 
-    // ترکیب فهرست‌ها، حذف تاریخ‌ها و حذف موارد تکراری
-    const internationalEvents = Array.from(
-      new Set([
-        ...fixedInternationalEvents,
-        ...discoveredInternationalEvents,
-      ])
+    // ترکیب فهرست‌ها و حذف موارد تکراری با نرمال‌سازی عنوان
+    const internationalEventCandidates = [
+      ...fixedInternationalEvents,
+      ...discoveredInternationalEvents,
+    ];
+
+    const internationalEventKeys = new Set<string>();
+
+    const internationalEvents = internationalEventCandidates.filter(
+      (event) => {
+        const key = String(event)
+          .replace(/\([^)]*[a-z][^)]*\)/gi, "")
+          .replace(/[يى]/g, "ی")
+          .replace(/ك/g, "ک")
+          .replace(/[\u200c\u200f]/g, "")
+          .replace(/[^\p{L}\p{N}]+/gu, "")
+          .toLowerCase();
+
+        if (!key || internationalEventKeys.has(key)) {
+          return false;
+        }
+
+        internationalEventKeys.add(key);
+        return true;
+      }
     );
+
 
     const progress = getYearProgress(
       persian.month,
