@@ -1818,24 +1818,6 @@ const internationalEvents = internationalEventCandidates.filter(
   }
 );
 
-        const key = String(event)
-          .replace(/\([^)]*[a-z][^)]*\)/gi, "")
-          .replace(/[يى]/g, "ی")
-          .replace(/ك/g, "ک")
-          .replace(/[\u200c\u200f]/g, "")
-          .replace(/[^\p{L}\p{N}]+/gu, "")
-          .toLowerCase();
-
-        if (!key || internationalEventKeys.has(key)) {
-          return false;
-        }
-
-        internationalEventKeys.add(key);
-        return true;
-      }
-    );
-
-
     const progress = getYearProgress(
       persian.month,
       persian.day,
