@@ -569,12 +569,6 @@ function cleanEventText(value: string) {
     return "ولادت حضرت زینب (س) و روز پرستار و بهورز";
   }
 
-    .replace(/[يى]/g, "ی")
-    .replace(/ك/g, "ک")
-    .replace(/[\u200c\u200f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
   const persianMonths =
     "فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند";
 
