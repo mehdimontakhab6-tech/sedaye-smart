@@ -555,13 +555,20 @@ function getEventsForDay(
 
 function cleanEventText(value: string) {
   let text = String(value || "")
-   if (
-  /ولادت حضرت زینب/.test(text) &&
-  /روز پرستار/.test(text) &&
-  /بهورز/.test(text)
-) {
-  return "ولادت حضرت زینب (س) و روز پرستار و بهورز";
-   }
+    .replace(/[يى]/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/[\u200c\u200f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (
+    /ولادت حضرت زینب/.test(text) &&
+    /روز پرستار/.test(text) &&
+    /بهورز/.test(text)
+  ) {
+    return "ولادت حضرت زینب (س) و روز پرستار و بهورز";
+  }
+
     .replace(/[يى]/g, "ی")
     .replace(/ك/g, "ک")
     .replace(/[\u200c\u200f]/g, " ")
