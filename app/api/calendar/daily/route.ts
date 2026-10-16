@@ -554,20 +554,9 @@ function getEventsForDay(
    ===================================== */
 
 function cleanEventText(value: string) {
-  return String(value)
-    .replace(
-      /^\s*[۰-۹0-9]{1,2}\s+(?:فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\s*/,
-      ""
-    )
-    .replace(
-      /^\s*[۰-۹0-9]{1,2}\s*[\/\-]\s*[۰-۹0-9]{1,2}\s*/,
-      ""
-    )
-    .trim();
-}
-
-function cleanInternationalEventText(value: string) {
   let text = String(value || "")
+    .replace(/[يى]/g, "ی")
+    .replace(/ك/g, "ک")
     .replace(/[\u200c\u200f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -575,8 +564,8 @@ function cleanInternationalEventText(value: string) {
   const persianMonths =
     "فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند";
 
-  const englishMonths =
-    "January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec";
+  const hijriMonths =
+    "محرم|صفر|ربیع\\s*الاول|ربیع\\s*الثانی|جمادی\\s*الاول|جمادی\\s*الثانی|رجب|شعبان|رمضان|شوال|ذی\\s*القعده|ذی\\s*الحجه";
 
   // حذف تاریخ شمسی از ابتدای متن
   text = text.replace(
@@ -589,11 +578,62 @@ function cleanInternationalEventText(value: string) {
 
   // حذف تاریخ عددی از ابتدای متن
   text = text.replace(
+    /^\s*[۰-۹0-9]{1,2}\s*[\/\-]\s*[۰-۹0-9]{1,2}\s*[:：،,\-–—|]?\s*/,
+    ""
+  );
+
+  // حذف تاریخ قمری از ابتدای متن
+  text = text.replace(
+    new RegExp(
+      `^\\s*[۰-۹0-9]{1,2}\\s+(?:${hijriMonths})\\s*[:：،,\\-–—|]?\\s*`,
+      "i"
+    ),
+    ""
+  );
+
+  // حذف تاریخ قمری از انتهای متن
+  text = text.replace(
+    new RegExp(
+      `\\s*[,،|;:\\-–—]?\\s*[۰-۹0-9]{1,2}\\s+(?:${hijriMonths})\\s*$`,
+      "i"
+    ),
+    ""
+  );
+
+  return text
+    .replace(/^[\s،,;:|–—-]+/, "")
+    .replace(/\s*[،,;:|–—-]+\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanInternationalEventText(value: string) {
+  let text = String(value || "")
+    .replace(/[\u200c\u200f]/g, " ")
+    .replace(/[يى]/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const persianMonths =
+    "فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند";
+
+  const englishMonths =
+    "January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec";
+
+  text = text.replace(
+    new RegExp(
+      `^\\s*[۰-۹0-9]{1,2}\\s+(?:${persianMonths})\\s*[:：،,\\-–—|]?\\s*`,
+      "i"
+    ),
+    ""
+  );
+
+  text = text.replace(
     /^\s*(?:[۰-۹0-9]{4}\s*[\/.\-]\s*)?[۰-۹0-9]{1,2}\s*[\/.\-]\s*[۰-۹0-9]{1,2}\s*[:：،,\-–—|]?\s*/,
     ""
   );
 
-  // حذف تاریخ میلادی مثل 11 October یا October 11
   text = text.replace(
     new RegExp(
       `\\s*(?:[,،|;:\\-–—]\\s*)?(?:(?:${englishMonths})\\.?\\s+[۰-۹0-9]{1,2}(?:st|nd|rd|th)?|[۰-۹0-9]{1,2}(?:st|nd|rd|th)?\\s+(?:${englishMonths})\\.?)(?:,?\\s+[۰-۹0-9]{4})?\\s*$`,
@@ -602,13 +642,11 @@ function cleanInternationalEventText(value: string) {
     ""
   );
 
-  // حذف تاریخ میلادی عددی از انتهای متن
   text = text.replace(
     /\s*(?:[,،|;:\-–—]\s*)?[۰-۹0-9]{1,2}\s*[\/.\-]\s*[۰-۹0-9]{1,2}(?:\s*[\/.\-]\s*[۰-۹0-9]{2,4})?\s*$/,
     ""
   );
 
-  // حذف تاریخ شمسی از انتهای متن
   text = text.replace(
     new RegExp(
       `\\s*(?:[,،|;:\\-–—]\\s*)?[۰-۹0-9]{1,2}\\s+(?:${persianMonths})\\s*$`,
@@ -617,9 +655,9 @@ function cleanInternationalEventText(value: string) {
     ""
   );
 
-  // حذف جداکننده باقی‌مانده در انتهای عنوان
   return text
     .replace(/\s*[,،|;:\-–—]+\s*$/, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
