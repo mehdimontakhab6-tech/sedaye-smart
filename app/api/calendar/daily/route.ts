@@ -609,31 +609,37 @@ function cleanEventText(value: string) {
 
 function cleanInternationalEventText(value: string) {
   let text = String(value || "")
-    .replace(/[\u200c\u200f]/g, " ")
     .replace(/[يى]/g, "ی")
     .replace(/ك/g, "ک")
+    .replace(/[\u200c\u200f\u0640]/g, " ")
+    .replace(/[|｜[\](){}]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
   const persianMonths =
     "فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند";
 
+  const hijriMonths =
+    "محرم|صفر|ربیع\\s*الاول|ربیع\\s*الثانی|جمادی\\s*الاول|جمادی\\s*الثانی|رجب|شعبان|رمضان|شوال|ذی\\s*القعده|ذی\\s*الحجه";
+
   const englishMonths =
     "January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec";
 
+  // حذف تاریخ از ابتدای متن
   text = text.replace(
     new RegExp(
-      `^\\s*[۰-۹0-9]{1,2}\\s+(?:${persianMonths})\\s*[:：،,\\-–—|]?\\s*`,
+      `^\\s*(?:(?:[۰-۹0-9]{4}\\s*[/.-]\\s*)?[۰-۹0-9]{1,2}\\s*[/.-]\\s*)?[۰-۹0-9]{1,2}\\s+(?:${persianMonths}|${hijriMonths})\\s*[:：،,\\-–—|]?\\s*`,
       "i"
     ),
     ""
   );
 
   text = text.replace(
-    /^\s*(?:[۰-۹0-9]{4}\s*[\/.\-]\s*)?[۰-۹0-9]{1,2}\s*[\/.\-]\s*[۰-۹0-9]{1,2}\s*[:：،,\-–—|]?\s*/,
+    /^\s*(?:[۰-۹0-9]{4}\s*[\/.-]\s*)?[۰-۹0-9]{1,2}\s*[\/.-]\s*[۰-۹0-9]{1,2}\s*[:：،,\-–—|]?\s*/,
     ""
   );
 
+  // حذف تاریخ میلادی از انتهای متن
   text = text.replace(
     new RegExp(
       `\\s*(?:[,،|;:\\-–—]\\s*)?(?:(?:${englishMonths})\\.?\\s+[۰-۹0-9]{1,2}(?:st|nd|rd|th)?|[۰-۹0-9]{1,2}(?:st|nd|rd|th)?\\s+(?:${englishMonths})\\.?)(?:,?\\s+[۰-۹0-9]{4})?\\s*$`,
@@ -642,11 +648,16 @@ function cleanInternationalEventText(value: string) {
     ""
   );
 
+  // حذف تاریخ قمری از انتهای متن
   text = text.replace(
-    /\s*(?:[,،|;:\-–—]\s*)?[۰-۹0-9]{1,2}\s*[\/.\-]\s*[۰-۹0-9]{1,2}(?:\s*[\/.\-]\s*[۰-۹0-9]{2,4})?\s*$/,
+    new RegExp(
+      `\\s*(?:[,،|;:\\-–—]\\s*)?[۰-۹0-9]{1,2}\\s+(?:${hijriMonths})\\s*\\)?\\s*$`,
+      "i"
+    ),
     ""
   );
 
+  // حذف تاریخ شمسی از انتهای متن
   text = text.replace(
     new RegExp(
       `\\s*(?:[,،|;:\\-–—]\\s*)?[۰-۹0-9]{1,2}\\s+(?:${persianMonths})\\s*$`,
@@ -655,8 +666,15 @@ function cleanInternationalEventText(value: string) {
     ""
   );
 
+  // حذف تاریخ عددی از انتهای متن
+  text = text.replace(
+    /\s*(?:[,،|;:\-–—]\s*)?[۰-۹0-9]{1,2}\s*[\/.-]\s*[۰-۹0-9]{1,2}(?:\s*[\/.-]\s*[۰-۹0-9]{2,4})?\s*$/,
+    ""
+  );
+
   return text
-    .replace(/\s*[,،|;:\-–—]+\s*$/, "")
+    .replace(/^[\s،,;:|–—-]+/, "")
+    .replace(/\s*[،,;:|–—-]+\s*$/, "")
     .replace(/\s+/g, " ")
     .trim();
 }
