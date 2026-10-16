@@ -1789,10 +1789,35 @@ export async function GET() {
       ...discoveredInternationalEvents,
     ];
 
-    const internationalEventKeys = new Set<string>();
+const internationalEventKeys: string[] = [];
 
-    const internationalEvents = internationalEventCandidates.filter(
-      (event) => {
+const internationalEvents = internationalEventCandidates.filter(
+  (event) => {
+    const key = cleanInternationalEventText(String(event))
+      .replace(/[يى]/g, "ی")
+      .replace(/ك/g, "ک")
+      .replace(/[\u200c\u200f]/g, "")
+      .replace(/[^\p{L}\p{N}]+/gu, "")
+      .toLowerCase();
+
+    if (!key) return false;
+
+    // اگر عنوان قبلاً ثبت شده یا عنوانی مشابه آن وجود دارد،
+    // مورد جدید را حذف می‌کنیم.
+    const isDuplicate = internationalEventKeys.some(
+      (existingKey) =>
+        existingKey === key ||
+        existingKey.includes(key) ||
+        key.includes(existingKey)
+    );
+
+    if (isDuplicate) return false;
+
+    internationalEventKeys.push(key);
+    return true;
+  }
+);
+
         const key = String(event)
           .replace(/\([^)]*[a-z][^)]*\)/gi, "")
           .replace(/[يى]/g, "ی")
