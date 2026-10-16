@@ -6,11 +6,11 @@ export const dynamic = "force-dynamic";
 const SOURCE_URL = "https://t.me/s/kargozinonline";
 const SETTINGS_KEY = "kargozin_telegram_seen_posts";
 const SCHEDULE_KEY = "schedule_kargozin";
-const MAX_POSTS_PER_RUN = 2;
+const MAX_POSTS_PER_RUN = 1;
 const MAX_SEEN_IDS = 1500;
 
 const NOTICE =
-  "🔴 نبض خبر";
+  "🔴 نبض خبر گروه صدای کارکنان ثبت احوال";
 
 type TelegramPost = {
   id: string;
