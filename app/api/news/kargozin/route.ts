@@ -4,18 +4,36 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 export const dynamic = "force-dynamic";
 
 const SOURCE_URL = "https://t.me/s/kargozinonline";
+
+// تنظیمات قدیمی برای سازگاری با داده‌های موجود
 const SETTINGS_KEY = "kargozin_telegram_seen_posts";
 const SCHEDULE_KEY = "schedule_kargozin";
-const MAX_POSTS_PER_RUN = 1;
-const MAX_SEEN_IDS = 1500;
 
-const NOTICE =
-  "🔴 نبض خبر گروه صدای کارکنان ثبت احوال";
+// تمام وضعیت صف در یک رکورد ذخیره می‌شود.
+const STATE_KEY = "kargozin_telegram_state";
+
+const MAX_SEEN_IDS = 1500;
+const MIN_SEND_INTERVAL_MS = 10 * 60 * 1000;
+const TEHRAN_TIME_ZONE = "Asia/Tehran";
+const SEND_START_MINUTES = 8 * 60;
+const SEND_END_MINUTES = 23 * 60;
+
+const NOTICE = "🔴 نبض خبر گروه صدای کارکنان ثبت احوال";
 
 type TelegramPost = {
   id: string;
   url: string;
   text: string;
+};
+
+type QueuedPost = TelegramPost;
+
+type KargozinState = {
+  version: 1;
+  initialized: boolean;
+  seenIds: string[];
+  queue: QueuedPost[];
+  lastSentAt: string | null;
 };
 
 type Env = {
@@ -72,10 +90,6 @@ function decodeHtml(value: string): string {
   );
 }
 
-/**
- * بررسی وجود یک کلاس در تگ HTML.
- * ترتیب attributeها اهمیتی ندارد.
- */
 function hasClass(tag: string, className: string): boolean {
   const match = tag.match(/\bclass\s*=\s*(["'])(.*?)\1/i);
 
@@ -86,10 +100,6 @@ function hasClass(tag: string, className: string): boolean {
     .some((name) => name === className);
 }
 
-/**
- * انتهای یک عنصر div را با درنظرگرفتن divهای تو‌در‌تو پیدا می‌کند.
- * خروجی، موقعیت انتهای تگ بسته‌شدن است.
- */
 function findDivEnd(
   html: string,
   contentStart: number,
@@ -115,10 +125,6 @@ function findDivEnd(
   return -1;
 }
 
-/**
- * محتوای کامل اولین div دارای کلاس مشخص را استخراج می‌کند.
- * برخلاف Regex ساده، با divهای داخلی متوقف نمی‌شود.
- */
 function extractDivInnerByClass(
   html: string,
   className: string,
@@ -134,17 +140,14 @@ function extractDivInnerByClass(
 
     if (end < 0) return null;
 
-    // تگ بسته‌شدن div را از خروجی حذف می‌کنیم.
-    return html.slice(contentStart, end).replace(/<\/div>\s*$/i, "");
+    return html
+      .slice(contentStart, end)
+      .replace(/<\/div>\s*$/i, "");
   }
 
   return null;
 }
 
-/**
- * عناصر div دارای کلاس‌های مشخص را حذف می‌کند.
- * divهای تو‌در‌تو نیز به‌طور کامل حذف می‌شوند.
- */
 function removeDivElementsByClass(
   html: string,
   classNames: string[],
@@ -152,8 +155,6 @@ function removeDivElementsByClass(
   let result = html;
 
   for (const className of classNames) {
-    // برای جلوگیری از حلقه بی‌نهایت در HTML نامعتبر
-    // تعداد تلاش‌ها محدود شده است.
     for (let attempt = 0; attempt < 50; attempt++) {
       const tags = /<div\b[^>]*>/gi;
       let match: RegExpExecArray | null;
@@ -167,7 +168,6 @@ function removeDivElementsByClass(
         const end = findDivEnd(result, contentStart);
 
         if (end < 0) {
-          // HTML ناقص است؛ باقی محتوا را حدسی حذف نکن.
           return result;
         }
 
@@ -186,38 +186,23 @@ function removeDivElementsByClass(
   return result;
 }
 
-/**
- * حذف عناصر ریپلای و نقل‌قول در صورتی که داخل HTML
- * متن پیام قرار گرفته باشند.
- */
+const REPLY_CLASSES = [
+  "tgme_widget_message_reply",
+  "tgme_widget_message_text_reply",
+  "tgme_widget_message_reply_text",
+  "tgme_widget_message_reply_quote",
+];
+
 function removeReplyElements(html: string): string {
-  return removeDivElementsByClass(html, [
-    "tgme_widget_message_reply",
-    "tgme_widget_message_text_reply",
-    "tgme_widget_message_reply_text",
-    "tgme_widget_message_reply_quote",
-  ]);
+  return removeDivElementsByClass(html, REPLY_CLASSES);
 }
 
-/**
- * تشخیص پستی که خودش پاسخ (Reply) به پست دیگری است.
- * کل بلوک پست بررسی می‌شود، نه فقط متن آن.
- *
- * این فیلتر به کلاس‌های موجود در HTML تلگرام متکی است.
- */
 function isReplyPost(block: string): boolean {
-  const replyClasses = [
-    "tgme_widget_message_reply",
-    "tgme_widget_message_text_reply",
-    "tgme_widget_message_reply_text",
-    "tgme_widget_message_reply_quote",
-  ];
-
   const tags = /<[a-z][^>]*>/gi;
   let match: RegExpExecArray | null;
 
   while ((match = tags.exec(block)) !== null) {
-    for (const className of replyClasses) {
+    for (const className of REPLY_CLASSES) {
       if (hasClass(match[0], className)) {
         return true;
       }
@@ -227,9 +212,6 @@ function isReplyPost(block: string): boolean {
   return false;
 }
 
-/**
- * تبدیل HTML به متن ساده با حفظ شکست خطوط.
- */
 function htmlToText(html: string): string {
   return decodeHtml(
     html
@@ -246,10 +228,6 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-/**
- * تبلیغات انتهایی را حذف می‌کند، بدون اینکه وجود لینک
- * در وسط خبر باعث حذف ادامه متن شود.
- */
 function cleanPostText(input: string): string {
   let text = input
     .replace(/\u00a0/g, " ")
@@ -283,7 +261,6 @@ function cleanPostText(input: string): string {
 
   text = text.slice(0, cutAt);
 
-  // حذف خط‌های تزئینی مستقل شامل لوزی‌ها و دایره‌های رنگی
   text = text
     .replace(
       /(?:^|\n)[ \t\u200c]*(?:(?:🔹|🔸|🔷|🔶|🔴|🔵|⚫️?|⚪️?|♦️?|◆|◇|💠)[ \t\u200c]*)+(?=\n|$)/gu,
@@ -291,7 +268,6 @@ function cleanPostText(input: string): string {
     )
     .replace(/(?:^|\n)[ \t\u200c]+(?=\n|$)/g, "\n");
 
-  // حذف URLها بدون حذف ادامه خبر
   text = text
     .replace(/https?:\/\/[^\s]+/gi, "")
     .replace(
@@ -312,11 +288,6 @@ function hasUsefulText(text: string): boolean {
   return /[\p{L}\p{N}]/u.test(text);
 }
 
-/**
- * عکس کوچک پروفایل، رسانه پست محسوب نمی‌شود.
- * پست‌های دارای عکس، فیلم، فایل، صوت، استیکر یا نظرسنجی
- * مانند نسخه قبلی از ارسال کنار گذاشته می‌شوند.
- */
 function containsMedia(block: string): boolean {
   const mediaPatterns = [
     /\btgme_widget_message_photo_wrap\b/i,
@@ -339,12 +310,16 @@ function containsMedia(block: string): boolean {
   return mediaPatterns.some((pattern) => pattern.test(block));
 }
 
-/**
- * استخراج پست‌های کانال تلگرام.
- *
- * پست‌های ریپلای پیش از استخراج متن کنار گذاشته می‌شوند.
- * فقط پست‌های متنی مستقل و بدون رسانه به خروجی اضافه می‌شوند.
- */
+function compareIds(
+  a: TelegramPost,
+  b: TelegramPost,
+): number {
+  const first = BigInt(a.id);
+  const second = BigInt(b.id);
+
+  return first < second ? -1 : first > second ? 1 : 0;
+}
+
 function parseTelegramPosts(html: string): TelegramPost[] {
   const posts: TelegramPost[] = [];
   const seenIds = new Set<string>();
@@ -363,16 +338,13 @@ function parseTelegramPosts(html: string): TelegramPost[] {
 
     const id = postMatch[1];
 
-    // مهم: پست ریپلای نباید به بله ارسال شود.
     if (isReplyPost(block)) continue;
 
     if (seenIds.has(id)) continue;
     seenIds.add(id);
 
-    // پست رسانه‌ای حتی اگر کپشن داشته باشد ارسال نمی‌شود.
     if (containsMedia(block)) continue;
 
-    // استخراج کل محتوای عنصر متن، با پشتیبانی از divهای تو‌در‌تو
     const messageHtml = extractDivInnerByClass(
       block,
       "tgme_widget_message_text",
@@ -380,9 +352,7 @@ function parseTelegramPosts(html: string): TelegramPost[] {
 
     if (messageHtml === null) continue;
 
-    // حذف عناصر شناخته‌شده ریپلای از متن
     const mainHtml = removeReplyElements(messageHtml);
-
     const text = cleanPostText(htmlToText(mainHtml));
 
     if (!hasUsefulText(text)) continue;
@@ -394,7 +364,7 @@ function parseTelegramPosts(html: string): TelegramPost[] {
     });
   }
 
-  return posts;
+  return posts.sort(compareIds);
 }
 
 async function fetchTelegramPosts(): Promise<TelegramPost[]> {
@@ -568,17 +538,174 @@ function parseSeenIds(value: unknown): string[] {
     try {
       parsed = JSON.parse(parsed);
     } catch {
-      return [];
+      throw new Error("Stored seen IDs contain invalid JSON.");
     }
   }
 
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(parsed)) {
+    throw new Error("Stored seen IDs are not an array.");
+  }
+
+  const ids = parsed.map(String);
+
+  if (ids.some((id) => !/^\d+$/.test(id))) {
+    throw new Error("Stored seen IDs contain an invalid ID.");
+  }
+
+  return [...new Set(ids)].slice(-MAX_SEEN_IDS);
+}
+
+function parseQueue(value: unknown): QueuedPost[] {
+  let parsed = value;
+
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      throw new Error("Stored queue contains invalid JSON.");
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("Stored queue is not an array.");
+  }
+
+  const queue: QueuedPost[] = [];
+
+  for (const item of parsed) {
+    if (
+      item === null ||
+      typeof item !== "object" ||
+      !/^\d+$/.test(String(item.id ?? "")) ||
+      typeof item.url !== "string" ||
+      typeof item.text !== "string"
+    ) {
+      throw new Error(
+        "Stored queue contains an invalid post; queue was not modified.",
+      );
+    }
+
+    queue.push({
+      id: String(item.id),
+      url: item.url,
+      text: item.text,
+    });
+  }
 
   return [
-    ...new Set(
-      parsed.map(String).filter((id) => /^\d+$/.test(id)),
-    ),
-  ].slice(-MAX_SEEN_IDS);
+    ...new Map(queue.map((post) => [post.id, post])).values(),
+  ].sort(compareIds);
+}
+
+function parseState(value: unknown): KargozinState {
+  let parsed = value;
+
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      throw new Error("Stored Kargozin state contains invalid JSON.");
+    }
+  }
+
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    (parsed as { version?: unknown }).version !== 1
+  ) {
+    throw new Error(
+      "Stored Kargozin state is invalid; refusing to overwrite it.",
+    );
+  }
+
+  const record = parsed as Record<string, unknown>;
+
+  if (typeof record.initialized !== "boolean") {
+    throw new Error("Stored Kargozin initialization flag is invalid.");
+  }
+
+  if (
+    record.lastSentAt !== null &&
+    typeof record.lastSentAt !== "string"
+  ) {
+    throw new Error("Stored last-send timestamp is invalid.");
+  }
+
+  const lastSentAt = record.lastSentAt as string | null;
+
+  if (
+    lastSentAt !== null &&
+    !Number.isFinite(Date.parse(lastSentAt))
+  ) {
+    throw new Error("Stored last-send timestamp cannot be parsed.");
+  }
+
+  return {
+    version: 1,
+    initialized: record.initialized,
+    seenIds: parseSeenIds(record.seenIds),
+    queue: parseQueue(record.queue),
+    lastSentAt,
+  };
+}
+
+function getTehranMinutes(date: Date): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TEHRAN_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const hour = Number(
+    parts.find((part) => part.type === "hour")?.value,
+  );
+
+  const minute = Number(
+    parts.find((part) => part.type === "minute")?.value,
+  );
+
+  return hour * 60 + minute;
+}
+
+function isWithinSendingHours(date: Date): boolean {
+  const minutes = getTehranMinutes(date);
+
+  return (
+    minutes >= SEND_START_MINUTES &&
+    minutes < SEND_END_MINUTES
+  );
+}
+
+function getNextSendingWindow(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TEHRAN_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const getPart = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  const year = Number(getPart("year"));
+  const month = Number(getPart("month"));
+  const day = Number(getPart("day"));
+
+  const localMinutes = getTehranMinutes(date);
+
+  // ساعت ۲۳ یا بعد از آن: روز بعد، ساعت ۰۸ ایران
+  const addDay = localMinutes >= SEND_END_MINUTES;
+
+  // تبدیل ساعت محلی ایران به UTC با استفاده از اختلاف زمانی همان تاریخ.
+  const targetDate = new Date(
+    Date.UTC(year, month - 1, day + (addDay ? 1 : 0), 8, 0, 0),
+  );
+
+  // ایران در حال حاضر UTC+03:30 است.
+  targetDate.setUTCMinutes(targetDate.getUTCMinutes() - 210);
+
+  return targetDate.toISOString();
 }
 
 async function sendBaleMessage(
@@ -608,30 +735,33 @@ async function sendBaleMessage(
     },
   );
 
-  const result = (await response.json()) as {
+  let result: {
     ok?: boolean;
     description?: string;
   };
 
-  if (!response.ok || result.ok === false) {
+  try {
+    result = (await response.json()) as {
+      ok?: boolean;
+      description?: string;
+    };
+  } catch {
     throw new Error(
-      `Bale sendMessage failed: ${result.description ?? response.status}`,
+      `Bale returned a non-JSON response; HTTP ${response.status}.`,
+    );
+  }
+
+  if (!response.ok || result.ok !== true) {
+    throw new Error(
+      `Bale sendMessage failed: ${
+        result.description ?? `HTTP ${response.status}`
+      }`,
     );
   }
 }
 
 function buildMessage(post: TelegramPost): string {
   return `${NOTICE}\n\n${post.text}`;
-}
-
-function compareIds(
-  a: TelegramPost,
-  b: TelegramPost,
-): number {
-  const first = BigInt(a.id);
-  const second = BigInt(b.id);
-
-  return first < second ? -1 : first > second ? 1 : 0;
 }
 
 export async function GET(): Promise<Response> {
@@ -646,73 +776,153 @@ export async function GET(): Promise<Response> {
       });
     }
 
+    const now = new Date();
     const posts = await fetchTelegramPosts();
-    const saved = await getSetting(env, SETTINGS_KEY);
 
-    // اجرای اول: ثبت پست‌های موجود بدون ارسال آن‌ها
-    if (saved === null) {
-      const baseline = posts
-        .map((post) => post.id)
-        .slice(-MAX_SEEN_IDS);
+    const savedState = await getSetting(env, STATE_KEY);
 
-      await saveSetting(env, SETTINGS_KEY, baseline);
+    let state: KargozinState;
 
+    if (savedState !== null) {
+      state = parseState(savedState);
+    } else {
+      // سازگاری با نسخه قبلی که فقط SETTINGS_KEY داشت.
+      const legacySeen = await getSetting(env, SETTINGS_KEY);
+
+      if (legacySeen === null) {
+        // اجرای اولیه: پست‌های موجود فقط ثبت می‌شوند.
+        state = {
+          version: 1,
+          initialized: true,
+          seenIds: posts
+            .map((post) => post.id)
+            .slice(-MAX_SEEN_IDS),
+          queue: [],
+          lastSentAt: null,
+        };
+
+        await saveSetting(env, STATE_KEY, state);
+
+        return Response.json({
+          ok: true,
+          initialized: true,
+          baselineCount: state.seenIds.length,
+          sent: 0,
+          reason: "Existing posts recorded as baseline",
+        });
+      }
+
+      // نسخه قدیمی قبلاً فعال بوده است؛ پست‌های جدید را صف می‌کنیم.
+      state = {
+        version: 1,
+        initialized: true,
+        seenIds: parseSeenIds(legacySeen),
+        queue: [],
+        lastSentAt: null,
+      };
+    }
+
+    const seen = new Set(state.seenIds);
+    const queued = new Set(state.queue.map((post) => post.id));
+
+    const discovered = posts
+      .filter(
+        (post) =>
+          !seen.has(post.id) &&
+          !queued.has(post.id),
+      )
+      .sort(compareIds);
+
+    const mergedQueue = [
+      ...state.queue,
+      ...discovered,
+    ].sort(compareIds);
+
+    // وضعیت تازه‌ی صف را پیش از ارسال ثبت می‌کنیم.
+    if (discovered.length > 0 || savedState === null) {
+      state = {
+        ...state,
+        queue: mergedQueue,
+      };
+
+      await saveSetting(env, STATE_KEY, state);
+    }
+
+    if (state.queue.length === 0) {
       return Response.json({
         ok: true,
-        initialized: true,
-        baselineCount: baseline.length,
+        foundNew: discovered.length,
+        queued: 0,
         sent: 0,
+        reason: "No posts waiting",
       });
     }
 
-    const seenIds = parseSeenIds(saved);
-    const seen = new Set(seenIds);
+    if (!isWithinSendingHours(now)) {
+      return Response.json({
+        ok: true,
+        foundNew: discovered.length,
+        queued: state.queue.length,
+        sent: 0,
+        reason: "Outside Tehran sending hours",
+        nextSendingWindow: getNextSendingWindow(now),
+      });
+    }
 
-    const newPosts = posts
-      .filter((post) => !seen.has(post.id))
-      .sort(compareIds);
+    if (state.lastSentAt !== null) {
+      const lastSentTime = Date.parse(state.lastSentAt);
 
-    const batch = newPosts.slice(0, MAX_POSTS_PER_RUN);
-    const sentIds: string[] = [];
-    const errors: Array<{
-      id: string;
-      error: string;
-    }> = [];
+      const nextEligibleTime =
+        lastSentTime + MIN_SEND_INTERVAL_MS;
 
-    for (const post of batch) {
-      try {
-        await sendBaleMessage(env, buildMessage(post));
-        sentIds.push(post.id);
-      } catch (error) {
-        errors.push({
-          id: post.id,
-          error:
-            error instanceof Error
-              ? error.message
-              : String(error),
+      if (now.getTime() < nextEligibleTime) {
+        return Response.json({
+          ok: true,
+          foundNew: discovered.length,
+          queued: state.queue.length,
+          sent: 0,
+          reason: "Waiting for 10-minute interval",
+          nextEligibleAt: new Date(
+            nextEligibleTime,
+          ).toISOString(),
         });
-
-        break;
       }
     }
 
-    if (sentIds.length > 0) {
-      await saveSetting(
-        env,
-        SETTINGS_KEY,
-        [...new Set([...seenIds, ...sentIds])].slice(
-          -MAX_SEEN_IDS,
-        ),
-      );
-    }
+    const nextPost = state.queue[0];
+
+    // تا دریافت پاسخ موفق از بله، پست از صف حذف نمی‌شود.
+    await sendBaleMessage(env, buildMessage(nextPost));
+
+    // زمان را بعد از موفقیت ارسال ثبت می‌کنیم.
+    const sentAt = new Date().toISOString();
+
+    const updatedState: KargozinState = {
+      version: 1,
+      initialized: true,
+      seenIds: [
+        ...new Set([
+          ...state.seenIds,
+          nextPost.id,
+        ]),
+      ].slice(-MAX_SEEN_IDS),
+      queue: state.queue.slice(1),
+      lastSentAt: sentAt,
+    };
+
+    // وضعیت جدید صف، شناسه‌ها و زمان ارسال در یک رکورد نوشته می‌شود.
+    await saveSetting(env, STATE_KEY, updatedState);
 
     return Response.json({
-      ok: errors.length === 0,
-      foundNew: newPosts.length,
-      attempted: batch.length,
-      sent: sentIds.length,
-      sentIds,
-      errors,
+      ok: true,
+      foundNew: discovered.length,
+      sent: 1,
+      sentIds: [nextPost.id],
+      queued: updatedState.queue.length,
+      lastSentAt: sentAt,
+      nextEligibleAt: new Date(
+        Date.parse(sentAt) + MIN_SEND_INTERVAL_MS,
+      ).toISOString(),
     });
   } catch (error) {
     return Response.json(
