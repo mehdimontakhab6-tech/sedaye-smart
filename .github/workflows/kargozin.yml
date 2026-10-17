@@ -14,7 +14,4 @@ jobs:
       - name: Check channel and forward new text posts
         shell: bash
         run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --max-time 45 \
-            'https://sedaye-smart.mehdimontakhab6.workers.dev/api/news/kargozin'
-          echo "HTTP request completed successfully."
+          curl --fail --silent --show-error --max-time 45 "https://sedaye-smart.mehdimontakhab6.workers.dev/api/news/kargozin"
