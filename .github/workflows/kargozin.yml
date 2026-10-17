@@ -1,20 +1,21 @@
+
 name: Check Kargozin Telegram channel
 
 on:
-schedule:
-- cron: '*/5 * * * *'
-workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 jobs:
-check-channel:
-runs-on: ubuntu-latest
-timeout-minutes: 2
+  check-channel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
 
-steps:
-  - name: Check channel and forward new text posts
-    run: |
-      set -euo pipefail
-      curl --fail --silent --show-error \
-        --max-time 45 \
-        --write-out '\nHTTP Status: %{http_code}\n' \
-        'https://sedaye-smart.mehdimontakhab6.workers.dev/api/news/kargozin'
+    steps:
+      - name: Check channel and forward new text posts
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --max-time 45 \
+            --write-out '\nHTTP Status: %{http_code}\n' \
+            'https://sedaye-smart.mehdimontakhab6.workers.dev/api/news/kargozin'
