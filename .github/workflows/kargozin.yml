@@ -1,9 +1,9 @@
 
 name: Check Kargozin Telegram channel
 
-on:
+'on':
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,4 +12,5 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Check channel and forward new text posts
-        run: curl --fail --silent --show-error --max-time 45 --write-out "\nHTTP Status: %{http_code}\n" "https://sedaye-smart.mehdimontakhab6.workers.dev/api/news/kargozin"
+        shell: bash
+        run: 'curl --fail --silent --show-error --max-time 45 --write-out "HTTP Status: %{http_code}\n" "https://sedaye-smart.mehdimontakhab6.workers.dev/api/news/kargozin"'
