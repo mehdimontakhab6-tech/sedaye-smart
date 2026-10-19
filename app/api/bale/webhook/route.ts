@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { POST as assistantPost } from "../../assistant/route";
 
 export async function POST(req: Request) {
   let stage = "initialize";
@@ -233,13 +234,9 @@ export async function POST(req: Request) {
 
     stage = "assistant_request";
 
-    const assistantUrl = new URL(
-      "/api/assistant",
-      req.url
-    );
-
-    const aiResponse = await fetch(
-      assistantUrl.toString(),
+    // فراخوانی مستقیم دستیار به‌جای self-fetch به همان Worker
+    const assistantRequest = new Request(
+      "https://internal/api/assistant",
       {
         method: "POST",
         headers: {
@@ -249,6 +246,10 @@ export async function POST(req: Request) {
           question: text.trim(),
         }),
       }
+    );
+
+    const aiResponse = await assistantPost(
+      assistantRequest
     );
 
     if (!aiResponse.ok) {
