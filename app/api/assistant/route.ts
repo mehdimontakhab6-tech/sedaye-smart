@@ -429,7 +429,11 @@ ${context}
       });
     }
 
-    const answer = extractAnswer(result);
+  const rawAnswer = extractAnswer(result);
+
+const answer = rawAnswer
+  .replace(/مدیر\s*پاسخگو\s*هوشمند/g, "مدیر هوشمند")
+  .replace(/مدیر\s+پاسخگوی\s+هوشمند/g, "مدیر هوشمند");
 
     if (!answer) {
       return NextResponse.json({
