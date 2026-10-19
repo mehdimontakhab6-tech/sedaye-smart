@@ -92,7 +92,7 @@ export async function POST(req: Request) {
 
     const senderId = senderObject?.id;
 
-    const configuredBotId = (env as Record<string, unknown>)?.BALE_BOT_ID;
+    const configuredBotId = (env as unknown as Record<string, unknown>)?.BALE_BOT_ID;
 
     const isBot =
       message?.from?.is_bot === true ||
