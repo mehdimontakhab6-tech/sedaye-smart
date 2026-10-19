@@ -19,6 +19,14 @@ export async function POST(req: Request) {
       secret &&
       req.headers.get("x-bale-secret") !== secret
     ) {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage: "authentication",
+          error: "Webhook secret validation failed",
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -34,6 +42,14 @@ export async function POST(req: Request) {
     const payload = await req.json().catch(() => null);
 
     if (!payload || typeof payload !== "object") {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage,
+          error: "Invalid JSON payload",
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -44,7 +60,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // پشتیبانی از پیام عادی و پیام ویرایش‌شده
     const message =
       payload?.message ??
       payload?.edited_message ??
@@ -79,7 +94,6 @@ export async function POST(req: Request) {
       payload?.sender?.name ??
       null;
 
-    // جلوگیری از پاسخ به پیام‌های خود ربات
     if (
       message?.from?.is_bot === true ||
       message?.sender?.is_bot === true
@@ -104,6 +118,18 @@ export async function POST(req: Request) {
     }
 
     if (chatId === null || chatId === undefined) {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage: "extract_chat_id",
+          error: "Chat ID is missing",
+          message_keys:
+            message && typeof message === "object"
+              ? Object.keys(message)
+              : [],
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -119,12 +145,19 @@ export async function POST(req: Request) {
       );
     }
 
-    // حفظ محدودیت گروه فعلی
     const allowedGroupId = String(
       env?.BALE_GROUP_ID || "4554953620"
     );
 
     if (String(chatId) !== allowedGroupId) {
+      console.warn(
+        "[BALE_WEBHOOK_IGNORED]",
+        JSON.stringify({
+          reason: "group_not_allowed",
+          received_chat_id: String(chatId),
+        })
+      );
+
       return NextResponse.json({
         ok: true,
         received: false,
@@ -139,6 +172,16 @@ export async function POST(req: Request) {
     const supabaseKey = env?.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage,
+          error: "Supabase configuration is incomplete",
+          has_url: Boolean(supabaseUrl),
+          has_service_role_key: Boolean(supabaseKey),
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -168,6 +211,15 @@ export async function POST(req: Request) {
         .single();
 
     if (saveError) {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage,
+          error: saveError.message,
+          code: saveError.code ?? null,
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -204,6 +256,15 @@ export async function POST(req: Request) {
         .text()
         .catch(() => "");
 
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage,
+          status: aiResponse.status,
+          details: errorBody.slice(0, 500),
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -218,7 +279,29 @@ export async function POST(req: Request) {
 
     stage = "assistant_parse";
 
-    const aiData = await aiResponse.json();
+    let aiData: any;
+
+    try {
+      aiData = await aiResponse.json();
+    } catch {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage,
+          error: "Assistant returned invalid JSON",
+        })
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          stage,
+          error: "پاسخ سرویس پاسخ‌گویی JSON معتبر نیست.",
+          message_id: savedMessage.id,
+        },
+        { status: 502 }
+      );
+    }
 
     const answer =
       aiData?.answer ??
@@ -229,6 +312,18 @@ export async function POST(req: Request) {
       typeof answer !== "string" ||
       !answer.trim()
     ) {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage,
+          error: "Assistant response did not contain a usable answer",
+          response_keys:
+            aiData && typeof aiData === "object"
+              ? Object.keys(aiData)
+              : [],
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -245,6 +340,14 @@ export async function POST(req: Request) {
     const token = env?.BALE_SMART_TOKEN;
 
     if (!token) {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage,
+          error: "BALE_SMART_TOKEN is not configured",
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -283,6 +386,18 @@ export async function POST(req: Request) {
       .catch(() => null);
 
     if (!baleResponse.ok || baleData?.ok !== true) {
+      console.error(
+        "[BALE_WEBHOOK_STAGE_ERROR]",
+        JSON.stringify({
+          stage,
+          status: baleResponse.status,
+          error_code: baleData?.error_code ?? null,
+          description: baleData?.description ?? null,
+          chat_id: String(chatId),
+          reply_to_message_id: messageId ?? null,
+        })
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -299,6 +414,15 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log(
+      "[BALE_WEBHOOK_SUCCESS]",
+      JSON.stringify({
+        stage: "completed",
+        message_id: savedMessage.id,
+        bale_ok: true,
+      })
+    );
+
     return NextResponse.json({
       ok: true,
       received: true,
@@ -312,27 +436,27 @@ export async function POST(req: Request) {
         aiData?.knowledge_match ?? null,
       bale_ok: true,
     });
-} catch (error) {
-  const errorMessage =
-    error instanceof Error
-      ? error.message
-      : "خطای ناشناخته";
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : String(error);
 
-  console.error(
-    "[BALE_WEBHOOK_ERROR]",
-    JSON.stringify({
-      stage,
-      error: errorMessage,
-    })
-  );
+    console.error(
+      "[BALE_WEBHOOK_ERROR]",
+      JSON.stringify({
+        stage,
+        error: errorMessage,
+      })
+    );
 
-  return NextResponse.json(
-    {
-      ok: false,
-      stage,
-      error: errorMessage,
-    },
-    { status: 500 }
+    return NextResponse.json(
+      {
+        ok: false,
+        stage,
+        error: errorMessage,
+      },
+      { status: 500 }
     );
   }
 }
