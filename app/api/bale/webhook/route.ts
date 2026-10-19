@@ -312,17 +312,26 @@ export async function POST(req: Request) {
         aiData?.knowledge_match ?? null,
       bale_ok: true,
     });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        stage,
-        error:
-          error instanceof Error
-            ? error.message
-            : "خطای ناشناخته",
-      },
-      { status: 500 }
-    );
+} catch (error) {
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : "خطای ناشناخته";
+
+  console.error(
+    "[BALE_WEBHOOK_ERROR]",
+    JSON.stringify({
+      stage,
+      error: errorMessage,
+    })
+  );
+
+  return NextResponse.json(
+    {
+      ok: false,
+      stage,
+      error: errorMessage,
+    },
+    { status: 500 }
+  );
   }
-}
