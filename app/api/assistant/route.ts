@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export const runtime = "edge";
-
 type KnowledgeRow = {
   title: string | null;
   content: string | null;
