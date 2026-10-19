@@ -46,7 +46,34 @@ export async function POST(req: Request) {
       payload?.message ??
       payload?.edited_message ??
       payload;
-
+console.log(
+  "[BALE_INCOMING_DIAGNOSTIC]",
+  JSON.stringify({
+    update_id: payload?.update_id ?? null,
+    message_id: message?.message_id ?? message?.id ?? null,
+    chat_id: message?.chat?.id ?? message?.chat_id ?? null,
+    from: message?.from
+      ? {
+          id: message.from.id ?? null,
+          is_bot: message.from.is_bot ?? null,
+          username: message.from.username ?? null,
+          first_name: message.from.first_name ?? null,
+        }
+      : null,
+    sender: message?.sender
+      ? {
+          id: message.sender.id ?? null,
+          is_bot: message.sender.is_bot ?? null,
+          username: message.sender.username ?? null,
+          name: message.sender.name ?? null,
+        }
+      : null,
+    reply_to_message_id:
+      message?.reply_to_message?.message_id ?? null,
+    has_reply_to_message: Boolean(message?.reply_to_message),
+  })
+);
+    
     const text = [
       message?.text,
       message?.body,
