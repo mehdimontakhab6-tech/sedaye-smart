@@ -6,6 +6,11 @@ import { POST as assistantPost } from "../../assistant/route";
 
 export async function POST(req: Request) {
   let stage = "initialize";
+  let supabase: any = null;
+  let claimCreated = false;
+  let keepClaim = false;
+  let claimChatId = "";
+  let claimMessageId = "";
 
   try {
     stage = "cloudflare_context";
@@ -20,20 +25,8 @@ export async function POST(req: Request) {
       secret &&
       req.headers.get("x-bale-secret") !== secret
     ) {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage: "authentication",
-          error: "Webhook secret validation failed",
-        })
-      );
-
       return NextResponse.json(
-        {
-          ok: false,
-          stage: "authentication",
-          error: "دسترسی غیرمجاز",
-        },
+        { ok: false, error: "دسترسی غیرمجاز" },
         { status: 401 }
       );
     }
@@ -43,20 +36,8 @@ export async function POST(req: Request) {
     const payload = await req.json().catch(() => null);
 
     if (!payload || typeof payload !== "object") {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage,
-          error: "Invalid JSON payload",
-        })
-      );
-
       return NextResponse.json(
-        {
-          ok: false,
-          stage,
-          error: "بدنه درخواست JSON معتبر نیست.",
-        },
+        { ok: false, error: "بدنه درخواست معتبر نیست." },
         { status: 400 }
       );
     }
@@ -86,22 +67,48 @@ export async function POST(req: Request) {
 
     const messageId =
       message?.message_id ??
+      message?.id ??
       payload?.message_id ??
       null;
 
+    const senderObject =
+      message?.from ??
+      message?.sender ??
+      payload?.sender ??
+      {};
+
     const sender =
-      message?.from?.first_name ??
-      message?.sender?.name ??
-      payload?.sender?.name ??
+      senderObject?.first_name ??
+      senderObject?.name ??
+      senderObject?.username ??
       null;
 
-    if (
+    // پیام‌های ربات‌ها، از جمله خود این ربات، پردازش نشوند.
+    const senderUsername = String(
+      senderObject?.username ?? ""
+    )
+      .replace(/^@/, "")
+      .toLowerCase();
+
+    const senderId = senderObject?.id;
+
+    const configuredBotId = env?.BALE_BOT_ID;
+
+    const isBot =
       message?.from?.is_bot === true ||
-      message?.sender?.is_bot === true
-    ) {
+      message?.sender?.is_bot === true ||
+      payload?.from?.is_bot === true ||
+      senderObject?.is_bot === true ||
+      senderUsername === "mmm532bot" ||
+      (
+        configuredBotId &&
+        senderId != null &&
+        String(senderId) === String(configuredBotId)
+      );
+
+    if (isBot) {
       return NextResponse.json({
         ok: true,
-        received: false,
         ignored: true,
         reason: "bot_message",
       });
@@ -110,40 +117,41 @@ export async function POST(req: Request) {
     if (!text) {
       return NextResponse.json({
         ok: true,
-        received: false,
+        ignored: true,
         reason: "no_text",
-        message: "در به‌روزرسانی دریافتی متن قابل‌پاسخ وجود ندارد.",
-        has_message: Boolean(payload?.message),
-        has_chat: Boolean(message?.chat),
       });
     }
 
-    if (chatId === null || chatId === undefined) {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage: "extract_chat_id",
-          error: "Chat ID is missing",
-          message_keys:
-            message && typeof message === "object"
-              ? Object.keys(message)
-              : [],
-        })
-      );
+    // فقط پیام‌هایی که عبارت «مدیر هوشمند» دارند.
+    // تفاوت حروف عربی/فارسی و فاصله‌ها نادیده گرفته می‌شود.
+    const normalizedText = text
+      .normalize("NFC")
+      .replace(/[يى]/g, "ی")
+      .replace(/ك/g, "ک")
+      .replace(/[\u200c\u200d]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
 
-      return NextResponse.json(
-        {
-          ok: false,
-          stage: "extract_chat_id",
-          error: "شناسه گروه یا گفت‌وگو در پیام دریافتی پیدا نشد.",
-          has_message: Boolean(payload?.message),
-          message_keys:
-            message && typeof message === "object"
-              ? Object.keys(message)
-              : [],
-        },
-        { status: 400 }
-      );
+    if (!/مدیر\s*هوشمند/u.test(normalizedText)) {
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "assistant_not_mentioned",
+      });
+    }
+
+    if (
+      chatId === null ||
+      chatId === undefined ||
+      messageId === null ||
+      messageId === undefined ||
+      String(messageId).trim() === ""
+    ) {
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "missing_chat_or_message_id",
+      });
     }
 
     const allowedGroupId = String(
@@ -151,17 +159,8 @@ export async function POST(req: Request) {
     );
 
     if (String(chatId) !== allowedGroupId) {
-      console.warn(
-        "[BALE_WEBHOOK_IGNORED]",
-        JSON.stringify({
-          reason: "group_not_allowed",
-          received_chat_id: String(chatId),
-        })
-      );
-
       return NextResponse.json({
         ok: true,
-        received: false,
         ignored: true,
         reason: "group_not_allowed",
       });
@@ -173,32 +172,44 @@ export async function POST(req: Request) {
     const supabaseKey = env?.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage,
-          error: "Supabase configuration is incomplete",
-          has_url: Boolean(supabaseUrl),
-          has_service_role_key: Boolean(supabaseKey),
-        })
-      );
-
-      return NextResponse.json(
-        {
-          ok: false,
-          stage,
-          error: "تنظیمات اتصال به Supabase کامل نیست.",
-        },
-        { status: 500 }
-      );
+      throw new Error("Supabase configuration is incomplete");
     }
 
-    stage = "supabase_insert";
+    supabase = createClient(supabaseUrl, supabaseKey);
 
-    const supabase = createClient(
-      supabaseUrl,
-      supabaseKey
-    );
+    // ثبت اتمیک شناسه پیام؛ قید UNIQUE مانع پردازش تکراری می‌شود.
+    stage = "claim_message";
+
+    claimChatId = String(chatId);
+    claimMessageId = String(messageId);
+
+    const { error: claimError } = await supabase
+      .from("bale_processed_messages")
+      .insert({
+        chat_id: claimChatId,
+        message_id: claimMessageId,
+      });
+
+    if (claimError?.code === "23505") {
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "duplicate_message",
+      });
+    }
+
+    if (claimError) {
+      console.error("[BALE_WEBHOOK_CLAIM_ERROR]", {
+        code: claimError.code,
+        message: claimError.message,
+      });
+
+      throw new Error("Could not register message for deduplication");
+    }
+
+    claimCreated = true;
+
+    stage = "supabase_insert";
 
     const { data: savedMessage, error: saveError } =
       await supabase
@@ -212,29 +223,17 @@ export async function POST(req: Request) {
         .single();
 
     if (saveError) {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage,
-          error: saveError.message,
-          code: saveError.code ?? null,
-        })
-      );
+      console.error("[BALE_WEBHOOK_SAVE_ERROR]", {
+        message: saveError.message,
+        code: saveError.code ?? null,
+      });
 
-      return NextResponse.json(
-        {
-          ok: false,
-          stage,
-          error: "ثبت پیام در Supabase انجام نشد.",
-          details: saveError.message,
-        },
-        { status: 500 }
-      );
+      throw new Error("ثبت پیام در Supabase ناموفق بود.");
     }
 
+    // فراخوانی مستقیم؛ از self-fetch به Worker استفاده نمی‌شود.
     stage = "assistant_request";
 
-    // فراخوانی مستقیم دستیار به‌جای self-fetch به همان Worker
     const assistantRequest = new Request(
       "https://internal/api/assistant",
       {
@@ -248,92 +247,31 @@ export async function POST(req: Request) {
       }
     );
 
-    const aiResponse = await assistantPost(
-      assistantRequest
-    );
+    const aiResponse = await assistantPost(assistantRequest);
 
     if (!aiResponse.ok) {
-      const errorBody = await aiResponse
+      const details = await aiResponse
         .text()
         .catch(() => "");
 
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage,
-          status: aiResponse.status,
-          details: errorBody.slice(0, 500),
-        })
-      );
+      console.error("[BALE_WEBHOOK_ASSISTANT_ERROR]", {
+        status: aiResponse.status,
+        details: details.slice(0, 500),
+      });
 
-      return NextResponse.json(
-        {
-          ok: false,
-          stage,
-          error: "سرویس پاسخ‌گویی درخواست را با خطا پاسخ داد.",
-          assistant_status: aiResponse.status,
-          details: errorBody.slice(0, 1000),
-        },
-        { status: 502 }
+      throw new Error(
+        `Assistant request failed with status ${aiResponse.status}`
       );
     }
 
     stage = "assistant_parse";
 
-    let aiData: any;
+    const aiData: any = await aiResponse.json();
 
-    try {
-      aiData = await aiResponse.json();
-    } catch {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage,
-          error: "Assistant returned invalid JSON",
-        })
-      );
+    const answer = aiData?.answer ?? aiData?.response ?? null;
 
-      return NextResponse.json(
-        {
-          ok: false,
-          stage,
-          error: "پاسخ سرویس پاسخ‌گویی JSON معتبر نیست.",
-          message_id: savedMessage.id,
-        },
-        { status: 502 }
-      );
-    }
-
-    const answer =
-      aiData?.answer ??
-      aiData?.response ??
-      null;
-
-    if (
-      typeof answer !== "string" ||
-      !answer.trim()
-    ) {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage,
-          error: "Assistant response did not contain a usable answer",
-          response_keys:
-            aiData && typeof aiData === "object"
-              ? Object.keys(aiData)
-              : [],
-        })
-      );
-
-      return NextResponse.json(
-        {
-          ok: false,
-          stage,
-          error: "پاسخ متنی معتبر از سرویس هوش مصنوعی دریافت نشد.",
-          message_id: savedMessage.id,
-        },
-        { status: 502 }
-      );
+    if (typeof answer !== "string" || !answer.trim()) {
+      throw new Error("پاسخ متنی معتبری از دستیار دریافت نشد.");
     }
 
     stage = "bale_config";
@@ -341,26 +279,8 @@ export async function POST(req: Request) {
     const token = env?.BALE_SMART_TOKEN;
 
     if (!token) {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage,
-          error: "BALE_SMART_TOKEN is not configured",
-        })
-      );
-
-      return NextResponse.json(
-        {
-          ok: false,
-          stage,
-          error: "متغیر BALE_SMART_TOKEN تنظیم نشده است.",
-          message_id: savedMessage.id,
-        },
-        { status: 500 }
-      );
+      throw new Error("BALE_SMART_TOKEN تنظیم نشده است.");
     }
-
-    stage = "bale_send_message";
 
     const sendUrl =
       `https://tapi.bale.ai/bot${token}/sendMessage`;
@@ -368,11 +288,14 @@ export async function POST(req: Request) {
     const sendPayload: Record<string, unknown> = {
       chat_id: chatId,
       text: answer.trim().slice(0, 4000),
+      reply_to_message_id: messageId,
     };
 
-    if (messageId !== null && messageId !== undefined) {
-      sendPayload.reply_to_message_id = messageId;
-    }
+    stage = "bale_send_message";
+
+    // از این نقطه به بعد شناسه نگه داشته می‌شود تا در خطاهای
+    // مبهم شبکه، ارسال مجدد باعث پاسخ تکراری نشود.
+    keepClaim = true;
 
     const baleResponse = await fetch(sendUrl, {
       method: "POST",
@@ -387,17 +310,11 @@ export async function POST(req: Request) {
       .catch(() => null);
 
     if (!baleResponse.ok || baleData?.ok !== true) {
-      console.error(
-        "[BALE_WEBHOOK_STAGE_ERROR]",
-        JSON.stringify({
-          stage,
-          status: baleResponse.status,
-          error_code: baleData?.error_code ?? null,
-          description: baleData?.description ?? null,
-          chat_id: String(chatId),
-          reply_to_message_id: messageId ?? null,
-        })
-      );
+      console.error("[BALE_WEBHOOK_SEND_ERROR]", {
+        status: baleResponse.status,
+        error_code: baleData?.error_code ?? null,
+        description: baleData?.description ?? null,
+      });
 
       return NextResponse.json(
         {
@@ -405,36 +322,28 @@ export async function POST(req: Request) {
           stage,
           error: "ارسال پاسخ به بله ناموفق بود.",
           bale_http_status: baleResponse.status,
-          bale_error_code: baleData?.error_code ?? null,
           bale_description: baleData?.description ?? null,
-          chat_id: chatId,
-          reply_to_message_id: messageId,
-          message_id: savedMessage.id,
         },
         { status: 502 }
       );
     }
 
-    console.log(
-      "[BALE_WEBHOOK_SUCCESS]",
-      JSON.stringify({
-        stage: "completed",
-        message_id: savedMessage.id,
-        bale_ok: true,
-      })
-    );
+    console.log("[BALE_WEBHOOK_SUCCESS]", {
+      message_id: savedMessage?.id ?? null,
+      chat_id: claimChatId,
+      reply_to_message_id: claimMessageId,
+    });
 
     return NextResponse.json({
       ok: true,
       received: true,
-      message_id: savedMessage.id,
+      message_id: savedMessage?.id ?? null,
       sender,
       chat_id: chatId,
       reply_to_message_id: messageId,
       answer,
       ai_used: aiData?.ai_used ?? null,
-      knowledge_match:
-        aiData?.knowledge_match ?? null,
+      knowledge_match: aiData?.knowledge_match ?? null,
       bale_ok: true,
     });
   } catch (error) {
@@ -443,13 +352,10 @@ export async function POST(req: Request) {
         ? error.message
         : String(error);
 
-    console.error(
-      "[BALE_WEBHOOK_ERROR]",
-      JSON.stringify({
-        stage,
-        error: errorMessage,
-      })
-    );
+    console.error("[BALE_WEBHOOK_ERROR]", {
+      stage,
+      error: errorMessage,
+    });
 
     return NextResponse.json(
       {
@@ -459,5 +365,24 @@ export async function POST(req: Request) {
       },
       { status: 500 }
     );
+  } finally {
+    // اگر ارسال پاسخ شروع نشده باشد، اجازه پردازش مجدد بده.
+    // پس از شروع ارسال، شناسه حفظ می‌شود تا پاسخ تکراری نسازیم.
+    if (claimCreated && !keepClaim && supabase) {
+      try {
+        await supabase
+          .from("bale_processed_messages")
+          .delete()
+          .eq("chat_id", claimChatId)
+          .eq("message_id", claimMessageId);
+      } catch (cleanupError) {
+        console.error("[BALE_WEBHOOK_CLEANUP_ERROR]", {
+          error:
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : String(cleanupError),
+        });
+      }
+    }
   }
 }
