@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -20,71 +21,76 @@ export default function Home() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
+          "Accept": "text/plain",
         },
         body: JSON.stringify({
           question: text,
         }),
       });
 
-      const rawText = await response.text();
-
-      let data: any = null;
-
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        data = {
-          raw: rawText,
-        };
-      }
-
       if (!response.ok) {
+        const errorText = await response.text();
+
+        let errorMessage = errorText;
+
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage =
+            errorData?.error ||
+            errorData?.details ||
+            errorData?.message ||
+            errorText;
+        } catch {
+          // پاسخ خطا متن ساده است.
+        }
+
         setAnswer(
-          `خطای سامانه
-
-کد خطا: ${response.status}
-
-${
-  data?.error ||
-  data?.details ||
-  data?.message ||
-  data?.raw ||
-  "پاسخ نامعتبر از سرور دریافت شد."
-}`
+          `خطای سامانه\n\nکد خطا: ${response.status}\n\n${errorMessage || "خطای نامشخص از سرور دریافت شد."}`
         );
 
         return;
       }
 
-      if (data?.ok && data?.answer) {
-        setAnswer(data.answer);
-        return;
+      if (!response.body) {
+        throw new Error("جریان پاسخ از سرور در دسترس نیست.");
       }
 
-      if (data?.answer) {
-        setAnswer(data.answer);
-        return;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      let fullAnswer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+
+        if (done) break;
+
+        fullAnswer += decoder.decode(value, {
+          stream: true,
+        });
+
+        setAnswer(fullAnswer);
       }
 
+      fullAnswer += decoder.decode();
+
+      if (fullAnswer) {
+        setAnswer(fullAnswer);
+      } else {
+        setAnswer(
+          "پاسخی از مدیر هوشمند دریافت نشد. لطفاً دوباره تلاش کنید."
+        );
+      }
+    } catch (error: unknown) {
+      console.error("AI request failed:", error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "ارتباط با API برقرار نشد.";
+
       setAnswer(
-        `سامانه پاسخ متنی برنگرداند.
-
-پاسخ سرور:
-
-${rawText}`
-      );
-
-    } catch (error: any) {
-      console.error(error);
-
-      setAnswer(
-        `خطا در ارتباط با سامانه
-
-${
-  error?.message ||
-  "ارتباط با API برقرار نشد."
-}`
+        `خطا در ارتباط با سامانه\n\n${message}`
       );
     } finally {
       setLoading(false);
@@ -165,8 +171,18 @@ ${
           <textarea
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                (e.ctrlKey || e.metaKey)
+              ) {
+                e.preventDefault();
+                void askAI();
+              }
+            }}
             placeholder="پرسش خود را اینجا بنویسید..."
             rows={5}
+            disabled={loading}
             style={{
               width: "100%",
               boxSizing: "border-box",
@@ -176,11 +192,12 @@ ${
               fontSize: "16px",
               resize: "vertical",
               outline: "none",
+              lineHeight: 1.8,
             }}
           />
 
           <button
-            onClick={askAI}
+            onClick={() => void askAI()}
             disabled={loading || !question.trim()}
             style={{
               marginTop: "14px",
@@ -197,14 +214,17 @@ ${
                 loading || !question.trim()
                   ? 0.6
                   : 1,
+              background: "#2457c5",
+              color: "#ffffff",
             }}
           >
             {loading
-              ? "در حال بررسی..."
+              ? "در حال دریافت پاسخ..."
               : "ارسال پرسش"}
           </button>
 
           <div
+            aria-live="polite"
             style={{
               marginTop: "24px",
               background: "#f8f9fc",
@@ -212,18 +232,43 @@ ${
               padding: "18px",
               minHeight: "80px",
               whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
               lineHeight: 1.9,
             }}
           >
-            <strong>
-              🤖 پاسخ مدیر هوشمند
-            </strong>
+            <strong>🤖 پاسخ مدیر هوشمند</strong>
 
             <div style={{ marginTop: "12px" }}>
               {answer ||
-                "هنوز پرسشی ارسال نشده است."}
+                (loading
+                  ? "در حال آماده‌سازی پاسخ..."
+                  : "هنوز پرسشی ارسال نشده است.")}
             </div>
+
+            {loading && (
+              <div
+                style={{
+                  marginTop: "10px",
+                  color: "#666",
+                  fontSize: "13px",
+                }}
+              >
+                مدیر هوشمند در حال پاسخ‌گویی است...
+              </div>
+            )}
           </div>
+
+          <p
+            style={{
+              marginTop: "14px",
+              color: "#777",
+              fontSize: "13px",
+              lineHeight: 1.8,
+            }}
+          >
+            نکته: برای ارسال سریع‌تر می‌توانید از
+            کلیدهای Ctrl + Enter نیز استفاده کنید.
+          </p>
         </section>
       </div>
     </main>
