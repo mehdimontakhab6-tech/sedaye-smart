@@ -1,6 +1,14 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
+// یکسان‌سازی نام دستیار در پاسخ‌های تولیدشده
+function fixAssistantName(text: string): string {
+  return text.replace(
+    /مدیر[\s\u200c\u200d]*پاسخگو(?:ی)?[\s\u200c\u200d]*هوشمند/giu,
+    "مدیر هوشمند"
+  );
+}
 
 function extractAnswer(result: any): string {
   if (!result) return "";
@@ -43,20 +51,16 @@ export async function POST(
   req: NextRequest
 ) {
   try {
-    const body =
-      await req.json();
+    const body = await req.json();
 
     const question =
-      String(
-        body?.question || ""
-      ).trim();
+      String(body?.question || "").trim();
 
     if (!question) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "لطفاً پرسش خود را وارد کنید.",
+          error: "لطفاً پرسش خود را وارد کنید.",
         },
         {
           status: 400,
@@ -64,13 +68,11 @@ export async function POST(
       );
     }
 
-    const context =
-      await getCloudflareContext({
-        async: true,
-      });
+    const context = await getCloudflareContext({
+      async: true,
+    });
 
-    const env =
-      context.env as any;
+    const env = context.env as any;
 
     if (!env?.AI) {
       return NextResponse.json(
@@ -86,7 +88,7 @@ export async function POST(
     }
 
     const systemPrompt = `
-تو «مدیر پاسخگو هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
+تو «مدیر هوشمند» گروه «صدای کارکنان ثبت احوال» هستی.
 
 وظیفه تو پاسخ‌گویی به پرسش‌های کارکنان
 به زبان فارسی، دقیق، روشن، محترمانه و کاربردی است.
@@ -109,34 +111,34 @@ export async function POST(
 درخواست‌ها و تجربه‌های کارکنان را
 تحلیلی و مسئولانه بررسی کن.
 
-7. نام تو «مدیر پاسخگو هوشمند» است.
+7. نام تو «مدیر هوشمند» است.
 
 8. از نام «صدایار» استفاده نکن.
+
+9. اگر در پاسخ به نام خودت اشاره می‌کنی،
+فقط از عبارت «مدیر هوشمند» استفاده کن.
 `;
 
     let result: any;
 
     try {
-      result =
-        await env.AI.run(
-          "@cf/google/gemma-4-26b-a4b-it",
-          {
-            messages: [
-              {
-                role: "system",
-                content:
-                  systemPrompt,
-              },
-              {
-                role: "user",
-                content:
-                  question,
-              },
-            ],
-            max_tokens: 1500,
-            temperature: 0.2,
-          }
-        );
+      result = await env.AI.run(
+        "@cf/google/gemma-4-26b-a4b-it",
+        {
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: question,
+            },
+          ],
+          max_tokens: 1500,
+          temperature: 0.2,
+        }
+      );
     } catch (aiError: any) {
       console.error(
         "WORKERS AI ERROR:",
@@ -146,8 +148,7 @@ export async function POST(
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "خطا هنگام اجرای هوش مصنوعی.",
+          error: "خطا هنگام اجرای هوش مصنوعی.",
           details:
             aiError?.message ||
             String(aiError),
@@ -158,8 +159,8 @@ export async function POST(
       );
     }
 
-    const answer =
-      extractAnswer(result);
+    const rawAnswer = extractAnswer(result);
+    const answer = fixAssistantName(rawAnswer);
 
     if (!answer) {
       console.error(
@@ -183,8 +184,7 @@ export async function POST(
       ok: true,
       answer,
       manager: {
-        name:
-          "مدیر پاسخگو هوشمند",
+        name: "مدیر هوشمند",
         model:
           "@cf/google/gemma-4-26b-a4b-it",
       },
@@ -198,8 +198,7 @@ export async function POST(
     return NextResponse.json(
       {
         ok: false,
-        error:
-          "خطا در مسیر مدیر پاسخگو هوشمند.",
+        error: "خطا در مسیر مدیر هوشمند.",
         details:
           error?.message ||
           String(error),
