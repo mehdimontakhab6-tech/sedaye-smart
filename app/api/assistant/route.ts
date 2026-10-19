@@ -71,17 +71,32 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-// یکسان‌سازی نام سامانه در تمام پاسخ‌های پویا
+// یکسان‌سازی نام دستیار در تمام پاسخ‌ها
 function fixAssistantName(text: string): string {
   return text
     .replace(
-      /مدیر[\s\u200c‌]*پاسخگو[\s\u200c‌]*هوشمند/g,
+      /مدیر[\s\u200c\u200d]*پاسخگو(?:ی)?[\s\u200c\u200d]*هوشمند/giu,
       "مدیر هوشمند"
     )
     .replace(
-      /مدیر[\s\u200c‌]*پاسخگوی[\s\u200c‌]*هوشمند/g,
+      /مدیر[\s\u200c\u200d]*پاسخگوی[\s\u200c\u200d]*هوشمند/giu,
       "مدیر هوشمند"
     );
+}
+
+// ساخت پاسخ JSON با یکسان‌سازی نام در فیلد answer
+function jsonResponse(
+  payload: Record<string, any>,
+  init?: ResponseInit
+) {
+  if (typeof payload.answer === "string") {
+    payload = {
+      ...payload,
+      answer: fixAssistantName(payload.answer),
+    };
+  }
+
+  return NextResponse.json(payload, init);
 }
 
 function getImportantWords(text: string): string[] {
@@ -239,7 +254,7 @@ function fallbackResponse(
   knowledgeCount: number,
   supabaseConnected: boolean
 ) {
-  return NextResponse.json({
+  return jsonResponse({
     ok: true,
     answer:
       "برای پاسخ دقیق و مستند به این پرسش، اطلاعات تأییدشده کافی در منابع مرتبط پیدا نشد. لطفاً موضوع را برای بررسی بیشتر به مسئول مربوط ارجاع دهید.",
@@ -261,7 +276,7 @@ export async function POST(request: Request) {
         : "";
 
     if (!question) {
-      return NextResponse.json(
+      return jsonResponse(
         {
           ok: false,
           answer: "لطفاً پرسش خود را وارد کنید.",
@@ -271,7 +286,7 @@ export async function POST(request: Request) {
     }
 
     if (question.length > 2000) {
-      return NextResponse.json(
+      return jsonResponse(
         {
           ok: false,
           answer:
@@ -298,10 +313,7 @@ export async function POST(request: Request) {
     );
 
     if (!hasSupabase) {
-      console.error(
-        "Supabase configuration is missing."
-      );
-
+      console.error("Supabase configuration is missing.");
       return fallbackResponse(0, false);
     }
 
@@ -315,7 +327,7 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error("KNOWLEDGE LOAD ERROR:", error);
 
-      return NextResponse.json({
+      return jsonResponse({
         ok: true,
         answer:
           "در حال حاضر دسترسی به منابع تأییدشده امکان‌پذیر نیست. لطفاً کمی بعد دوباره تلاش کنید یا موضوع را برای بررسی بیشتر ارجاع دهید.",
@@ -332,7 +344,7 @@ export async function POST(request: Request) {
     const ranked = rankKnowledge(question, knowledge);
     const bestMatch = ranked[0];
 
-    // پاسخ مستقیم بانک دانش؛ نام سامانه نیز یکسان‌سازی می‌شود.
+    // پاسخ مستقیم بانک دانش
     if (
       bestMatch &&
       bestMatch.score >= 100 &&
@@ -342,9 +354,9 @@ export async function POST(request: Request) {
         "بر اساس اطلاعات تأییدشده بانک دانش:\n\n" +
         bestMatch.item.content;
 
-      return NextResponse.json({
+      return jsonResponse({
         ok: true,
-        answer: fixAssistantName(knowledgeAnswer),
+        answer: knowledgeAnswer,
         source: "knowledge",
         knowledge_count: knowledge.length,
         knowledge_match: true,
@@ -401,7 +413,7 @@ ${context}
     const ai = runtimeEnv?.AI;
 
     if (!ai || typeof ai.run !== "function") {
-      return NextResponse.json({
+      return jsonResponse({
         ok: true,
         answer:
           "منابع مرتبط پیدا شدند، اما سرویس هوش مصنوعی در دسترس نیست. لطفاً کمی بعد دوباره تلاش کنید.",
@@ -434,7 +446,7 @@ ${context}
     } catch (error) {
       console.error("WORKERS AI ERROR:", error);
 
-      return NextResponse.json({
+      return jsonResponse({
         ok: true,
         answer:
           "منابع مرتبط شناسایی شدند، اما تولید پاسخ هوشمند در حال حاضر با خطا مواجه شد. لطفاً کمی بعد دوباره تلاش کنید.",
@@ -448,10 +460,9 @@ ${context}
     }
 
     const rawAnswer = extractAnswer(result);
-    const answer = fixAssistantName(rawAnswer);
 
-    if (!answer) {
-      return NextResponse.json({
+    if (!rawAnswer) {
+      return jsonResponse({
         ok: true,
         answer:
           "برای این پرسش پاسخ قابل اتکایی تولید نشد. لطفاً موضوع را برای بررسی بیشتر ارجاع دهید.",
@@ -464,9 +475,9 @@ ${context}
       });
     }
 
-    return NextResponse.json({
+    return jsonResponse({
       ok: true,
-      answer,
+      answer: rawAnswer,
       source: "workers-ai",
       knowledge_count: knowledge.length,
       knowledge_match: true,
@@ -478,7 +489,7 @@ ${context}
   } catch (error: any) {
     console.error("ASSISTANT API ERROR:", error);
 
-    return NextResponse.json(
+    return jsonResponse(
       {
         ok: false,
         answer:
