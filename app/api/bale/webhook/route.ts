@@ -355,11 +355,20 @@ console.log(
       );
     }
 
-    console.log("[BALE_WEBHOOK_SUCCESS]", {
-      message_id: savedMessage?.id ?? null,
-      chat_id: claimChatId,
-      reply_to_message_id: claimMessageId,
-    });
+    console.log(
+  "[BALE_WEBHOOK_SUCCESS]",
+  JSON.stringify({
+    saved_message_id: savedMessage?.id ?? null,
+    sent_bale_message_id:
+      baleData?.result?.message_id ?? null,
+    sent_by_bot_id:
+      baleData?.result?.from?.id ?? null,
+    sent_by_bot_is_bot:
+      baleData?.result?.from?.is_bot ?? null,
+    chat_id: claimChatId,
+    reply_to_message_id: claimMessageId,
+  })
+);
 
     return NextResponse.json({
       ok: true,
