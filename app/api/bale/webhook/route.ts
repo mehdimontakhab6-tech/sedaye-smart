@@ -497,11 +497,22 @@ export async function POST(req: Request) {
     const sendUrl =
       `https://tapi.bale.ai/bot${token}/sendMessage`;
 
-    const sendPayload = {
-      chat_id: chatId,
-      text: answer.trim().slice(0, 4000),
-      reply_to_message_id: messageId,
-    };
+    const numericMessageId = Number(messageId);
+
+if (
+  !Number.isSafeInteger(numericMessageId) ||
+  numericMessageId <= 0
+) {
+  throw new Error(
+    `Invalid Bale message ID: ${String(messageId)}`
+  );
+}
+
+const sendPayload = {
+  chat_id: String(chatId),
+  text: answer.trim().slice(0, 4000),
+  reply_to_message_id: numericMessageId,
+};
 
     // پس از شروع ارسال، در صورت ابهام ارسال مجدد خودکار نکن.
     stage = "bale_send_message";
