@@ -23,13 +23,22 @@ function normalizeText(value: string): string {
     .trim();
 }
 
-function isKnownBot(sender: any, configuredBotId: unknown): boolean {
+function isKnownBot(
+  sender: any,
+  configuredBotId: unknown
+): boolean {
   if (!sender || typeof sender !== "object") {
     return false;
   }
 
-  const username = normalizeUsername(sender.username);
-  const id = sender.id;
+  const username = normalizeUsername(
+    sender.username ?? sender.user_name
+  );
+
+  const id =
+    sender.id ??
+    sender.user_id ??
+    sender.sender_id;
 
   return (
     sender.is_bot === true ||
@@ -47,13 +56,40 @@ function isKnownBot(sender: any, configuredBotId: unknown): boolean {
   );
 }
 
+async function sha256(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    bytes
+  );
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export async function POST(req: Request) {
   let stage = "initialize";
   let supabase: any = null;
+
   let claimCreated = false;
-  let keepClaim = false;
+  let requestClaimCreated = false;
+  let sendAttempted = false;
+
   let claimChatId = "";
   let claimMessageId = "";
+  let requestKey = "";
+
+  const ignored = (
+    reason: string,
+    details: Record<string, unknown> = {}
+  ) =>
+    NextResponse.json({
+      ok: true,
+      ignored: true,
+      reason,
+      ...details,
+    });
 
   try {
     stage = "cloudflare_context";
@@ -69,25 +105,33 @@ export async function POST(req: Request) {
       req.headers.get("x-bale-secret") !== secret
     ) {
       return NextResponse.json(
-        { ok: false, error: "دسترسی غیرمجاز" },
+        {
+          ok: false,
+          error: "دسترسی غیرمجاز",
+        },
         { status: 401 }
       );
     }
 
     stage = "parse_payload";
 
-    const payload = await req.json().catch(() => null);
+    const payload: any = await req
+      .json()
+      .catch(() => null);
 
     if (!payload || typeof payload !== "object") {
       return NextResponse.json(
-        { ok: false, error: "بدنه درخواست معتبر نیست." },
+        {
+          ok: false,
+          error: "بدنه درخواست معتبر نیست.",
+        },
         { status: 400 }
       );
     }
 
-    const message =
-      payload?.message ??
-      payload?.edited_message ??
+    const message: any =
+      payload.message ??
+      payload.edited_message ??
       payload;
 
     const text = [
@@ -121,15 +165,22 @@ export async function POST(req: Request) {
       payload?.sender ??
       {};
 
-    const replyMessage =
-      message?.reply_to_message ??
-      message?.replyToMessage ??
-      message?.reply_to ??
+    const senderId =
+      senderObject?.id ??
+      senderObject?.user_id ??
+      senderObject?.sender_id ??
       null;
 
     const configuredBotId = (
       env as unknown as Record<string, unknown>
     )?.BALE_BOT_ID;
+
+    const replyMessage =
+      message?.reply_to_message ??
+      message?.replyToMessage ??
+      message?.reply_to ??
+      payload?.reply_to_message ??
+      null;
 
     console.log(
       "[BALE_INCOMING_DIAGNOSTIC]",
@@ -141,62 +192,26 @@ export async function POST(req: Request) {
           typeof text === "string"
             ? text.slice(0, 200)
             : null,
-        from: message?.from
-          ? {
-              id: message.from.id ?? null,
-              is_bot: message.from.is_bot ?? null,
-              username: message.from.username ?? null,
-              first_name: message.from.first_name ?? null,
-            }
-          : null,
-        sender: message?.sender
-          ? {
-              id: message.sender.id ?? null,
-              is_bot: message.sender.is_bot ?? null,
-              username: message.sender.username ?? null,
-              name: message.sender.name ?? null,
-            }
-          : null,
+        sender_id: senderId ?? null,
+        sender_username:
+          senderObject?.username ??
+          senderObject?.user_name ??
+          null,
+        sender_is_bot:
+          senderObject?.is_bot ?? null,
         reply_to_message_id:
           replyMessage?.message_id ??
           replyMessage?.id ??
           null,
-        reply_from: replyMessage?.from
-          ? {
-              id: replyMessage.from.id ?? null,
-              is_bot: replyMessage.from.is_bot ?? null,
-              username: replyMessage.from.username ?? null,
-            }
-          : null,
-        reply_sender: replyMessage?.sender
-          ? {
-              id: replyMessage.sender.id ?? null,
-              is_bot: replyMessage.sender.is_bot ?? null,
-              username: replyMessage.sender.username ?? null,
-            }
-          : null,
-        has_reply_to_message: Boolean(replyMessage),
       })
     );
 
-    // فیلتر اصلی: پیام‌های خود ربات قبل از فراخوانی دستیار متوقف شوند.
+    // جلوگیری از پردازش پیام خود ربات و ربات‌های شناخته‌شده
     if (isKnownBot(senderObject, configuredBotId)) {
-      console.log(
-        "[BALE_BOT_MESSAGE_IGNORED]",
-        JSON.stringify({
-          message_id: messageId ?? null,
-          chat_id: chatId ?? null,
-        })
-      );
-
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "bot_message",
-      });
+      return ignored("bot_message");
     }
 
-    // اگر پیام ریپلای به یکی از پیام‌های خود ربات باشد، پاسخ تازه نساز.
+    // جلوگیری از چرخه پاسخ در ریپلای به پیام ربات
     const replySenderCandidates = [
       replyMessage?.from,
       replyMessage?.sender,
@@ -205,46 +220,22 @@ export async function POST(req: Request) {
     ].filter(Boolean);
 
     if (
-      replySenderCandidates.some((replySender: any) =>
-        isKnownBot(replySender, configuredBotId)
+      replySenderCandidates.some((sender: any) =>
+        isKnownBot(sender, configuredBotId)
       )
     ) {
-      console.log(
-        "[BALE_REPLY_TO_BOT_IGNORED]",
-        JSON.stringify({
-          message_id: messageId ?? null,
-          chat_id: chatId ?? null,
-          reply_to_message_id:
-            replyMessage?.message_id ??
-            replyMessage?.id ??
-            null,
-        })
-      );
-
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "reply_to_bot_message",
-      });
+      return ignored("reply_to_bot_message");
     }
 
-    if (!text) {
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "no_text",
-      });
+    if (typeof text !== "string" || !text.trim()) {
+      return ignored("no_text");
     }
 
-    // فقط پیام انسانی که عبارت «مدیر هوشمند» را دارد.
     const normalizedText = normalizeText(text);
 
+    // فقط پیام‌هایی که مدیر هوشمند را خطاب می‌کنند
     if (!/مدیر\s*هوشمند/u.test(normalizedText)) {
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "assistant_not_mentioned",
-      });
+      return ignored("assistant_not_mentioned");
     }
 
     if (
@@ -254,11 +245,7 @@ export async function POST(req: Request) {
       messageId === undefined ||
       String(messageId).trim() === ""
     ) {
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "missing_chat_or_message_id",
-      });
+      return ignored("missing_message_identity");
     }
 
     const allowedGroupId = String(
@@ -266,17 +253,16 @@ export async function POST(req: Request) {
     );
 
     if (String(chatId) !== allowedGroupId) {
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "group_not_allowed",
-      });
+      return ignored("group_not_allowed");
     }
 
     stage = "supabase_config";
 
-    const supabaseUrl = env?.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = env?.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl =
+      env?.NEXT_PUBLIC_SUPABASE_URL;
+
+    const supabaseKey =
+      env?.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       throw new Error(
@@ -289,11 +275,11 @@ export async function POST(req: Request) {
       supabaseKey
     );
 
-    // جلوگیری اتمیک از پردازش مجدد همان شناسه پیام.
-    stage = "claim_message";
-
     claimChatId = String(chatId);
     claimMessageId = String(messageId);
+
+    // قفل اول: جلوگیری از پردازش دوباره همان شناسه پیام
+    stage = "claim_message";
 
     const { error: claimError } = await supabase
       .from("bale_processed_messages")
@@ -311,11 +297,7 @@ export async function POST(req: Request) {
         })
       );
 
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "duplicate_message",
-      });
+      return ignored("duplicate_message");
     }
 
     if (claimError) {
@@ -333,6 +315,73 @@ export async function POST(req: Request) {
     }
 
     claimCreated = true;
+
+    // پاک‌سازی درخواست‌های قدیمی؛ خطای آن مانع پاسخ‌گویی نیست
+    stage = "cleanup_old_requests";
+
+    const cleanupCutoff = new Date(
+      Date.now() - 2 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    const { error: cleanupError } = await supabase
+      .from("bale_processed_requests")
+      .delete()
+      .lt("created_at", cleanupCutoff);
+
+    if (cleanupError) {
+      console.error(
+        "[BALE_REQUEST_CLEANUP_ERROR]",
+        cleanupError
+      );
+    }
+
+    // قفل دوم: متن یکسان از همان کاربر در همان دقیقه
+    stage = "claim_request";
+
+    const minuteBucket = Math.floor(
+      Date.now() / 60_000
+    );
+
+    const senderIdentity =
+      senderId == null
+        ? "unknown-sender"
+        : String(senderId);
+
+    requestKey = await sha256(
+      [
+        claimChatId,
+        senderIdentity,
+        normalizedText.toLowerCase(),
+        String(minuteBucket),
+      ].join("|")
+    );
+
+    const { error: requestClaimError } =
+      await supabase
+        .from("bale_processed_requests")
+        .insert({
+          request_key: requestKey,
+        });
+
+    if (requestClaimError?.code === "23505") {
+      console.log(
+        "[BALE_DUPLICATE_REQUEST_IGNORED]",
+        JSON.stringify({
+          chat_id: claimChatId,
+          message_id: claimMessageId,
+        })
+      );
+
+      return ignored("duplicate_request");
+    }
+
+    if (requestClaimError) {
+      throw new Error(
+        "Could not register request for deduplication"
+      );
+    }
+
+    requestClaimCreated = true;
 
     stage = "supabase_insert";
 
@@ -353,8 +402,8 @@ export async function POST(req: Request) {
       console.error(
         "[BALE_WEBHOOK_SAVE_ERROR]",
         {
-          message: saveError.message,
           code: saveError.code ?? null,
+          message: saveError.message,
         }
       );
 
@@ -363,6 +412,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // حفظ مسیر داخلی دستیار در نسخه اصلی
     stage = "assistant_request";
 
     const assistantRequest = new Request(
@@ -431,17 +481,16 @@ export async function POST(req: Request) {
     const sendUrl =
       `https://tapi.bale.ai/bot${token}/sendMessage`;
 
-    const sendPayload: Record<string, unknown> = {
+    const sendPayload = {
       chat_id: chatId,
       text: answer.trim().slice(0, 4000),
       reply_to_message_id: messageId,
     };
 
+    // از این نقطه نتیجه ارسال ممکن است مبهم باشد؛
+    // برای جلوگیری از ارسال مجدد، قفل‌ها حفظ می‌شوند.
     stage = "bale_send_message";
-
-    // بعد از شروع ارسال، شناسه ورودی حفظ شود تا تلاش مجدد
-    // در صورت خطای مبهم، پاسخ تکراری نسازد.
-    keepClaim = true;
+    sendAttempted = true;
 
     const baleResponse = await fetch(sendUrl, {
       method: "POST",
@@ -451,7 +500,7 @@ export async function POST(req: Request) {
       body: JSON.stringify(sendPayload),
     });
 
-    const baleData = await baleResponse
+    const baleData: any = await baleResponse
       .json()
       .catch(() => null);
 
@@ -467,6 +516,7 @@ export async function POST(req: Request) {
             baleData?.error_code ?? null,
           description:
             baleData?.description ?? null,
+          message_id: claimMessageId,
         }
       );
 
@@ -484,15 +534,19 @@ export async function POST(req: Request) {
     }
 
     const sentMessageId =
-      baleData?.result?.message_id;
+      baleData?.result?.message_id ??
+      baleData?.result?.message?.message_id ??
+      baleData?.message?.message_id ??
+      null;
 
-    // ثبت شناسه پیام خروجی ربات در همان جدول برای کمک به تشخیص
-    // برگشت احتمالی پیام ارسالی به وب‌هوک.
+    // ثبت شناسه پیام خروجی ربات برای شناسایی echo احتمالی
     if (
       sentMessageId !== null &&
       sentMessageId !== undefined
     ) {
-      const { error: ownMessageError } =
+      stage = "register_outgoing_message";
+
+      const { error: outgoingError } =
         await supabase
           .from("bale_processed_messages")
           .upsert(
@@ -506,13 +560,13 @@ export async function POST(req: Request) {
             }
           );
 
-      if (ownMessageError) {
+      if (outgoingError) {
         console.error(
           "[BALE_OWN_MESSAGE_REGISTER_ERROR]",
           {
             message_id: String(sentMessageId),
-            code: ownMessageError.code ?? null,
-            message: ownMessageError.message,
+            code: outgoingError.code ?? null,
+            message: outgoingError.message,
           }
         );
       }
@@ -521,16 +575,18 @@ export async function POST(req: Request) {
     console.log(
       "[BALE_WEBHOOK_SUCCESS]",
       JSON.stringify({
-        saved_message_id:
-          savedMessage?.id ?? null,
-        sent_bale_message_id:
-          sentMessageId ?? null,
-        sent_by_bot_id:
-          baleData?.result?.from?.id ?? null,
-        sent_by_bot_is_bot:
-          baleData?.result?.from?.is_bot ?? null,
+        update_id: payload?.update_id ?? null,
+        saved_message_id: savedMessage?.id ?? null,
+        incoming_message_id: claimMessageId,
+        outgoing_message_id:
+          sentMessageId == null
+            ? null
+            : String(sentMessageId),
         chat_id: claimChatId,
-        reply_to_message_id: claimMessageId,
+        sender_id: senderId ?? null,
+        ai_used: aiData?.ai_used ?? null,
+        knowledge_match:
+          aiData?.knowledge_match ?? null,
       })
     );
 
@@ -545,7 +601,7 @@ export async function POST(req: Request) {
         null,
       chat_id: chatId,
       reply_to_message_id: messageId,
-      answer,
+      answer: answer.trim(),
       ai_used: aiData?.ai_used ?? null,
       knowledge_match:
         aiData?.knowledge_match ?? null,
@@ -562,40 +618,58 @@ export async function POST(req: Request) {
       {
         stage,
         error: errorMessage,
+        chat_id: claimChatId || null,
+        message_id: claimMessageId || null,
+        send_attempted: sendAttempted,
       }
     );
+
+    // فقط قبل از شروع ارسال، قفل‌ها آزاد می‌شوند
+    // تا خطای موقت مانع تلاش مجدد نشود.
+    if (!sendAttempted && supabase) {
+      if (requestClaimCreated && requestKey) {
+        const { error: releaseRequestError } =
+          await supabase
+            .from("bale_processed_requests")
+            .delete()
+            .eq("request_key", requestKey);
+
+        if (releaseRequestError) {
+          console.error(
+            "[BALE_REQUEST_RELEASE_ERROR]",
+            releaseRequestError
+          );
+        }
+      }
+
+      if (
+        claimCreated &&
+        claimChatId &&
+        claimMessageId
+      ) {
+        const { error: releaseMessageError } =
+          await supabase
+            .from("bale_processed_messages")
+            .delete()
+            .eq("chat_id", claimChatId)
+            .eq("message_id", claimMessageId);
+
+        if (releaseMessageError) {
+          console.error(
+            "[BALE_MESSAGE_RELEASE_ERROR]",
+            releaseMessageError
+          );
+        }
+      }
+    }
 
     return NextResponse.json(
       {
         ok: false,
         stage,
-        error: errorMessage,
+        error: "خطا در پردازش پیام",
       },
       { status: 500 }
     );
-  } finally {
-    if (
-      claimCreated &&
-      !keepClaim &&
-      supabase
-    ) {
-      try {
-        await supabase
-          .from("bale_processed_messages")
-          .delete()
-          .eq("chat_id", claimChatId)
-          .eq("message_id", claimMessageId);
-      } catch (cleanupError) {
-        console.error(
-          "[BALE_WEBHOOK_CLEANUP_ERROR]",
-          {
-            error:
-              cleanupError instanceof Error
-                ? cleanupError.message
-                : String(cleanupError),
-          }
-        );
-      }
-    }
   }
 }
