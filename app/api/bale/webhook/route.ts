@@ -1,7 +1,51 @@
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { POST as assistantPost } from "../../assistant/route";
+
+const KNOWN_BALE_BOT_ID = "502859097";
+const KNOWN_BALE_BOT_USERNAME = "mmm532bot";
+
+function normalizeUsername(value: unknown): string {
+  return String(value ?? "")
+    .replace(/^@/, "")
+    .toLowerCase();
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFC")
+    .replace(/[يى]/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/[\u200c\u200d]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isKnownBot(sender: any, configuredBotId: unknown): boolean {
+  if (!sender || typeof sender !== "object") {
+    return false;
+  }
+
+  const username = normalizeUsername(sender.username);
+  const id = sender.id;
+
+  return (
+    sender.is_bot === true ||
+    username === KNOWN_BALE_BOT_USERNAME ||
+    (
+      id != null &&
+      (
+        String(id) === KNOWN_BALE_BOT_ID ||
+        (
+          configuredBotId != null &&
+          String(id) === String(configuredBotId)
+        )
+      )
+    )
+  );
+}
 
 export async function POST(req: Request) {
   let stage = "initialize";
@@ -70,8 +114,23 @@ export async function POST(req: Request) {
       payload?.message_id ??
       null;
 
-    // گزارش تشخیصی: متن و مشخصات پیام ورودی ثبت می‌شود
-    // تا مشخص شود آیا دو پاسخ از دو پیام ورودی متفاوت ایجاد شده‌اند.
+    const senderObject =
+      message?.from ??
+      message?.sender ??
+      payload?.from ??
+      payload?.sender ??
+      {};
+
+    const replyMessage =
+      message?.reply_to_message ??
+      message?.replyToMessage ??
+      message?.reply_to ??
+      null;
+
+    const configuredBotId = (
+      env as unknown as Record<string, unknown>
+    )?.BALE_BOT_ID;
+
     console.log(
       "[BALE_INCOMING_DIAGNOSTIC]",
       JSON.stringify({
@@ -99,57 +158,73 @@ export async function POST(req: Request) {
             }
           : null,
         reply_to_message_id:
-          message?.reply_to_message?.message_id ??
-          message?.reply_to_message?.id ??
+          replyMessage?.message_id ??
+          replyMessage?.id ??
           null,
-        has_reply_to_message: Boolean(
-          message?.reply_to_message
-        ),
+        reply_from: replyMessage?.from
+          ? {
+              id: replyMessage.from.id ?? null,
+              is_bot: replyMessage.from.is_bot ?? null,
+              username: replyMessage.from.username ?? null,
+            }
+          : null,
+        reply_sender: replyMessage?.sender
+          ? {
+              id: replyMessage.sender.id ?? null,
+              is_bot: replyMessage.sender.is_bot ?? null,
+              username: replyMessage.sender.username ?? null,
+            }
+          : null,
+        has_reply_to_message: Boolean(replyMessage),
       })
     );
 
-    const senderObject =
-      message?.from ??
-      message?.sender ??
-      payload?.sender ??
-      {};
-
-    const sender =
-      senderObject?.first_name ??
-      senderObject?.name ??
-      senderObject?.username ??
-      null;
-
-    // پیام‌های ربات‌ها، از جمله خود این ربات، پردازش نشوند.
-    const senderUsername = String(
-      senderObject?.username ?? ""
-    )
-      .replace(/^@/, "")
-      .toLowerCase();
-
-    const senderId = senderObject?.id;
-
-    const configuredBotId = (
-      env as unknown as Record<string, unknown>
-    )?.BALE_BOT_ID;
-
-    const isBot =
-      message?.from?.is_bot === true ||
-      message?.sender?.is_bot === true ||
-      payload?.from?.is_bot === true ||
-      senderObject?.is_bot === true ||
-      senderUsername === "mmm532bot" ||
-      (
-        configuredBotId &&
-        senderId != null &&
-        String(senderId) === String(configuredBotId)
+    // فیلتر اصلی: پیام‌های خود ربات قبل از فراخوانی دستیار متوقف شوند.
+    if (isKnownBot(senderObject, configuredBotId)) {
+      console.log(
+        "[BALE_BOT_MESSAGE_IGNORED]",
+        JSON.stringify({
+          message_id: messageId ?? null,
+          chat_id: chatId ?? null,
+        })
       );
 
-    if (isBot) {
       return NextResponse.json({
         ok: true,
         ignored: true,
         reason: "bot_message",
+      });
+    }
+
+    // اگر پیام ریپلای به یکی از پیام‌های خود ربات باشد، پاسخ تازه نساز.
+    const replySenderCandidates = [
+      replyMessage?.from,
+      replyMessage?.sender,
+      replyMessage?.author,
+      replyMessage?.sender_chat,
+    ].filter(Boolean);
+
+    if (
+      replySenderCandidates.some((replySender: any) =>
+        isKnownBot(replySender, configuredBotId)
+      )
+    ) {
+      console.log(
+        "[BALE_REPLY_TO_BOT_IGNORED]",
+        JSON.stringify({
+          message_id: messageId ?? null,
+          chat_id: chatId ?? null,
+          reply_to_message_id:
+            replyMessage?.message_id ??
+            replyMessage?.id ??
+            null,
+        })
+      );
+
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "reply_to_bot_message",
       });
     }
 
@@ -161,15 +236,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // فقط پیام‌هایی که عبارت «مدیر هوشمند» دارند.
-    // تفاوت حروف عربی/فارسی و فاصله‌ها نادیده گرفته می‌شود.
-    const normalizedText = text
-      .normalize("NFC")
-      .replace(/[يى]/g, "ی")
-      .replace(/ك/g, "ک")
-      .replace(/[\u200c\u200d]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    // فقط پیام انسانی که عبارت «مدیر هوشمند» را دارد.
+    const normalizedText = normalizeText(text);
 
     if (!/مدیر\s*هوشمند/u.test(normalizedText)) {
       return NextResponse.json({
@@ -221,7 +289,7 @@ export async function POST(req: Request) {
       supabaseKey
     );
 
-    // ثبت اتمیک شناسه پیام؛ قید UNIQUE مانع پردازش تکراری می‌شود.
+    // جلوگیری اتمیک از پردازش مجدد همان شناسه پیام.
     stage = "claim_message";
 
     claimChatId = String(chatId);
@@ -295,7 +363,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // فراخوانی مستقیم؛ از self-fetch به Worker استفاده نمی‌شود.
     stage = "assistant_request";
 
     const assistantRequest = new Request(
@@ -372,8 +439,8 @@ export async function POST(req: Request) {
 
     stage = "bale_send_message";
 
-    // از این نقطه به بعد شناسه نگه داشته می‌شود تا در خطاهای
-    // مبهم شبکه، ارسال مجدد باعث پاسخ تکراری نشود.
+    // بعد از شروع ارسال، شناسه ورودی حفظ شود تا تلاش مجدد
+    // در صورت خطای مبهم، پاسخ تکراری نسازد.
     keepClaim = true;
 
     const baleResponse = await fetch(sendUrl, {
@@ -416,13 +483,48 @@ export async function POST(req: Request) {
       );
     }
 
+    const sentMessageId =
+      baleData?.result?.message_id;
+
+    // ثبت شناسه پیام خروجی ربات در همان جدول برای کمک به تشخیص
+    // برگشت احتمالی پیام ارسالی به وب‌هوک.
+    if (
+      sentMessageId !== null &&
+      sentMessageId !== undefined
+    ) {
+      const { error: ownMessageError } =
+        await supabase
+          .from("bale_processed_messages")
+          .upsert(
+            {
+              chat_id: claimChatId,
+              message_id: String(sentMessageId),
+            },
+            {
+              onConflict: "chat_id,message_id",
+              ignoreDuplicates: true,
+            }
+          );
+
+      if (ownMessageError) {
+        console.error(
+          "[BALE_OWN_MESSAGE_REGISTER_ERROR]",
+          {
+            message_id: String(sentMessageId),
+            code: ownMessageError.code ?? null,
+            message: ownMessageError.message,
+          }
+        );
+      }
+    }
+
     console.log(
       "[BALE_WEBHOOK_SUCCESS]",
       JSON.stringify({
         saved_message_id:
           savedMessage?.id ?? null,
         sent_bale_message_id:
-          baleData?.result?.message_id ?? null,
+          sentMessageId ?? null,
         sent_by_bot_id:
           baleData?.result?.from?.id ?? null,
         sent_by_bot_is_bot:
@@ -436,7 +538,11 @@ export async function POST(req: Request) {
       ok: true,
       received: true,
       message_id: savedMessage?.id ?? null,
-      sender,
+      sender:
+        senderObject?.first_name ??
+        senderObject?.name ??
+        senderObject?.username ??
+        null,
       chat_id: chatId,
       reply_to_message_id: messageId,
       answer,
@@ -468,8 +574,6 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   } finally {
-    // اگر ارسال پاسخ شروع نشده باشد، اجازه پردازش مجدد بده.
-    // پس از شروع ارسال، شناسه حفظ می‌شود تا پاسخ تکراری نسازیم.
     if (
       claimCreated &&
       !keepClaim &&
@@ -494,4 +598,4 @@ export async function POST(req: Request) {
       }
     }
   }
-  }
+}
