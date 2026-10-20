@@ -460,7 +460,7 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
             content: question,
           },
         ],
-        max_tokens: 800,
+        max_tokens: 1500,
         temperature: 0.2,
       });
     } catch (error) {
