@@ -162,24 +162,30 @@ export async function POST(req: Request) {
     )?.BALE_BOT_ID;
 
     console.log(
-      "[BALE_INCOMING_DIAGNOSTIC]",
-      JSON.stringify({
-        update_id: payload?.update_id ?? null,
-        message_id: messageId ?? null,
-        chat_id: chatId ?? null,
-        text:
-          typeof text === "string"
-            ? text.slice(0, 200)
-            : null,
-        sender_id: senderId ?? null,
-        sender_username:
-          senderObject?.username ??
-          senderObject?.user_name ??
-          null,
-        sender_is_bot:
-          senderObject?.is_bot ?? null,
-      })
-    );
+  "[BALE_INCOMING_DIAGNOSTIC]",
+  JSON.stringify({
+    update_id: payload?.update_id ?? null,
+    message_id: messageId ?? null,
+    chat_id: chatId ?? null,
+    text:
+      typeof text === "string"
+        ? text.slice(0, 200)
+        : null,
+    sender_id: senderId ?? null,
+    sender_username:
+      senderObject?.username ??
+      senderObject?.user_name ??
+      null,
+    sender_is_bot:
+      senderObject?.is_bot ?? null,
+    message_date: message?.date ?? null,
+    reply_to_message_id:
+      message?.reply_to_message?.message_id ??
+      message?.reply_to_message?.id ??
+      message?.reply_to_message_id ??
+      null,
+  })
+);
 
     // پیام خود ربات یا ربات شناخته‌شده نباید پردازش شود.
     if (isKnownBot(senderObject, configuredBotId)) {
