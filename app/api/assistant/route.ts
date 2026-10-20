@@ -475,9 +475,18 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
         },
         { status: 502 }
       );
-    } finally {
+        } finally {
       aiMs = Date.now() - aiStartedAt;
     }
+
+    console.log(
+      "[WORKERS_AI_FINISH]",
+      JSON.stringify({
+        finish_reason:
+          result?.choices?.[0]?.finish_reason ?? null,
+        usage: result?.usage ?? null,
+      })
+    );
 
     const answer = extractAnswer(result);
 
