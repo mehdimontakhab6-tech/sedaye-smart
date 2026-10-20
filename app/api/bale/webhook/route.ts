@@ -518,7 +518,27 @@ export async function POST(req: Request) {
     const baleData: any = await baleResponse
       .json()
       .catch(() => null);
-
+console.log(
+  "[BALE_REPLY_TARGET_DIAGNOSTIC]",
+  JSON.stringify({
+    incoming_message_id: claimMessageId,
+    requested_reply_to_message_id: String(messageId),
+    outgoing_message_id:
+      baleData?.result?.message_id ??
+      baleData?.result?.message?.message_id ??
+      baleData?.message?.message_id ??
+      null,
+    api_ok: baleData?.ok ?? false,
+    api_error_code: baleData?.error_code ?? null,
+    api_description: baleData?.description ?? null,
+    returned_reply_to_message_id:
+      baleData?.result?.reply_to_message?.message_id ??
+      baleData?.result?.reply_to_message?.id ??
+      baleData?.result?.message?.reply_to_message?.message_id ??
+      null,
+  })
+);
+    
     if (
       !baleResponse.ok ||
       baleData?.ok !== true
