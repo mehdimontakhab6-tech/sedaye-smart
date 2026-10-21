@@ -610,7 +610,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           question: text.trim(),
-          stream: true,
+          stream: false,
         }),
       }
     );
