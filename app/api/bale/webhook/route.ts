@@ -609,8 +609,9 @@ export async function POST(req: Request) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          question: text.trim(),
-          stream: false,
+        question: text.trim(),
+stream: true,
+          
         }),
       }
     );
