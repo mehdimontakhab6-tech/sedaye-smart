@@ -826,11 +826,23 @@ stream: true,
         }
       );
 
-      if (!answer) {
-        throw new Error(
-          "مدل پاسخ متنی تولید نکرد."
-        );
-      }
+      
+if (!answer) {
+  console.error(
+    "[BALE_EMPTY_ASSISTANT_STREAM]",
+    JSON.stringify({
+      status: aiResponse.status,
+      content_type: contentType,
+      body_used: aiResponse.bodyUsed,
+      request_message_id: claimMessageId,
+      answer_length: answer.length,
+    })
+  );
+
+  throw new Error(
+    "مدل پاسخ متنی تولید نکرد."
+  );
+}
 
       // ویرایش نهایی برای اطمینان از نمایش پاسخ کامل.
       stage = "bale_finalize_stream";
