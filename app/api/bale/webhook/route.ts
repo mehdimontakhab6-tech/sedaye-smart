@@ -125,12 +125,28 @@ async function readAssistantStream(
 
     let parsed: any;
 
-    try {
-      parsed = JSON.parse(data);
-    } catch {
-      // ممکن است خط، رویداد ناقص یا غیر JSON باشد.
-      return;
-    }
+try {
+  parsed = JSON.parse(data);
+} catch {
+  console.log(
+    "[BALE_SSE_NON_JSON]",
+    data.slice(0, 300)
+  );
+  return;
+}
+
+if (answer.length === 0) {
+  console.log(
+    "[BALE_SSE_FIRST_EVENT]",
+    JSON.stringify({
+      keys:
+        parsed && typeof parsed === "object"
+          ? Object.keys(parsed)
+          : [],
+      event: JSON.stringify(parsed).slice(0, 1000),
+    })
+  );
+}
 
     if (
       parsed?.error ||
