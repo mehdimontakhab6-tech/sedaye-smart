@@ -632,16 +632,53 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
       aiMs = Date.now() - aiStartedAt;
     }
 
-    console.log(
-      "[WORKERS_AI_FINISH]",
-      JSON.stringify({
-        finish_reason:
-          result?.choices?.[0]?.finish_reason ?? null,
-        usage: result?.usage ?? null,
-      })
-    );
+    
+console.log(
+  "[WORKERS_AI_FINISH]",
+  JSON.stringify({
+    result_type: typeof result,
+    result_is_null: result == null,
+    result_keys:
+      result && typeof result === "object"
+        ? Object.keys(result)
+        : [],
+    choices_type: typeof result?.choices,
+    choices_is_array: Array.isArray(result?.choices),
+    choices_length: Array.isArray(result?.choices)
+      ? result.choices.length
+      : null,
+    first_choice_keys:
+      result?.choices?.[0] &&
+      typeof result.choices[0] === "object"
+        ? Object.keys(result.choices[0])
+        : [],
+    message_keys:
+      result?.choices?.[0]?.message &&
+      typeof result.choices[0].message === "object"
+        ? Object.keys(result.choices[0].message)
+        : [],
+    content_type: typeof result?.choices?.[0]?.message?.content,
+    content_length:
+      typeof result?.choices?.[0]?.message?.content === "string"
+        ? result.choices[0].message.content.length
+        : null,
+    response_type: typeof result?.response,
+    response_length:
+      typeof result?.response === "string"
+        ? result.response.length
+        : null,
+    text_type: typeof result?.text,
+    text_length:
+      typeof result?.text === "string"
+        ? result.text.length
+        : null,
+    finish_reason:
+      result?.choices?.[0]?.finish_reason ?? null,
+    usage: result?.usage ?? null,
+  })
+);
 
-    const answer = extractAnswer(result);
+const answer = extractAnswer(result);
 
     if (!answer) {
       return jsonResponse(
