@@ -17,9 +17,6 @@ type RankedKnowledge = {
 
 const MODEL = "@cf/google/gemma-4-26b-a4b-it";
 
-// برای پاسخ‌های عمومی، بانک دانش را بی‌دلیل بارگذاری نمی‌کنیم.
-// این فهرست فقط مسیر جست‌وجوی دانش را انتخاب می‌کند؛
-// خود پاسخ را در همه موارد هوش مصنوعی تولید می‌کند.
 const ORGANIZATION_TERMS = [
   "ثبت احوال",
   "کارمند",
@@ -115,8 +112,6 @@ function getImportantWords(text: string): string[] {
   ];
 }
 
-// این تابع پاسخ تولید نمی‌کند؛ فقط مشخص می‌کند
-// آیا جست‌وجو در بانک دانش سازمانی ارزش انجام دارد یا خیر.
 function needsOrganizationKnowledge(question: string): boolean {
   const normalized = normalizeText(question);
 
@@ -125,8 +120,6 @@ function needsOrganizationKnowledge(question: string): boolean {
   );
 }
 
-// اطلاعات زمان را به مدل می‌دهیم تا خودش پاسخ را بنویسد.
-// این تابع پاسخ نهایی به کاربر تولید نمی‌کند.
 function getCurrentTimeContext(): string {
   const now = new Date();
 
@@ -274,6 +267,98 @@ function isRelevantMatch(
   return match.matchedWords >= 2 && match.score >= 0.65;
 }
 
+/**
+ * اگر Workers AI یک ReadableStream برگرداند، همان استریم
+ * را بدون بافرکردن کل پاسخ به فراخواننده منتقل می‌کنیم.
+ *
+ * اگر خروجی مدل استریم نبود، آن را به یک رویداد SSE تبدیل
+ * می‌کنیم تا مصرف‌کننده بتواند همان قالب را پردازش کند.
+ */
+function createStreamingResponse(
+  modelResult: any,
+  onComplete: () => void
+): Response {
+  const headers = {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "X-Accel-Buffering": "no",
+  };
+
+  if (
+    modelResult &&
+    typeof modelResult.getReader === "function"
+  ) {
+    const sourceReader = modelResult.getReader();
+
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          const { done, value } = await sourceReader.read();
+
+          if (done) {
+            onComplete();
+            controller.close();
+            return;
+          }
+
+          controller.enqueue(value);
+        } catch (error) {
+          console.error("AI STREAM READ ERROR:", error);
+          onComplete();
+          controller.error(error);
+        }
+      },
+
+      async cancel(reason) {
+        try {
+          await sourceReader.cancel(reason);
+        } catch (error) {
+          console.error("AI STREAM CANCEL ERROR:", error);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      status: 200,
+      headers,
+    });
+  }
+
+  const answer = fixAssistantName(extractAnswer(modelResult));
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (answer) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ response: answer })}\n\n`
+          )
+        );
+      } else {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              ok: false,
+              error: "پاسخ معتبری تولید نشد.",
+            })}\n\n`
+          )
+        );
+      }
+
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      onComplete();
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers,
+  });
+}
+
 export async function POST(request: Request) {
   const startedAt = Date.now();
 
@@ -292,6 +377,10 @@ export async function POST(request: Request) {
       typeof body?.question === "string"
         ? body.question.trim()
         : "";
+
+    // فقط درخواست‌هایی که صریحاً stream:true دارند
+    // وارد مسیر استریم می‌شوند.
+    const streamingRequested = body?.stream === true;
 
     if (!question) {
       return jsonResponse(
@@ -321,7 +410,8 @@ export async function POST(request: Request) {
       return jsonResponse(
         {
           ok: false,
-          answer: "سرویس هوش مصنوعی در دسترس نیست. لطفاً کمی بعد تلاش کنید.",
+          answer:
+            "سرویس هوش مصنوعی در دسترس نیست. لطفاً کمی بعد تلاش کنید.",
           source: "ai-unavailable",
           ai_used: false,
         },
@@ -341,8 +431,7 @@ export async function POST(request: Request) {
 
     let relevantItems: RankedKnowledge[] = [];
 
-    // برای پرسش عمومی، زمان و هزینه دریافت بانک دانش صرف نمی‌شود.
-    // برای پرسش سازمانی، دانش تأییدشده به مدل ارائه می‌شود.
+    // رفتار بانک دانش بدون تغییر حفظ شده است.
     if (needsKnowledge && supabaseUrl && serviceRoleKey) {
       const knowledgeStartedAt = Date.now();
 
@@ -371,7 +460,6 @@ export async function POST(request: Request) {
 
     const currentTimeContext = getCurrentTimeContext();
 
-    // فقط منابع مرتبط، با محدودیت طول، به مدل فرستاده می‌شوند.
     const context = relevantItems
       .map(({ item }, index) => {
         const title = (item.title || "").slice(0, 250);
@@ -443,23 +531,87 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
 گرفته‌ای مگر واقعاً در ورودی درخواست موجود باشد.
 `;
 
-    let result: any;
+    const messages = [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
+        role: "user",
+        content: question,
+      },
+    ];
+
     aiUsed = true;
 
     const aiStartedAt = Date.now();
 
+    // مسیر جدید: استریم واقعی فقط در صورت درخواست صریح.
+    if (streamingRequested) {
+      let streamResult: any;
+
+      try {
+        streamResult = await ai.run(MODEL, {
+          messages,
+          max_tokens: 1500,
+          temperature: 0.2,
+          stream: true,
+        });
+      } catch (error) {
+        console.error("WORKERS AI STREAM ERROR:", error);
+
+        return jsonResponse(
+          {
+            ok: false,
+            answer:
+              "تولید پاسخ با خطا مواجه شد. لطفاً کمی بعد دوباره تلاش کنید.",
+            source: "ai-error",
+            ai_used: false,
+          },
+          { status: 502 }
+        );
+      }
+
+      aiMs = Date.now() - aiStartedAt;
+
+      console.log(
+        JSON.stringify({
+          event: "ASSISTANT_STREAM_STARTED",
+          request_type: requestType,
+          knowledge_ms: knowledgeMs,
+          ai_start_ms: aiMs,
+          knowledge_count: knowledgeCount,
+          knowledge_match: knowledgeMatch,
+          supabase_connected: knowledgeAvailable,
+          ai_used: aiUsed,
+          model: MODEL,
+        })
+      );
+
+      return createStreamingResponse(streamResult, () => {
+        console.log(
+          JSON.stringify({
+            event: "ASSISTANT_STREAM_FINISHED",
+            request_type: requestType,
+            knowledge_ms: knowledgeMs,
+            ai_start_ms: aiMs,
+            total_ms: Date.now() - startedAt,
+            knowledge_count: knowledgeCount,
+            knowledge_match: knowledgeMatch,
+            supabase_connected: knowledgeAvailable,
+            ai_used: aiUsed,
+            model: MODEL,
+          })
+        );
+      });
+    }
+
+    // مسیر قدیمی: پاسخ JSON برای تمام درخواست‌های عادی.
+    let result: any;
+
     try {
       result = await ai.run(MODEL, {
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: question,
-          },
-        ],
+        messages,
         max_tokens: 1500,
         temperature: 0.2,
       });
@@ -469,13 +621,14 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
       return jsonResponse(
         {
           ok: false,
-          answer: "تولید پاسخ با خطا مواجه شد. لطفاً کمی بعد دوباره تلاش کنید.",
+          answer:
+            "تولید پاسخ با خطا مواجه شد. لطفاً کمی بعد دوباره تلاش کنید.",
           source: "ai-error",
           ai_used: false,
         },
         { status: 502 }
       );
-        } finally {
+    } finally {
       aiMs = Date.now() - aiStartedAt;
     }
 
@@ -494,7 +647,8 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
       return jsonResponse(
         {
           ok: false,
-          answer: "پاسخ معتبری تولید نشد. لطفاً پرسش را واضح‌تر بیان کنید.",
+          answer:
+            "پاسخ معتبری تولید نشد. لطفاً پرسش را واضح‌تر بیان کنید.",
           source: "ai-empty",
           ai_used: true,
         },
@@ -540,7 +694,8 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
     return jsonResponse(
       {
         ok: false,
-        answer: "خطا در ارتباط با مدیر هوشمند. لطفاً کمی بعد دوباره تلاش کنید.",
+        answer:
+          "خطا در ارتباط با مدیر هوشمند. لطفاً کمی بعد دوباره تلاش کنید.",
         source: "assistant-error",
       },
       { status: 500 }
