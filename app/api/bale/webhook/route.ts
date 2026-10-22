@@ -77,18 +77,29 @@ function extractStreamText(item: any): string {
     return item.response;
   }
 
-  if (typeof item?.choices?.[0]?.delta?.content === "string") {
-    return item.choices[0].delta.content;
+  const choice = item?.choices?.[0];
+
+  if (typeof choice?.delta?.content === "string") {
+    return choice.delta.content;
   }
 
-  if (typeof item?.choices?.[0]?.message?.content === "string") {
-    return item.choices[0].message.content;
+  if (Array.isArray(choice?.delta?.content)) {
+    return choice.delta.content
+      .map((part: any) =>
+        typeof part?.text === "string" ? part.text : ""
+      )
+      .join("");
+  }
+
+  if (typeof choice?.message?.content === "string") {
+    return choice.message.content;
   }
 
   if (typeof item?.text === "string") {
     return item.text;
   }
 
+  // reasoning_content عمداً پاسخ کاربر محسوب نمی‌شود.
   return "";
 }
 
@@ -109,6 +120,8 @@ async function readAssistantStream(
 
   let buffer = "";
   let answer = "";
+  let firstEventLogged = false;
+  let contentEventCount = 0;
 
   async function processLine(line: string): Promise<void> {
     const trimmed = line.trim();
@@ -125,37 +138,76 @@ async function readAssistantStream(
 
     let parsed: any;
 
-try {
-  parsed = JSON.parse(data);
-} catch {
-  console.log(
-    "[BALE_SSE_NON_JSON]",
-    data.slice(0, 300)
-  );
-  return;
-}
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      console.warn(
+        "[BALE_SSE_NON_JSON]",
+        data.slice(0, 150)
+      );
+      return;
+    }
 
-if (answer.length === 0) {
-  console.log(
-    "[BALE_SSE_FIRST_EVENT]",
-    JSON.stringify({
-      keys:
-        parsed && typeof parsed === "object"
-          ? Object.keys(parsed)
-          : [],
-      event: JSON.stringify(parsed).slice(0, 1000),
-    })
-  );
-}
+    if (!firstEventLogged) {
+      firstEventLogged = true;
 
-    if (
-      parsed?.error ||
-      parsed?.ok === false
-    ) {
+      const delta = parsed?.choices?.[0]?.delta;
+
+      console.log(
+        "[BALE_SSE_FIRST_EVENT]",
+        JSON.stringify({
+          keys:
+            parsed && typeof parsed === "object"
+              ? Object.keys(parsed)
+              : [],
+          delta_keys:
+            delta && typeof delta === "object"
+              ? Object.keys(delta)
+              : [],
+          has_content:
+            typeof delta?.content === "string",
+          has_reasoning_content:
+            typeof delta?.reasoning_content === "string",
+          response_type: typeof parsed?.response,
+          text_type: typeof parsed?.text,
+        })
+      );
+    }
+
+    if (parsed?.error || parsed?.ok === false) {
       throw new Error(
         typeof parsed?.error === "string"
           ? parsed.error
-          : "مدل در حین تولید پاسخ خطا برگرداند."
+          : "مدل هنگام تولید پاسخ خطا برگرداند."
+      );
+    }
+
+    const choice = parsed?.choices?.[0];
+
+    if (
+      choice?.delta &&
+      (
+        choice.delta.content !== undefined ||
+        choice.finish_reason !== undefined
+      )
+    ) {
+      contentEventCount++;
+
+      console.log(
+        "[BALE_SSE_CONTENT_EVENT]",
+        JSON.stringify({
+          delta_keys:
+            typeof choice.delta === "object"
+              ? Object.keys(choice.delta)
+              : [],
+          has_content:
+            typeof choice.delta.content === "string",
+          content_length:
+            typeof choice.delta.content === "string"
+              ? choice.delta.content.length
+              : 0,
+          finish_reason: choice.finish_reason ?? null,
+        })
       );
     }
 
@@ -192,6 +244,14 @@ if (answer.length === 0) {
     if (buffer.trim()) {
       await processLine(buffer);
     }
+
+    console.log(
+      "[BALE_SSE_STREAM_SUMMARY]",
+      JSON.stringify({
+        answer_length: answer.length,
+        content_event_count: contentEventCount,
+      })
+    );
 
     return answer.trim();
   } finally {
