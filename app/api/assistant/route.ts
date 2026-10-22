@@ -267,13 +267,6 @@ function isRelevantMatch(
   return match.matchedWords >= 2 && match.score >= 0.65;
 }
 
-/**
- * اگر Workers AI یک ReadableStream برگرداند، همان استریم
- * را بدون بافرکردن کل پاسخ به فراخواننده منتقل می‌کنیم.
- *
- * اگر خروجی مدل استریم نبود، آن را به یک رویداد SSE تبدیل
- * می‌کنیم تا مصرف‌کننده بتواند همان قالب را پردازش کند.
- */
 function createStreamingResponse(
   modelResult: any,
   onComplete: () => void
@@ -325,7 +318,6 @@ function createStreamingResponse(
   }
 
   const answer = fixAssistantName(extractAnswer(modelResult));
-
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
@@ -378,8 +370,6 @@ export async function POST(request: Request) {
         ? body.question.trim()
         : "";
 
-    // فقط درخواست‌هایی که صریحاً stream:true دارند
-    // وارد مسیر استریم می‌شوند.
     const streamingRequested = body?.stream === true;
 
     if (!question) {
@@ -431,7 +421,6 @@ export async function POST(request: Request) {
 
     let relevantItems: RankedKnowledge[] = [];
 
-    // رفتار بانک دانش بدون تغییر حفظ شده است.
     if (needsKnowledge && supabaseUrl && serviceRoleKey) {
       const knowledgeStartedAt = Date.now();
 
@@ -546,7 +535,8 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
 
     const aiStartedAt = Date.now();
 
-    // مسیر جدید: استریم واقعی فقط در صورت درخواست صریح.
+    // مسیر جریانی: تفکر داخلی مدل غیرفعال است
+    // تا مدل متن پاسخ نهایی را تولید کند.
     if (streamingRequested) {
       let streamResult: any;
 
@@ -556,6 +546,9 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
           max_tokens: 1500,
           temperature: 0.2,
           stream: true,
+          chat_template_kwargs: {
+            enable_thinking: false,
+          },
         });
       } catch (error) {
         console.error("WORKERS AI STREAM ERROR:", error);
@@ -585,6 +578,7 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
           supabase_connected: knowledgeAvailable,
           ai_used: aiUsed,
           model: MODEL,
+          thinking_enabled: false,
         })
       );
 
@@ -601,12 +595,13 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
             supabase_connected: knowledgeAvailable,
             ai_used: aiUsed,
             model: MODEL,
+            thinking_enabled: false,
           })
         );
       });
     }
 
-    // مسیر قدیمی: پاسخ JSON برای تمام درخواست‌های عادی.
+    // مسیر غیرجریانی: همان تنظیم برای تولید پاسخ نهایی.
     let result: any;
 
     try {
@@ -614,6 +609,9 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
         messages,
         max_tokens: 1500,
         temperature: 0.2,
+        chat_template_kwargs: {
+          enable_thinking: false,
+        },
       });
     } catch (error) {
       console.error("WORKERS AI ERROR:", error);
@@ -632,53 +630,53 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
       aiMs = Date.now() - aiStartedAt;
     }
 
-    
-console.log(
-  "[WORKERS_AI_FINISH]",
-  JSON.stringify({
-    result_type: typeof result,
-    result_is_null: result == null,
-    result_keys:
-      result && typeof result === "object"
-        ? Object.keys(result)
-        : [],
-    choices_type: typeof result?.choices,
-    choices_is_array: Array.isArray(result?.choices),
-    choices_length: Array.isArray(result?.choices)
-      ? result.choices.length
-      : null,
-    first_choice_keys:
-      result?.choices?.[0] &&
-      typeof result.choices[0] === "object"
-        ? Object.keys(result.choices[0])
-        : [],
-    message_keys:
-      result?.choices?.[0]?.message &&
-      typeof result.choices[0].message === "object"
-        ? Object.keys(result.choices[0].message)
-        : [],
-    content_type: typeof result?.choices?.[0]?.message?.content,
-    content_length:
-      typeof result?.choices?.[0]?.message?.content === "string"
-        ? result.choices[0].message.content.length
-        : null,
-    response_type: typeof result?.response,
-    response_length:
-      typeof result?.response === "string"
-        ? result.response.length
-        : null,
-    text_type: typeof result?.text,
-    text_length:
-      typeof result?.text === "string"
-        ? result.text.length
-        : null,
-    finish_reason:
-      result?.choices?.[0]?.finish_reason ?? null,
-    usage: result?.usage ?? null,
-  })
-);
+    console.log(
+      "[WORKERS_AI_FINISH]",
+      JSON.stringify({
+        result_type: typeof result,
+        result_is_null: result == null,
+        result_keys:
+          result && typeof result === "object"
+            ? Object.keys(result)
+            : [],
+        choices_type: typeof result?.choices,
+        choices_is_array: Array.isArray(result?.choices),
+        choices_length: Array.isArray(result?.choices)
+          ? result.choices.length
+          : null,
+        first_choice_keys:
+          result?.choices?.[0] &&
+          typeof result.choices[0] === "object"
+            ? Object.keys(result.choices[0])
+            : [],
+        message_keys:
+          result?.choices?.[0]?.message &&
+          typeof result.choices[0].message === "object"
+            ? Object.keys(result.choices[0].message)
+            : [],
+        content_type: typeof result?.choices?.[0]?.message?.content,
+        content_length:
+          typeof result?.choices?.[0]?.message?.content === "string"
+            ? result.choices[0].message.content.length
+            : null,
+        response_type: typeof result?.response,
+        response_length:
+          typeof result?.response === "string"
+            ? result.response.length
+            : null,
+        text_type: typeof result?.text,
+        text_length:
+          typeof result?.text === "string"
+            ? result.text.length
+            : null,
+        finish_reason:
+          result?.choices?.[0]?.finish_reason ?? null,
+        usage: result?.usage ?? null,
+        thinking_enabled: false,
+      })
+    );
 
-const answer = extractAnswer(result);
+    const answer = extractAnswer(result);
 
     if (!answer) {
       return jsonResponse(
@@ -705,6 +703,7 @@ const answer = extractAnswer(result);
         supabase_connected: knowledgeAvailable,
         ai_used: aiUsed,
         model: MODEL,
+        thinking_enabled: false,
       })
     );
 
