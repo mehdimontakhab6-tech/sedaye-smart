@@ -543,7 +543,7 @@ ${context || "منبع مرتبطی از بانک دانش ارائه نشده �
       try {
         streamResult = await ai.run(MODEL, {
           messages,
-          max_tokens: 1500,
+          max_tokens: 3000,
           temperature: 0.2,
           stream: true,
           chat_template_kwargs: {
