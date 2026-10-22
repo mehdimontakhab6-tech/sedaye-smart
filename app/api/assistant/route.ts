@@ -979,6 +979,62 @@ export async function POST(request: Request) {
 
     const webContext = formatWebSources(webResults);
 
+    // جلوگیری از ادعای جزئیات بخشنامه بدون دسترسی به
+    // محتوای صفحه‌ای از یک دامنه رسمی شناخته‌شده.
+    const readableOfficialPages = webResults.filter(
+      (item) => item.official && Boolean(item.pageContent)
+    );
+
+    if (
+      officialDocumentQuestion &&
+      readableOfficialPages.length === 0
+    ) {
+      const sourceLinks = webResults.length
+        ? "\n\nگزارش‌های پیدا‌شده (صرفاً برای پیگیری، نه تأیید مفاد بخشنامه):\n" +
+          webResults
+            .slice(0, 3)
+            .map(
+              (item) => `- [${item.title}](${item.url})`
+            )
+            .join("\n")
+        : "";
+
+      const safeAnswer =
+        "در جست‌وجوی فعلی نتوانستم متن قابل‌بررسی یک صفحه از منبع رسمی درباره این بخشنامه دریافت کنم. " +
+        "بنابراین شماره، تاریخ ابلاغ، تعداد روزهای دورکاری و لازم‌الاجرا بودن آن را تأیید نمی‌کنم. " +
+        "این نتیجه به معنی نبودن یا ابلاغ‌نشدن بخشنامه نیست." +
+        sourceLinks;
+
+      if (streamingRequested) {
+        return createStreamingResponse(
+          { response: safeAnswer },
+          () => {
+            console.log(
+              JSON.stringify({
+                event: "OFFICIAL_DOCUMENT_UNVERIFIED",
+                request_type: requestType,
+                web_results_count: webResults.length,
+                official_results_found: officialResultsFound,
+                total_ms: Date.now() - startedAt,
+              })
+            );
+          }
+        );
+      }
+
+      return jsonResponse({
+        ok: true,
+        answer: safeAnswer,
+        source: "official-document-unverified",
+        request_type: requestType,
+        web_search_attempted: webSearchAttempted,
+        web_results_count: webResults.length,
+        official_results_found: officialResultsFound,
+        web_search_error: webSearchError,
+        ai_used: false,
+      });
+    }
+
     let knowledgeStatus: string;
 
     if (!needsKnowledge) {
