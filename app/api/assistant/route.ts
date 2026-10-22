@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -218,7 +217,7 @@ function needsOrganizationKnowledge(question: string): boolean {
 }
 
 /**
- * تشخیص جداگانه پرسش‌هایی که برای پاسخ معتبر به سند
+ * تشخیص پرسش‌هایی که برای پاسخ معتبر به سند
  * یا وضعیت رسمی و به‌روز نیاز دارند.
  */
 function needsOfficialDocumentSearch(question: string): boolean {
@@ -258,8 +257,10 @@ function needsOfficialDocumentSearch(question: string): boolean {
     "لازم الاجرا",
   ].some((term) => q.includes(normalizeText(term)));
 
-  return terms.some((term) => q.includes(normalizeText(term))) ||
-    asksForCurrentStatus;
+  return (
+    terms.some((term) => q.includes(normalizeText(term))) ||
+    asksForCurrentStatus
+  );
 }
 
 function getCurrentTimeContext(): string {
@@ -317,7 +318,10 @@ function extractAnswer(result: any): string {
     if (text) return text;
   }
 
-  if (typeof result?.response === "string" && result.response.trim()) {
+  if (
+    typeof result?.response === "string" &&
+    result.response.trim()
+  ) {
     return result.response.trim();
   }
 
@@ -344,8 +348,7 @@ function isOfficialDomain(url: string): boolean {
 
 /**
  * متن صفحه را فقط برای URLهای رسمی شناخته‌شده دریافت می‌کند.
- * شکست دریافت صفحه به‌معنی نامعتبر بودن سند نیست؛ فقط یعنی
- * محتوای کامل صفحه در دسترس قرار نگرفته است.
+ * شکست دریافت صفحه به معنی نامعتبر بودن سند نیست.
  */
 async function fetchOfficialPage(
   url: string
@@ -526,9 +529,9 @@ async function runTavilySearch(
 }
 
 /**
- * برای پرسش عمومی یک جست‌وجو انجام می‌شود.
- * برای پرسش درباره اسناد رسمی ابتدا دامنه‌های رسمی بررسی می‌شوند.
- * فقط در صورت نبود نتیجه رسمی، جست‌وجوی عمومی انجام می‌شود.
+ * ابتدا دامنه‌های رسمی بررسی می‌شوند.
+ * اگر صفحه‌های رسمی قابل خواندن نباشند، جست‌وجوی عمومی هم اجرا می‌شود.
+ * شکست جست‌وجوی رسمی مانع تولید پاسخ هوش مصنوعی نمی‌شود.
  */
 async function searchWeb(
   question: string,
@@ -540,7 +543,9 @@ async function searchWeb(
 
     return {
       ...general,
-      officialResultsFound: false,
+      officialResultsFound: general.results.some(
+        (item) => item.official
+      ),
       fallbackUsed: false,
     };
   }
@@ -556,7 +561,6 @@ async function searchWeb(
   );
 
   if (officialResults.length > 0) {
-    // صفحه‌های رسمی را هم در صورت امکان مستقیماً می‌خوانیم.
     const enrichedResults = await Promise.all(
       officialResults.map(async (item) => ({
         ...item,
@@ -564,15 +568,60 @@ async function searchWeb(
       }))
     );
 
+    const readableOfficialPages = enrichedResults.filter(
+      (item) => Boolean(item.pageContent)
+    );
+
+    // اگر دست‌کم یک صفحه رسمی خوانده شده باشد،
+    // همان نتایج رسمی برای پاسخ‌گویی استفاده می‌شوند.
+    if (readableOfficialPages.length > 0) {
+      return {
+        results: enrichedResults,
+        credits: officialSearch.credits,
+        error: null,
+        officialResultsFound: true,
+        fallbackUsed: false,
+      };
+    }
+
+    // نتیجه رسمی وجود دارد اما متن صفحه‌ها قابل دریافت نیست.
+    // برای افزایش شواهد، جست‌وجوی عمومی هم انجام می‌شود.
+    const generalSearch = await runTavilySearch(
+      `${question} گزارش خبرگزاری متن بخشنامه شماره تاریخ ابلاغ`,
+      apiKey
+    );
+
+    const combinedResults: WebSearchResult[] = [
+      ...enrichedResults,
+      ...generalSearch.results,
+    ];
+
+    const uniqueResults = [
+      ...new Map(
+        combinedResults.map((item) => [item.url, item])
+      ).values(),
+    ].slice(0, MAX_WEB_RESULTS);
+
+    const credits =
+      officialSearch.credits !== null ||
+      generalSearch.credits !== null
+        ? (officialSearch.credits ?? 0) +
+          (generalSearch.credits ?? 0)
+        : null;
+
     return {
-      results: enrichedResults,
-      credits: officialSearch.credits,
-      error: null,
+      results: uniqueResults,
+      credits,
+      error:
+        uniqueResults.length > 0
+          ? null
+          : generalSearch.error || officialSearch.error,
       officialResultsFound: true,
-      fallbackUsed: false,
+      fallbackUsed: true,
     };
   }
 
+  // هیچ نتیجه رسمی پیدا نشده است؛ جست‌وجوی عمومی انجام می‌شود.
   const generalSearch = await runTavilySearch(
     `${question} منبع رسمی متن ابلاغیه شماره تاریخ`,
     apiKey
@@ -979,61 +1028,8 @@ export async function POST(request: Request) {
 
     const webContext = formatWebSources(webResults);
 
-    // جلوگیری از ادعای جزئیات بخشنامه بدون دسترسی به
-    // محتوای صفحه‌ای از یک دامنه رسمی شناخته‌شده.
-    const readableOfficialPages = webResults.filter(
-      (item) => item.official && Boolean(item.pageContent)
-    );
-
-    if (
-      officialDocumentQuestion &&
-      readableOfficialPages.length === 0
-    ) {
-      const sourceLinks = webResults.length
-        ? "\n\nگزارش‌های پیدا‌شده (صرفاً برای پیگیری، نه تأیید مفاد بخشنامه):\n" +
-          webResults
-            .slice(0, 3)
-            .map(
-              (item) => `- [${item.title}](${item.url})`
-            )
-            .join("\n")
-        : "";
-
-      const safeAnswer =
-        "در جست‌وجوی فعلی نتوانستم متن قابل‌بررسی یک صفحه از منبع رسمی درباره این بخشنامه دریافت کنم. " +
-        "بنابراین شماره، تاریخ ابلاغ، تعداد روزهای دورکاری و لازم‌الاجرا بودن آن را تأیید نمی‌کنم. " +
-        "این نتیجه به معنی نبودن یا ابلاغ‌نشدن بخشنامه نیست." +
-        sourceLinks;
-
-      if (streamingRequested) {
-        return createStreamingResponse(
-          { response: safeAnswer },
-          () => {
-            console.log(
-              JSON.stringify({
-                event: "OFFICIAL_DOCUMENT_UNVERIFIED",
-                request_type: requestType,
-                web_results_count: webResults.length,
-                official_results_found: officialResultsFound,
-                total_ms: Date.now() - startedAt,
-              })
-            );
-          }
-        );
-      }
-
-      return jsonResponse({
-        ok: true,
-        answer: safeAnswer,
-        source: "official-document-unverified",
-        request_type: requestType,
-        web_search_attempted: webSearchAttempted,
-        web_results_count: webResults.length,
-        official_results_found: officialResultsFound,
-        web_search_error: webSearchError,
-        ai_used: false,
-      });
-    }
+    // پاسخ‌گویی در نبود منبع رسمی نیز ادامه می‌یابد.
+    // محدودیت منابع در systemPrompt به مدل اعلام می‌شود.
 
     let knowledgeStatus: string;
 
@@ -1072,12 +1068,18 @@ export async function POST(request: Request) {
       ).length;
 
       webStatus =
-        `تعداد ${webResults.length} نتیجه از دامنه‌های رسمی شناخته‌شده دریافت شد. ` +
-        `متن ${pageCount} صفحه رسمی با موفقیت دریافت شد. ` +
+        `تعداد ${webResults.filter((item) => item.official).length} نتیجه از دامنه‌های رسمی شناخته‌شده دریافت شد. ` +
+        `متن ${pageCount} صفحه با موفقیت دریافت شد. ` +
+        (webSearchFallbackUsed
+          ? "به دلیل قابل دریافت نبودن متن صفحه‌های رسمی، نتایج جست‌وجوی عمومی نیز اضافه شده‌اند. "
+          : "") +
         "این وضعیت به‌تنهایی ثابت نمی‌کند که نتیجه، متن اصلی یا آخرین نسخه سند است.";
-    } else if (officialDocumentQuestion && webSearchFallbackUsed) {
+    } else if (
+      officialDocumentQuestion &&
+      webSearchFallbackUsed
+    ) {
       webStatus =
-        "جست‌وجوی محدود به دامنه‌های رسمی نتیجه‌ای نداد. " +
+        "جست‌وجوی محدود به دامنه‌های رسمی نتیجه قابل استفاده‌ای نداد. " +
         "نتایج فعلی از جست‌وجوی عمومی هستند؛ منبع رسمی در این جست‌وجو تأیید نشده است.";
     } else {
       webStatus =
