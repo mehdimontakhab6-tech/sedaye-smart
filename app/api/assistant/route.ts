@@ -126,14 +126,52 @@ const ORGANIZATION_TERMS = [
 ];
 
 const STOP_WORDS = new Set([
-  "چیست", "چگونه", "چطور", "لطفا", "لطفاً",
-  "است", "هست", "بود", "شد", "شود", "هستند",
-  "بودند", "اطلاعات", "برای", "را", "در", "به",
-  "از", "با", "چه", "درباره", "میشه", "می‌شود",
-  "می شود", "میخواهم", "می‌خواهم", "مورد", "آیا",
-  "این", "آن", "یک", "که", "و", "یا", "تا",
-  "من", "شما", "می", "کنم", "کنید", "کنه",
-  "دارد", "دارند", "بوده", "باشد", "خواهند",
+  "چیست",
+  "چگونه",
+  "چطور",
+  "لطفا",
+  "لطفاً",
+  "است",
+  "هست",
+  "بود",
+  "شد",
+  "شود",
+  "هستند",
+  "بودند",
+  "اطلاعات",
+  "برای",
+  "را",
+  "در",
+  "به",
+  "از",
+  "با",
+  "چه",
+  "درباره",
+  "میشه",
+  "می‌شود",
+  "می شود",
+  "میخواهم",
+  "می‌خواهم",
+  "مورد",
+  "آیا",
+  "این",
+  "آن",
+  "یک",
+  "که",
+  "و",
+  "یا",
+  "تا",
+  "من",
+  "شما",
+  "می",
+  "کنم",
+  "کنید",
+  "کنه",
+  "دارد",
+  "دارند",
+  "بوده",
+  "باشد",
+  "خواهند",
 ]);
 
 function normalizeText(text: string): string {
@@ -149,6 +187,23 @@ function normalizeText(text: string): string {
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+// اصلاح ۱: تشخیص احوال‌پرسی برای پاسخ فوری و بدون استفاده از مدل
+function getCasualReply(question: string): string | null {
+  const q = normalizeText(question);
+
+  const patterns = [
+    /^(مدیر هوشمند )?(سلام|درود|سلام علیکم)$/,
+    /^(مدیر هوشمند )?(خوبی|خوب هستی|حالت خوبه|حالت چطوره|چطوری|چه خبر)$/,
+    /^(سلام )?مدیر هوشمند (خوبی|خوب هستی|حالت خوبه|حالت چطوره|چطوری)$/,
+  ];
+
+  if (patterns.some((pattern) => pattern.test(q))) {
+    return "ممنون، خوبم! 😊 شما چطورید؟ چه کمکی از دستم برمیاد؟";
+  }
+
+  return null;
 }
 
 function fixAssistantName(text: string): string {
@@ -192,8 +247,16 @@ function getImportantWords(text: string): string[] {
 
 function stemPersianWord(word: string): string {
   const suffixes = [
-    "هایشان", "هایش", "ترین", "هایی", "های",
-    "ها", "ان", "ات", "شان", "تر",
+    "هایشان",
+    "هایش",
+    "ترین",
+    "هایی",
+    "های",
+    "ها",
+    "ان",
+    "ات",
+    "شان",
+    "تر",
   ];
 
   for (const suffix of suffixes) {
@@ -260,6 +323,35 @@ function needsOfficialDocumentSearch(question: string): boolean {
   return (
     terms.some((term) => q.includes(normalizeText(term))) ||
     asksForCurrentStatus
+  );
+}
+
+// اصلاح ۲: جست‌وجوی وب فقط برای پرسش‌های نیازمند جست‌وجو
+function shouldSearchWeb(question: string): boolean {
+  if (
+    needsOrganizationKnowledge(question) ||
+    needsOfficialDocumentSearch(question)
+  ) {
+    return true;
+  }
+
+  const q = normalizeText(question);
+
+  const searchIntents = [
+    "جستجو کن",
+    "جست و جو کن",
+    "در وب بگرد",
+    "منبع معتبر",
+    "لینک منبع",
+    "اخبار امروز",
+    "قیمت امروز",
+    "قیمت فعلی",
+    "اطلاعات به روز",
+    "اطلاعات به روزرسانی شده",
+  ];
+
+  return searchIntents.some((term) =>
+    q.includes(normalizeText(term))
   );
 }
 
@@ -396,7 +488,10 @@ async function fetchOfficialPage(
       .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ")
       .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, " ")
       .replace(/<!--[\s\S]*?-->/g, " ")
-      .replace(/<(br|\/p|\/div|\/li|\/tr|\/h[1-6])\b[^>]*>/gi, "\n")
+      .replace(
+        /<(br|\/p|\/div|\/li|\/tr|\/h[1-6])\b[^>]*>/gi,
+        "\n"
+      )
       .replace(/<[^>]+>/g, " ")
       .replace(/&nbsp;/gi, " ")
       .replace(/&amp;/gi, "&")
@@ -908,6 +1003,21 @@ export async function POST(request: Request) {
       );
     }
 
+    // اصلاح ۳: پاسخ احوال‌پرسی قبل از Cloudflare، Supabase و Tavily
+    const casualReply = getCasualReply(question);
+
+    if (casualReply) {
+      return jsonResponse({
+        ok: true,
+        answer: casualReply,
+        source: "conversation-rule",
+        request_type: "conversation",
+        ai_used: false,
+        web_search_attempted: false,
+        web_results_count: 0,
+      });
+    }
+
     const { env } = await getCloudflareContext({
       async: true,
     });
@@ -945,13 +1055,16 @@ export async function POST(request: Request) {
     const officialDocumentQuestion =
       needsOfficialDocumentSearch(question);
 
+    // اصلاح ۴: تصمیم‌گیری جداگانه درباره نیاز به جست‌وجوی وب
+    const webSearchNeeded = shouldSearchWeb(question);
+
     requestType = officialDocumentQuestion
       ? "official-document"
       : needsKnowledge
         ? "organization"
         : "general";
 
-    if (tavilyApiKey) {
+    if (tavilyApiKey && webSearchNeeded) {
       webSearchAttempted = true;
       const webStartedAt = Date.now();
 
@@ -967,9 +1080,11 @@ export async function POST(request: Request) {
       officialResultsFound = search.officialResultsFound;
       webSearchFallbackUsed = search.fallbackUsed;
       webSearchMs = Date.now() - webStartedAt;
-    } else {
+    } else if (webSearchNeeded) {
       webSearchError = "missing_api_key";
       console.error("TAVILY_API_KEY IS NOT CONFIGURED");
+    } else {
+      webSearchError = null;
     }
 
     let relevantItems: RankedKnowledge[] = [];
@@ -1054,15 +1169,22 @@ export async function POST(request: Request) {
 
     let webStatus: string;
 
-    if (!tavilyApiKey) {
+    // اصلاح ۵: اعلام صریح به مدل وقتی جست‌وجو لازم تشخیص داده نشده
+    if (!webSearchNeeded) {
       webStatus =
-        "جست‌وجوی وب انجام نشده است؛ کلید Tavily تنظیم نشده است.";
+        "برای این پرسش، جست‌وجوی وب لازم تشخیص داده نشد؛ پاسخ باید مستقیم و متناسب با سؤال باشد.";
+    } else if (!tavilyApiKey) {
+      webStatus =
+        "جست‌وجوی وب لازم بود اما کلید Tavily تنظیم نشده است.";
     } else if (webResults.length === 0) {
       webStatus =
         `جست‌وجوی وب نتیجه‌ای نداد. خطا: ${
           webSearchError || "no_results"
         }. نبود نتیجه، اثبات‌کننده نبود سند یا رویداد نیست.`;
-    } else if (officialDocumentQuestion && officialResultsFound) {
+    } else if (
+      officialDocumentQuestion &&
+      officialResultsFound
+    ) {
       const pageCount = webResults.filter(
         (item) => Boolean(item.pageContent)
       ).length;
@@ -1088,6 +1210,17 @@ export async function POST(request: Request) {
 
     const systemPrompt = `
 تو «مدیر هوشمند»، دستیار هوش مصنوعی گروه «صدای کارکنان ثبت احوال» هستی.
+
+قواعد اولویت‌دار مکالمه:
+
+- ابتدا تشخیص بده پیام، احوال‌پرسی، تعارف، خطاب دوستانه یا سؤال واقعی است.
+- به سلام و تعارف با یک پاسخ طبیعی و کوتاه جواب بده؛ برای احوال‌پرسی جست‌وجو نکن و مقاله ننویس.
+- اگر سؤال عمومی و روشن است، مستقیم و به فارسی روان پاسخ بده.
+- پاسخ پیش‌فرض حداکثر ۳ جمله باشد، مگر اینکه کاربر جزئیات بخواهد.
+- فقط برای اطلاعات متغیر، درخواست صریح جست‌وجو یا موضوعات تخصصی نیازمند منبع، از شواهد وب استفاده کن.
+- اگر سؤال مبهم است، فقط در صورت ضرورت یک سؤال روشن‌کننده بپرس.
+- متن طولانی را صرفاً برای رسمی یا هوشمند به نظر رسیدن تولید نکن.
+- به خود سؤال پاسخ بده؛ کلمات موجود در سؤال را بهانه‌ای برای ارائه مقاله‌ای نامرتبط نکن.
 
 هدف تو پاسخ دقیق، منطقی، روشن و مستند است؛ نه صرفاً تولید متنی قانع‌کننده.
 به زبان کاربر پاسخ بده و هیچ واقعیت، شماره سند، تاریخ، نقل‌قول یا لینکی را جعل نکن.
@@ -1375,4 +1508,4 @@ ${webContext}
       { status: 500 }
     );
   }
-}
+  }
