@@ -875,16 +875,17 @@ export async function POST(request: Request) {
 
     if (apiKey) {
       jobs.push(
-        searchWeb(question, apiKey, officialQuestion)
-          .then((results) => sources.push(...results))
-          .catch((error) => {
-            webSearchFailed = true;
-            console.error("WEB_SEARCH_FAILED", {
-              message: error instanceof Error ? error.message : "unknown",
-            });
-          })
-      );
-    }
+  searchWeb(question, apiKey, officialQuestion)
+    .then((results) => {
+      sources.push(...results);
+    })
+    .catch((error) => {
+      webSearchFailed = true;
+      console.error("WEB_SEARCH_FAILED", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    })
+);
 
     if (
       organizationQuestion &&
