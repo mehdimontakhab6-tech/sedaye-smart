@@ -1063,7 +1063,7 @@ ${context}
         total_ms: Date.now() - startedAt,
       },
     });
-  } catch (error) {
+    } catch (error) {
     console.error("ASSISTANT_API_ERROR", {
       message: error instanceof Error ? error.message : "unknown",
     });
@@ -1079,4 +1079,4 @@ ${context}
       { status: 500 }
     );
   }
-    }
+}
