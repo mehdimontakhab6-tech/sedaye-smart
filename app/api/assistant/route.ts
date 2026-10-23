@@ -873,19 +873,22 @@ export async function POST(request: Request) {
     // جست‌وجو و بازیابی بانک دانش مستقل‌اند؛ موازی اجرا می‌شوند.
     const jobs: Promise<void>[] = [];
 
+    
     if (apiKey) {
       jobs.push(
-  searchWeb(question, apiKey, officialQuestion)
-    .then((results) => {
-      sources.push(...results);
-    })
-    .catch((error) => {
-      webSearchFailed = true;
-      console.error("WEB_SEARCH_FAILED", {
-        message: error instanceof Error ? error.message : "unknown",
-      });
-    })
-);
+        searchWeb(question, apiKey, officialQuestion)
+          .then((results) => {
+            sources.push(...results);
+          })
+          .catch((error) => {
+            webSearchFailed = true;
+            console.error("WEB_SEARCH_FAILED", {
+              message:
+                error instanceof Error ? error.message : "unknown",
+            });
+          })
+      );
+    }
 
     if (
       organizationQuestion &&
@@ -903,7 +906,8 @@ export async function POST(request: Request) {
           .catch((error) => {
             knowledgeFailed = true;
             console.error("KNOWLEDGE_LOAD_FAILED", {
-              message: error instanceof Error ? error.message : "unknown",
+              message:
+                error instanceof Error ? error.message : "unknown",
             });
           })
       );
