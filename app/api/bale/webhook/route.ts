@@ -756,7 +756,6 @@ stream: true,
         {
           chat_id: String(chatId),
           text: "در حال نوشتن پاسخ…",
-          reply_to_message_id: numericMessageId,
         }
       );
 
@@ -954,7 +953,6 @@ if (!answer) {
               0,
               BALE_MAX_MESSAGE_LENGTH
             ),
-            reply_to_message_id: numericMessageId,
           }
         );
 
@@ -1142,7 +1140,6 @@ if (!answer) {
     const sendPayload = {
       chat_id: String(chatId),
       text: answer.trim().slice(0, BALE_MAX_MESSAGE_LENGTH),
-      reply_to_message_id: numericMessageId,
     };
 
     const baleResponse = await callBaleApi(
