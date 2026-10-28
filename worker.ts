@@ -151,142 +151,182 @@ export default {
      * در مجله کارگزینی منتشر شده است یا خیر.
      *
      * هر مقاله فقط یک بار ارسال می‌شود.
+     *
+     * بازنشر اینستاگرام نیز از همین Cron استفاده
+     * می‌کند؛ بنابراین Cron جدیدی لازم نیست.
      * ─────────────────────────────────────────────
      */
     if (event.cron === KARGOZIN_CRON) {
-      console.log(
-        "[cron] running Kargozin..."
-      );
+      let kargozinFailed = false;
+      let kargozinError: unknown;
 
-      const request = new Request(
-        `${BASE_URL}/api/news/kargozin`,
-        {
-          method: "GET",
-          headers: {
-            "User-Agent": "sedaye-smart-cron"
+      /*
+       * اجرای کارگزین
+       *
+       * خطا را فعلاً نگه می‌داریم تا ابتدا
+       * فرصت اجرای مستقل اینستاگرام را هم داشته باشیم.
+       */
+      try {
+        console.log(
+          "[cron] running Kargozin..."
+        );
+
+        const request = new Request(
+          `${BASE_URL}/api/news/kargozin`,
+          {
+            method: "GET",
+            headers: {
+              "User-Agent": "sedaye-smart-cron"
+            }
           }
+        );
+
+        const response = await handler.fetch(
+          request,
+          env,
+          ctx
+        );
+
+        const body = await response.text();
+
+        console.log(
+          "[cron] Kargozin status:",
+          response.status
+        );
+
+        console.log(
+          "[cron] Kargozin response:",
+          body.slice(0, 4000)
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Kargozin cron failed: HTTP ${response.status}`
+          );
         }
-      );
 
-      const response = await handler.fetch(
-        request,
-        env,
-        ctx
-      );
+        console.log(
+          "[cron] Kargozin completed successfully"
+        );
+      } catch (error) {
+        kargozinFailed = true;
+        kargozinError = error;
 
-      const body = await response.text();
-
-      console.log(
-        "[cron] Kargozin status:",
-        response.status
-      );
-
-      console.log(
-        "[cron] Kargozin response:",
-        body.slice(0, 4000)
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Kargozin cron failed: HTTP ${response.status}`
+        console.error(
+          "[cron] Kargozin error:",
+          error
         );
       }
-
-      console.log(
-        "[cron] Kargozin completed successfully"
-      );
 
       /*
        * ─────────────────────────────────────────────
        * بازنشر اینستاگرام
-       * از Cron موجود کارگزین استفاده می‌کند.
-       * Cron جدیدی به Cloudflare اضافه نمی‌شود.
        *
-       * ساعت تهران: 14، 15، 16، 17، 18، 19، 20، 21، 22
+       * استفاده از Cron موجود کارگزین؛ بدون افزودن
+       * Cron جدید به Cloudflare.
+       *
+       * ساعت تهران: 14 تا 22، طبق فهرست زیر
        * دقیقه: 15
        * ─────────────────────────────────────────────
        */
-      const tehranParts = new Intl.DateTimeFormat(
-        "en-GB",
-        {
-          timeZone: "Asia/Tehran",
-          hour: "2-digit",
-          minute: "2-digit",
-          hourCycle: "h23"
-        }
-      ).formatToParts(
-        new Date(event.scheduledTime)
-      );
+      try {
+        const tehranParts = new Intl.DateTimeFormat(
+          "en-GB",
+          {
+            timeZone: "Asia/Tehran",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23"
+          }
+        ).formatToParts(
+          new Date(event.scheduledTime)
+        );
 
-      const hour = Number(
-        tehranParts.find(
-          (part) => part.type === "hour"
-        )?.value
-      );
+        const hour = Number(
+          tehranParts.find(
+            (part) => part.type === "hour"
+          )?.value
+        );
 
-      const minute = Number(
-        tehranParts.find(
-          (part) => part.type === "minute"
-        )?.value
-      );
+        const minute = Number(
+          tehranParts.find(
+            (part) => part.type === "minute"
+          )?.value
+        );
 
-      const instagramHours = [
-        14, 15, 16, 17, 18, 19, 20, 21, 22
-      ];
+        const instagramHours = [
+          14, 15, 16, 17, 18, 19, 20, 21, 22
+        ];
 
-      if (
-        minute === 15 &&
-        instagramHours.includes(hour)
-      ) {
-        try {
-          console.log(
-            "[cron] running Instagram repost..."
-          );
-
-          const instagramRequest = new Request(
-            `${BASE_URL}/api/instagram`,
-            {
-              method: "GET",
-              headers: {
-                "User-Agent": "sedaye-smart-cron"
-              }
-            }
-          );
-
-          const instagramResponse = await handler.fetch(
-            instagramRequest,
-            env,
-            ctx
-          );
-
-          const instagramBody =
-            await instagramResponse.text();
-
-          console.log(
-            "[cron] Instagram status:",
-            instagramResponse.status
-          );
-
-          console.log(
-            "[cron] Instagram response:",
-            instagramBody.slice(0, 2000)
-          );
-
-          if (!instagramResponse.ok) {
-            console.error(
-              `Instagram cron failed: HTTP ${instagramResponse.status}`
-            );
-          } else {
+        if (
+          minute === 15 &&
+          instagramHours.includes(hour)
+        ) {
+          try {
             console.log(
-              "[cron] Instagram repost completed"
+              "[cron] running Instagram repost..."
+            );
+
+            const instagramRequest = new Request(
+              `${BASE_URL}/api/instagram`,
+              {
+                method: "GET",
+                headers: {
+                  "User-Agent": "sedaye-smart-cron"
+                }
+              }
+            );
+
+            const instagramResponse =
+              await handler.fetch(
+                instagramRequest,
+                env,
+                ctx
+              );
+
+            const instagramBody =
+              await instagramResponse.text();
+
+            console.log(
+              "[cron] Instagram status:",
+              instagramResponse.status
+            );
+
+            console.log(
+              "[cron] Instagram response:",
+              instagramBody.slice(0, 2000)
+            );
+
+            if (!instagramResponse.ok) {
+              console.error(
+                `[cron] Instagram cron failed: HTTP ${instagramResponse.status}`
+              );
+            } else {
+              console.log(
+                "[cron] Instagram repost completed"
+              );
+            }
+          } catch (error) {
+            console.error(
+              "[cron] Instagram error:",
+              error
             );
           }
-        } catch (error) {
-          console.error(
-            "[cron] Instagram error:",
-            error
-          );
         }
+      } catch (error) {
+        console.error(
+          "[cron] Instagram schedule check error:",
+          error
+        );
+      }
+
+      /*
+       * خطای کارگزین را پنهان نمی‌کنیم.
+       * ابتدا تلاش مستقل اینستاگرام انجام شده؛
+       * سپس در صورت خطای کارگزین، خطا گزارش می‌شود.
+       */
+      if (kargozinFailed) {
+        throw kargozinError;
       }
 
       return;
