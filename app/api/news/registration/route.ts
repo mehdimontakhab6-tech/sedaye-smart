@@ -803,7 +803,7 @@ function formatNewsMessage(
   });
 
   const header = [
-    "📰 خلاصه اخبار مرتبط با ثبت احوال",
+    "📰 ثبت احوال در رسانه ها",
     `📅 بازه گزارش: ${formatter.format(window.start)} تا ${formatter.format(window.end)}`,
     `📌 تعداد خبرها: ${items.length}`,
   ].join("\n");
