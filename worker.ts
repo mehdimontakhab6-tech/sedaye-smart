@@ -1,10 +1,10 @@
-// @ts-ignore .open-next/worker.js is generated at build time
+
+ // @ts-ignore .open-next/worker.js is generated at build time
 import { default as handler } from "./.open-next/worker.js";
 
 const CALENDAR_CRON = "45 4 * * *";
 const NEWS_CRON = "0 19 * * *";
 const KARGOZIN_CRON = "* * * * *";
-const INSTAGRAM_CRON = "45 10-18 * * *";
 
 const BASE_URL =
   "https://sedaye-smart.mehdimontakhab6.workers.dev";
@@ -40,22 +40,22 @@ export default {
       );
 
       const request = new Request(
-  `${BASE_URL}/api/calendar/daily`,
-  {
-    method: "GET",
-    headers: {
-      "User-Agent": "sedaye-smart-cron"
-    }
-  }
-);
+        `${BASE_URL}/api/calendar/daily`,
+        {
+          method: "GET",
+          headers: {
+            "User-Agent": "sedaye-smart-cron"
+          }
+        }
+      );
 
-const response = await handler.fetch(
-  request,
-  env,
-  ctx
-);
+      const response = await handler.fetch(
+        request,
+        env,
+        ctx
+      );
 
-const body = await response.text();
+      const body = await response.text();
 
       console.log(
         "[cron] calendar status:",
@@ -196,35 +196,102 @@ const body = await response.text();
         "[cron] Kargozin completed successfully"
       );
 
+      /*
+       * ─────────────────────────────────────────────
+       * بازنشر اینستاگرام
+       * از Cron موجود کارگزین استفاده می‌کند.
+       * Cron جدیدی به Cloudflare اضافه نمی‌شود.
+       *
+       * ساعت تهران: 14، 15، 16، 17، 18، 19، 20، 21، 22
+       * دقیقه: 15
+       * ─────────────────────────────────────────────
+       */
+      const tehranParts = new Intl.DateTimeFormat(
+        "en-GB",
+        {
+          timeZone: "Asia/Tehran",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23"
+        }
+      ).formatToParts(
+        new Date(event.scheduledTime)
+      );
+
+      const hour = Number(
+        tehranParts.find(
+          (part) => part.type === "hour"
+        )?.value
+      );
+
+      const minute = Number(
+        tehranParts.find(
+          (part) => part.type === "minute"
+        )?.value
+      );
+
+      const instagramHours = [
+        14, 15, 16, 17, 18, 19, 20, 21, 22
+      ];
+
+      if (
+        minute === 15 &&
+        instagramHours.includes(hour)
+      ) {
+        try {
+          console.log(
+            "[cron] running Instagram repost..."
+          );
+
+          const instagramRequest = new Request(
+            `${BASE_URL}/api/instagram`,
+            {
+              method: "GET",
+              headers: {
+                "User-Agent": "sedaye-smart-cron"
+              }
+            }
+          );
+
+          const instagramResponse = await handler.fetch(
+            instagramRequest,
+            env,
+            ctx
+          );
+
+          const instagramBody =
+            await instagramResponse.text();
+
+          console.log(
+            "[cron] Instagram status:",
+            instagramResponse.status
+          );
+
+          console.log(
+            "[cron] Instagram response:",
+            instagramBody.slice(0, 2000)
+          );
+
+          if (!instagramResponse.ok) {
+            console.error(
+              `Instagram cron failed: HTTP ${instagramResponse.status}`
+            );
+          } else {
+            console.log(
+              "[cron] Instagram repost completed"
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[cron] Instagram error:",
+            error
+          );
+        }
+      }
+
       return;
     }
 
-        if (event.cron === INSTAGRAM_CRON) {
-      console.log("[cron] running Instagram repost...");
-
-      const request = new Request(
-        `${BASE_URL}/api/instagram`,
-        {
-          method: "GET",
-          headers: {
-            "User-Agent": "sedaye-smart-cron"
-          }
-        }
-      );
-
-      const response = await handler.fetch(request, env, ctx);
-      const body = await response.text();
-
-      console.log("[cron] Instagram status:", response.status);
-      console.log("[cron] Instagram response:", body.slice(0, 2000));
-
-      if (!response.ok) {
-        throw new Error(`Instagram cron failed: HTTP ${response.status}`);
-      }
-
-      console.log("[cron] Instagram repost completed");
-      return;
-        }
     /*
      * اگر Cron ناشناخته باشد
      */
