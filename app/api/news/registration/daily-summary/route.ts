@@ -775,23 +775,23 @@ function formatNewsMessage(
     minute: "2-digit",
   });
 
-  const lines = [
+  const header = [
     "📰 خلاصه اخبار مرتبط با ثبت احوال",
     `📅 بازه گزارش: ${formatter.format(window.start)} تا ${formatter.format(window.end)}`,
     `📌 تعداد خبرها: ${items.length}`,
-    "",
-  ];
+  ].join("\n");
 
-  items.forEach((item, index) => {
-    lines.push(
-      `${index + 1}. ${item.title}`,
-      `🗞 منبع: ${item.source}`,
-      item.link,
-      ""
-    );
-  });
+  const newsList = items
+    .map((item, index) =>
+      [
+        `${index + 1}. ${cleanNewsTitle(item.title)}`,
+        `🗞 منبع: ${item.source}`,
+        `🔗 ${item.link}`,
+      ].join("\n")
+    )
+    .join("\n\n");
 
-  return lines.join("\n").trimEnd();
+  return newsList ? `${header}\n${newsList}` : header;
 }
 
 function noCacheHeaders() {
