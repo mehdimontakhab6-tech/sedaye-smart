@@ -199,6 +199,32 @@ const body = await response.text();
       return;
     }
 
+        if (event.cron === INSTAGRAM_CRON) {
+      console.log("[cron] running Instagram repost...");
+
+      const request = new Request(
+        `${BASE_URL}/api/instagram`,
+        {
+          method: "GET",
+          headers: {
+            "User-Agent": "sedaye-smart-cron"
+          }
+        }
+      );
+
+      const response = await handler.fetch(request, env, ctx);
+      const body = await response.text();
+
+      console.log("[cron] Instagram status:", response.status);
+      console.log("[cron] Instagram response:", body.slice(0, 2000));
+
+      if (!response.ok) {
+        throw new Error(`Instagram cron failed: HTTP ${response.status}`);
+      }
+
+      console.log("[cron] Instagram repost completed");
+      return;
+        }
     /*
      * اگر Cron ناشناخته باشد
      */
