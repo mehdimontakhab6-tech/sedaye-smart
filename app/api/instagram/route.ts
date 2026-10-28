@@ -122,11 +122,9 @@ async function readState(env: Env, date: string): Promise<State> {
   );
 
   if (!response.ok) {
-  const contentType = response.headers.get("content-type") ?? "unknown";
-
-  throw new Error(
-    `Instagram @${username} returned HTTP ${response.status}; content-type=${contentType}.`,
-  );
+    throw new Error(
+      `Supabase read failed: HTTP ${response.status}`,
+    );
   }
 
   const rows = (await response.json()) as Array<{ value: unknown }>;
@@ -271,7 +269,12 @@ async function fetchPosts(username: Username): Promise<Post[]> {
   );
 
   if (!response.ok) {
-    throw new Error(`Instagram @${username} returned HTTP ${response.status}.`);
+    const contentType =
+      response.headers.get("content-type") ?? "unknown";
+
+    throw new Error(
+      `Instagram @${username} returned HTTP ${response.status}; content-type=${contentType}.`,
+    );
   }
 
   const data = (await response.json()) as any;
@@ -426,4 +429,4 @@ export async function GET(request: Request): Promise<Response> {
       { status: 500 },
     );
   }
-}
+  }
