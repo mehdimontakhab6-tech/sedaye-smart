@@ -19,10 +19,7 @@
   "observability": {
     "enabled": true
   },
-  "triggers": {
-    "crons": [
-      "0 19 * * *",
-      "* * * * *"
+  "triggers": {"crons": ["0 19 * * *", "* * * * *", "45 4 * * *", "45 10-18 * * *"]}
     ]
   }
 }
