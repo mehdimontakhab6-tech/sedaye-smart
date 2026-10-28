@@ -209,6 +209,17 @@ function cleanText(value: unknown): string {
     .trim();
 }
 
+function cleanNewsTitle(title: string): string {
+  return title
+    .replace(
+      /\s*[-–—|،:]?\s*(?:(?:کد|شماره|شناسه)(?:\s+خبر)?)\s*[:：#-]?\s*[۰-۹0-9]+\s*$/i,
+      ""
+    )
+    .replace(/\s*[\[(（]\s*[۰-۹0-9]{4,}\s*[\])）]\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
