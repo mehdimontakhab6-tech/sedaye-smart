@@ -259,9 +259,9 @@ export default {
         ];
 
         if (
-          minute === 15 &&
-          instagramHours.includes(hour)
-        ) {
+  (minute === 15 || minute === 16) &&
+  instagramHours.includes(hour)
+) {
           try {
             console.log(
               "[cron] running Instagram repost..."
