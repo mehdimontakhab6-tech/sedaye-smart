@@ -4,6 +4,7 @@ import { default as handler } from "./.open-next/worker.js";
 const CALENDAR_CRON = "45 4 * * *";
 const NEWS_CRON = "0 19 * * *";
 const KARGOZIN_CRON = "* * * * *";
+const INSTAGRAM_CRON = "45 10-18 * * *";
 
 const BASE_URL =
   "https://sedaye-smart.mehdimontakhab6.workers.dev";
