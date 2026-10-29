@@ -358,7 +358,7 @@ export async function GET(request: Request): Promise<Response> {
     const now = tehranTime();
     const scheduledSource = sourceForHour(now.hour);
 
-    if (!force && (![15, 16].includes(now.minute) || !scheduledSource)) {
+    if (!force && (now.minute !== 15 || !scheduledSource)) {
       return Response.json({
         ok: true,
         skipped: true,
