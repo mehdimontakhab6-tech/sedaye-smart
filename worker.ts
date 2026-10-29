@@ -259,7 +259,7 @@ export default {
         ];
 
         if (
-  (minute === 15 || minute === 16) &&
+  minute === 15 &&
   instagramHours.includes(hour)
 ) {
           try {
