@@ -1865,10 +1865,12 @@ const internationalEvents = internationalEventCandidates.filter(
 
         hijriDate: hijriText,
 
-        gregorianDate:
-          `${fa(tehran.year)}/` +
-          `${fa(String(tehran.month).padStart(2, "0"))}/` +
-          `${fa(String(tehran.day).padStart(2, "0"))}`,
+        gregorianDate: new Intl.DateTimeFormat("fa-IR", {
+  timeZone: TIME_ZONE,
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+}).format(now),
 
         time,
 
