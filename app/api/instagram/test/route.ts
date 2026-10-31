@@ -9,30 +9,34 @@ export async function GET() {
   for (const username of SOURCES) {
     try {
       const response = await fetch(
-        `https://www.instagram.com/${username}/`,
+        `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
         {
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
+              "Instagram 300.0.0.0.0 Android",
+            "X-IG-App-ID": "936619743392459",
+            "Accept": "*/*",
           },
           cache: "no-store",
           signal: AbortSignal.timeout(20000),
         }
       );
 
-      const html = await response.text();
+      const body = await response.text();
+
+      let data: any = null;
+      try {
+        data = JSON.parse(body);
+      } catch {}
 
       results.push({
         username,
         httpStatus: response.status,
-        contentLength: html.length,
-        containsUsername: html.includes(username),
-        containsProfileData:
-          html.includes("edge_owner_to_timeline_media") ||
-          html.includes("og:description"),
+        contentLength: body.length,
+        hasUserData: Boolean(data?.data?.user?.id),
+        returnedUsername: data?.data?.user?.username ?? null,
         message: response.ok
-          ? "Page received"
+          ? "Request completed"
           : "Instagram rejected the request",
       });
     } catch (error) {
@@ -48,7 +52,7 @@ export async function GET() {
 
   return Response.json({
     ok: true,
-    test: "instagram-public-read-only",
+    test: "instagram-api-read-only",
     results,
   });
 }
