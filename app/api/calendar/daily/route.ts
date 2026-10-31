@@ -1172,7 +1172,7 @@ body {
   width: 100%;
   white-space: nowrap;
   color: #071f17;
-  font-size: 54px;
+  font-size: 52px;
   line-height: 1.15;
   font-weight: 900;
   letter-spacing: -2.5px;
