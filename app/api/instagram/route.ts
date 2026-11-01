@@ -1,3 +1,4 @@
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
@@ -6,8 +7,8 @@ const STATE_KEY = "instagram_bale_repost_state_v1";
 const TIME_ZONE = "Asia/Tehran";
 
 const SOURCES = {
-  modiryar_com: { limit: 6 },
-  "hr.garden": { limit: 3 },
+  modiryar_com: { limit: 4 },
+  "hr.garden": { limit: 2 },
 } as const;
 
 type Username = keyof typeof SOURCES;
@@ -18,6 +19,7 @@ type Env = {
   BALE_SMART_TOKEN?: string;
   BALE_GROUP_ID?: string;
   INSTAGRAM_TEST_SECRET?: string;
+  TOOLZERHUB_API_KEY?: string;
 };
 
 type Post = {
@@ -33,6 +35,7 @@ type Post = {
 type SourceState = {
   sentToday: number;
   sentIds: string[];
+  pendingIds?: string[];
 };
 
 type State = {
@@ -40,6 +43,14 @@ type State = {
   tehranDate: string;
   sources: Record<Username, SourceState>;
 };
+
+type SettingRow = {
+  key: string;
+  value: unknown;
+};
+
+const TOOLZERHUB_BASE = "https://api.toolzerhub.com";
+const TOOLZERHUB_POST_COUNT = 20;
 
 function tehranTime() {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -63,11 +74,11 @@ function tehranTime() {
 }
 
 function sourceForHour(hour: number): Username | null {
-  if ([14, 15, 17, 18, 20, 21].includes(hour)) {
+  if ([14, 16, 20, 22].includes(hour)) {
     return "modiryar_com";
   }
 
-  if ([16, 19, 22].includes(hour)) {
+  if ([12, 18].includes(hour)) {
     return "hr.garden";
   }
 
@@ -79,8 +90,16 @@ function emptyState(date: string): State {
     version: 1,
     tehranDate: date,
     sources: {
-      modiryar_com: { sentToday: 0, sentIds: [] },
-      "hr.garden": { sentToday: 0, sentIds: [] },
+      modiryar_com: {
+        sentToday: 0,
+        sentIds: [],
+        pendingIds: [],
+      },
+      "hr.garden": {
+        sentToday: 0,
+        sentIds: [],
+        pendingIds: [],
+      },
     },
   };
 }
@@ -115,28 +134,62 @@ async function supabase(
   });
 }
 
-async function readState(env: Env, date: string): Promise<State> {
+async function readSetting(
+  env: Env,
+  key: string,
+): Promise<unknown | null> {
   const response = await supabase(
     env,
-    `settings?key=eq.${encodeURIComponent(STATE_KEY)}&select=value&limit=1`,
+    `settings?key=eq.${encodeURIComponent(key)}&select=value&limit=1`,
   );
 
   if (!response.ok) {
     throw new Error(
-      `Supabase read failed: HTTP ${response.status}`,
+      `Supabase read failed for ${key}: HTTP ${response.status}`,
     );
   }
 
   const rows = (await response.json()) as Array<{ value: unknown }>;
-  let value: unknown = rows[0]?.value;
+  const raw = rows[0]?.value;
 
-  if (typeof value === "string") {
+  if (raw == null) return null;
+
+  if (typeof raw === "string") {
     try {
-      value = JSON.parse(value);
+      return JSON.parse(raw);
     } catch {
-      throw new Error("Saved Instagram state is invalid JSON.");
+      throw new Error(`Saved setting ${key} is invalid JSON.`);
     }
   }
+
+  return raw;
+}
+
+async function writeSetting(
+  env: Env,
+  key: string,
+  value: unknown,
+) {
+  const response = await supabase(env, "settings?on_conflict=key", {
+    method: "POST",
+    headers: {
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify({
+      key,
+      value: JSON.stringify(value),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Supabase write failed for ${key}: HTTP ${response.status} ${await response.text()}`,
+    );
+  }
+}
+
+async function readState(env: Env, date: string): Promise<State> {
+  const value = await readSetting(env, STATE_KEY);
 
   if (value == null) return emptyState(date);
 
@@ -160,6 +213,10 @@ async function readState(env: Env, date: string): Promise<State> {
     ) {
       throw new Error(`Invalid saved state for ${username}.`);
     }
+
+    if (!Array.isArray(entry.pendingIds)) {
+      entry.pendingIds = [];
+    }
   }
 
   if (saved.tehranDate !== date) {
@@ -170,10 +227,12 @@ async function readState(env: Env, date: string): Promise<State> {
         modiryar_com: {
           sentToday: 0,
           sentIds: saved.sources.modiryar_com.sentIds,
+          pendingIds: saved.sources.modiryar_com.pendingIds ?? [],
         },
         "hr.garden": {
           sentToday: 0,
           sentIds: saved.sources["hr.garden"].sentIds,
+          pendingIds: saved.sources["hr.garden"].pendingIds ?? [],
         },
       },
     };
@@ -183,22 +242,120 @@ async function readState(env: Env, date: string): Promise<State> {
 }
 
 async function writeState(env: Env, state: State) {
-  const response = await supabase(env, "settings?on_conflict=key", {
-    method: "POST",
-    headers: {
-      Prefer: "resolution=merge-duplicates,return=minimal",
-    },
-    body: JSON.stringify({
-      key: STATE_KEY,
-      value: state,
-    }),
+  await writeSetting(env, STATE_KEY, state);
+}
+
+function toolzerHeaders(env: Env) {
+  const key = env.TOOLZERHUB_API_KEY;
+
+  if (!key) {
+    throw new Error("TOOLZERHUB_API_KEY is missing.");
+  }
+
+  return {
+    "x-api-key": key,
+    Accept: "application/json",
+  };
+}
+
+async function checkToolzerCredits(env: Env): Promise<number> {
+  const response = await fetch(`${TOOLZERHUB_BASE}/v1/credits`, {
+    method: "GET",
+    headers: toolzerHeaders(env),
+    cache: "no-store",
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
     throw new Error(
-      `Supabase write failed: HTTP ${response.status} ${await response.text()}`,
+      `ToolzerHub credit check failed: HTTP ${response.status}.`,
     );
   }
+
+  const result = (await response.json()) as any;
+  const candidates = [
+    result?.balance,
+    result?.data?.balance,
+    result?.included_balance,
+    result?.data?.included_balance,
+    result?.allowance,
+    result?.data?.allowance,
+  ];
+
+  const available = candidates.find(
+    (value) => typeof value === "number" && Number.isFinite(value),
+  );
+
+  if (typeof available !== "number") {
+    throw new Error("ToolzerHub credit balance was not recognized.");
+  }
+
+  return available;
+}
+
+async function toolzerGet(
+  env: Env,
+  path: string,
+): Promise<any> {
+  const credits = await checkToolzerCredits(env);
+
+  if (credits < 1) {
+    throw new Error(
+      "ToolzerHub credit balance is insufficient. No paid request was made.",
+    );
+  }
+
+  const response = await fetch(`${TOOLZERHUB_BASE}${path}`, {
+    method: "GET",
+    headers: toolzerHeaders(env),
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `ToolzerHub request failed: HTTP ${response.status}.`,
+    );
+  }
+
+  return response.json();
+}
+
+async function getProfileId(
+  env: Env,
+  username: Username,
+): Promise<string> {
+  const cacheKey = `instagram_toolzerhub_profile_v1_${username}`;
+  const cached = await readSetting(env, cacheKey);
+
+  if (
+    cached &&
+    typeof cached === "object" &&
+    typeof (cached as any).id === "string"
+  ) {
+    return (cached as any).id;
+  }
+
+  const result = await toolzerGet(
+    env,
+    `/v1/instagram/user/info?username_or_url=${encodeURIComponent(username)}&detail=summary`,
+  );
+
+  const id = result?.data?.id;
+
+  if (id == null || String(id).length === 0) {
+    throw new Error(`ToolzerHub did not return an ID for @${username}.`);
+  }
+
+  const profileId = String(id);
+
+  await writeSetting(env, cacheKey, {
+    id: profileId,
+    username,
+    cachedAt: new Date().toISOString(),
+  });
+
+  return profileId;
 }
 
 function looksLikeAd(post: Post): boolean {
@@ -217,77 +374,121 @@ function looksLikeAd(post: Post): boolean {
   ].some((pattern) => pattern.test(post.caption));
 }
 
-function parsePost(node: any): Post | null {
+function parseToolzerPost(node: any): Post | null {
   if (!node || typeof node !== "object") return null;
 
-  const shortcode = String(node.shortcode ?? "");
+  const shortcode = String(node.code ?? node.shortcode ?? "");
   const id = String(node.id ?? node.pk ?? shortcode);
-  const caption = String(
-    node.edge_media_to_caption?.edges?.[0]?.node?.text ??
-    node.caption?.text ??
-    "",
-  ).trim();
 
-  const isVideo = Boolean(node.is_video);
-  const mediaUrl = String(
-    isVideo
-      ? node.video_url ?? ""
-      : node.display_url ?? node.thumbnail_src ?? "",
+  const captionValue =
+    typeof node.caption === "string"
+      ? node.caption
+      : node.caption?.text ?? "";
+
+  const caption = String(captionValue).trim();
+
+  const mediaTypeNumber = Number(node.media_type ?? 0);
+  const productType = String(node.product_type ?? "").toLowerCase();
+
+  // Carousel posts are skipped because the current Bale sender
+  // supports one photo or one video per message.
+  if (mediaTypeNumber === 8 || productType === "carousel") {
+    return null;
+  }
+
+  const videoUrl =
+    node.video_versions?.[0]?.url ??
+    node.video_url ??
+    "";
+
+  const imageUrl =
+    node.image_versions2?.candidates?.[0]?.url ??
+    node.display_uri ??
+    node.display_url ??
+    "";
+
+  const isVideo = mediaTypeNumber === 2 || Boolean(videoUrl);
+  const mediaUrl = String(isVideo ? videoUrl : imageUrl);
+
+  const timestamp = Number(
+    node.taken_at ??
+    node.taken_at_timestamp ??
+    0,
   );
 
-  if (!id || !shortcode || !caption || !mediaUrl) return null;
+  if (
+    !id ||
+    !shortcode ||
+    !caption ||
+    !mediaUrl ||
+    !Number.isFinite(timestamp) ||
+    timestamp <= 0
+  ) {
+    return null;
+  }
 
   return {
     id,
     shortcode,
     caption,
-    timestamp: Number(node.taken_at_timestamp ?? 0),
+    timestamp,
     mediaType: isVideo ? "video" : "photo",
     mediaUrl,
     sponsored: Boolean(
       node.is_paid_partnership ||
       node.branded_content ||
+      node.is_sponsored ||
       (Array.isArray(node.sponsor_tags) && node.sponsor_tags.length > 0),
     ),
   };
 }
 
-async function fetchPosts(username: Username): Promise<Post[]> {
-  const response = await fetch(
-    `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
-    {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
-        Accept: "*/*",
-        "X-IG-App-ID": "936619743392459",
-        "X-Requested-With": "XMLHttpRequest",
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(15000),
-    },
+async function fetchPosts(
+  env: Env,
+  username: Username,
+  date: string,
+): Promise<Post[]> {
+  const cacheKey =
+    `instagram_toolzerhub_posts_v1_${username}_${date}`;
+
+  const cached = await readSetting(env, cacheKey);
+
+  if (
+    cached &&
+    typeof cached === "object" &&
+    Array.isArray((cached as any).posts)
+  ) {
+    return (cached as any).posts as Post[];
+  }
+
+  const profileId = await getProfileId(env, username);
+
+  const result = await toolzerGet(
+    env,
+    `/v1/instagram/user/posts/by-id?user_id=${encodeURIComponent(profileId)}&count=${TOOLZERHUB_POST_COUNT}`,
   );
 
-  if (!response.ok) {
-    const contentType =
-      response.headers.get("content-type") ?? "unknown";
+  const items = result?.data?.items;
 
+  if (!Array.isArray(items)) {
     throw new Error(
-      `Instagram @${username} returned HTTP ${response.status}; content-type=${contentType}.`,
+      `ToolzerHub did not return a valid posts list for @${username}.`,
     );
   }
 
-  const data = (await response.json()) as any;
-  const edges = data?.data?.user?.edge_owner_to_timeline_media?.edges;
-
-  if (!Array.isArray(edges)) {
-    throw new Error(`No public post data was returned for @${username}.`);
-  }
-
-  return edges
-    .map((edge: any) => parsePost(edge?.node))
+  const posts = items
+    .map((item: any) => parseToolzerPost(item))
     .filter((post: Post | null): post is Post => post !== null)
     .sort((a: Post, b: Post) => a.timestamp - b.timestamp);
+
+  await writeSetting(env, cacheKey, {
+    username,
+    date,
+    posts,
+    cachedAt: new Date().toISOString(),
+  });
+
+  return posts;
 }
 
 async function sendToBale(
@@ -340,6 +541,8 @@ export async function GET(request: Request): Promise<Response> {
     const runtimeEnv = env as Env;
     const url = new URL(request.url);
 
+    // Manual force mode keeps using the existing project secret.
+    // Scheduled executions do not require this secret.
     const forceRequested = url.searchParams.get("force") === "1";
     const secret = runtimeEnv.INSTAGRAM_TEST_SECRET;
 
@@ -363,11 +566,13 @@ export async function GET(request: Request): Promise<Response> {
         ok: true,
         skipped: true,
         reason: "Not a scheduled Tehran publication slot.",
-        tehranTime: `${now.date} ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")}`,
+        tehranTime:
+          `${now.date} ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")}`,
       });
     }
 
     const requestedSource = url.searchParams.get("source");
+
     const username: Username = force
       ? requestedSource === "hr.garden"
         ? "hr.garden"
@@ -383,31 +588,60 @@ export async function GET(request: Request): Promise<Response> {
         skipped: true,
         reason: "Daily limit reached.",
         username,
+        sentToday: sourceState.sentToday,
+        dailyLimit: SOURCES[username].limit,
       });
     }
 
-    const posts = await fetchPosts(username);
+    const posts = await fetchPosts(
+      runtimeEnv,
+      username,
+      now.date,
+    );
+
     const sent = new Set(sourceState.sentIds);
+    const pending = new Set(sourceState.pendingIds ?? []);
 
     const candidate = posts.find(
-      (post) => !sent.has(post.id) && !looksLikeAd(post),
+      (post) =>
+        !sent.has(post.id) &&
+        !pending.has(post.id) &&
+        !looksLikeAd(post),
     );
 
     if (!candidate) {
       return Response.json({
         ok: true,
         skipped: true,
-        reason: "No eligible unsent post with caption and media was found.",
+        reason: "No eligible unsent post was found.",
         username,
         scanned: posts.length,
       });
     }
 
+    // Save a pending marker before sending. If the request times out
+    // or the result becomes ambiguous, this post will not be retried
+    // automatically and risk being sent twice.
+    sourceState.pendingIds = [
+      ...(sourceState.pendingIds ?? []),
+      candidate.id,
+    ].slice(-3000);
+
+    state.tehranDate = now.date;
+    await writeState(runtimeEnv, state);
+
     await sendToBale(runtimeEnv, username, candidate);
 
-    sourceState.sentIds = [...sourceState.sentIds, candidate.id].slice(-3000);
+    sourceState.pendingIds = (
+      sourceState.pendingIds ?? []
+    ).filter((id) => id !== candidate.id);
+
+    sourceState.sentIds = [
+      ...sourceState.sentIds,
+      candidate.id,
+    ].slice(-3000);
+
     sourceState.sentToday += 1;
-    state.tehranDate = now.date;
 
     await writeState(runtimeEnv, state);
 
@@ -419,8 +653,10 @@ export async function GET(request: Request): Promise<Response> {
       mediaType: candidate.mediaType,
       sentToday: sourceState.sentToday,
       dailyLimit: SOURCES[username].limit,
+      tehranTime:
+        `${now.date} ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")}`,
     });
-    } catch (error) {
+  } catch (error) {
     return Response.json(
       {
         ok: false,
