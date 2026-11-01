@@ -3,7 +3,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const username = "hr.garden";
 const username = "modiryar_com";
   
   try {
