@@ -104,29 +104,55 @@ const username = "modiryar_com";
       : [];
 
     // فقط اطلاعات خلاصه پست‌ها برگردانده می‌شود.
-    const posts = items.slice(0, 5).map((item: any) => {
-  const imageUrl =
-    item?.image_versions2?.candidates?.[0]?.url ??
-    item?.display_uri ??
-    "";
+    const posts = await Promise.all(
+  items.slice(0, 5).map(async (item: any) => {
+    const imageUrl =
+      item?.image_versions2?.candidates?.[0]?.url ??
+      item?.display_uri ??
+      "";
 
-  const videoUrl =
-    item?.video_versions?.[0]?.url ??
-    "";
+    const videoUrl =
+      item?.video_versions?.[0]?.url ??
+      "";
 
-  const caption =
-    item?.caption?.text ??
-    "";
+    const mediaUrl = videoUrl || imageUrl;
 
-  return {
-    shortcode: item?.code ?? null,
-    mediaType: item?.media_type ?? null,
-    captionAvailable: Boolean(caption),
-    imageUrlAvailable: Boolean(imageUrl),
-    videoUrlAvailable: Boolean(videoUrl),
-    mediaUrl: imageUrl || videoUrl,
-  };
-});
+    if (!mediaUrl) {
+      return {
+        shortcode: item?.code ?? null,
+        mediaType: item?.media_type ?? null,
+        mediaAvailable: false,
+        httpStatus: null,
+        contentType: null,
+      };
+    }
+
+    try {
+      const response = await fetch(mediaUrl, {
+        method: "HEAD",
+        redirect: "follow",
+        signal: AbortSignal.timeout(12000),
+      });
+
+      return {
+        shortcode: item?.code ?? null,
+        mediaType: item?.media_type ?? null,
+        mediaAvailable: response.ok,
+        httpStatus: response.status,
+        contentType: response.headers.get("content-type"),
+      };
+    } catch (error) {
+      return {
+        shortcode: item?.code ?? null,
+        mediaType: item?.media_type ?? null,
+        mediaAvailable: false,
+        httpStatus: null,
+        contentType: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  })
+);
 
     return Response.json({
       ok: true,
