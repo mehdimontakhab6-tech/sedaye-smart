@@ -525,18 +525,40 @@ async function sendToBale(
   const method = post.mediaType === "video" ? "sendVideo" : "sendPhoto";
   const mediaField = post.mediaType === "video" ? "video" : "photo";
 
-  const caption = post.caption
-  .replace(
-    /(?:^|\n)\s*#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار\s*/giu,
-    "\n",
-  )
-  .replace(
-    /(?:^|\n)\s*@(?:athir_360|modiryar_com|mahdi_yarahmadi)\s*/giu,
-    "\n",
-  )
-  .trim();
+    const caption = post.caption
+    .replace(
+      /(?:^|\n)\s*#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار\s*/giu,
+      "\n",
+    )
+    .replace(
+      /(?:^|\n)\s*@(?:athir_360|modiryar_com|mahdi_yarahmadi)\s*/giu,
+      "\n",
+    )
+    .trim();
 
-  const response = await fetch(
+  const chunks: string[] = [];
+  const maxLength = 900;
+
+  let remaining = caption;
+
+  while (remaining.length > maxLength) {
+    let splitAt = remaining.lastIndexOf("\n", maxLength);
+
+    if (splitAt < maxLength * 0.5) {
+      splitAt = remaining.lastIndexOf(" ", maxLength);
+    }
+
+    if (splitAt < maxLength * 0.5) {
+      splitAt = maxLength;
+    }
+
+    chunks.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trim();
+  }
+
+  if (remaining) chunks.push(remaining);
+
+  const firstResponse = await fetch(
     `https://tapi.bale.ai/bot${token}/${method}`,
     {
       method: "POST",
@@ -544,20 +566,45 @@ async function sendToBale(
       body: JSON.stringify({
         chat_id: chatId,
         [mediaField]: post.mediaUrl,
-        caption: caption.slice(0, 1000),
+        caption: chunks[0] ?? "",
       }),
       signal: AbortSignal.timeout(25000),
     },
   );
 
-  const result = (await response.json().catch(() => null)) as
+  const firstResult = await firstResponse.json().catch(() => null) as
     | { ok?: boolean; description?: string }
     | null;
 
-  if (!response.ok || result?.ok !== true) {
+  if (!firstResponse.ok || firstResult?.ok !== true) {
     throw new Error(
-      `Bale ${method} failed: ${result?.description ?? `HTTP ${response.status}`}`,
+      `Bale ${method} failed: ${firstResult?.description ?? `HTTP ${firstResponse.status}`}`,
     );
+  }
+
+  for (const chunk of chunks.slice(1)) {
+    const textResponse = await fetch(
+      `https://tapi.bale.ai/bot${token}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: chunk,
+        }),
+        signal: AbortSignal.timeout(25000),
+      },
+    );
+
+    const textResult = await textResponse.json().catch(() => null) as
+      | { ok?: boolean; description?: string }
+      | null;
+
+        if (!textResponse.ok || textResult?.ok !== true) {
+      throw new Error(
+        `Bale sendMessage failed: ${textResult?.description ?? `HTTP ${textResponse.status}`}`,
+      );
+    }
   }
 }
 
