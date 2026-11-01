@@ -525,7 +525,16 @@ async function sendToBale(
   const method = post.mediaType === "video" ? "sendVideo" : "sendPhoto";
   const mediaField = post.mediaType === "video" ? "video" : "photo";
 
-  const caption = post.caption;
+  const caption = post.caption
+  .replace(
+    /(?:^|\n)\s*#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار\s*/giu,
+    "\n",
+  )
+  .replace(
+    /(?:^|\n)\s*@(?:athir_360|modiryar_com|mahdi_yarahmadi)\s*/giu,
+    "\n",
+  )
+  .trim();
 
   const response = await fetch(
     `https://tapi.bale.ai/bot${token}/${method}`,
