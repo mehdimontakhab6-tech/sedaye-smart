@@ -104,11 +104,37 @@ export async function GET() {
       : [];
 
     // فقط اطلاعات خلاصه پست‌ها برگردانده می‌شود.
-    const posts = items.slice(0, 5).map((item: any) => ({
-      shortcode: item?.shortcode ?? item?.code ?? null,
-      timestamp: item?.taken_at ?? item?.timestamp ?? null,
-      mediaType: item?.media_type ?? item?.product_type ?? null,
-    }));
+    const posts = items.slice(0, 5).map((item: any) => {
+  const caption =
+    item?.caption?.text ??
+    item?.caption ??
+    item?.edge_media_to_caption?.edges?.[0]?.node?.text ??
+    "";
+
+  const imageUrl =
+    item?.display_url ??
+    item?.image_url ??
+    item?.thumbnail_url ??
+    item?.thumbnail_src ??
+    item?.image_versions2?.candidates?.[0]?.url ??
+    item?.thumbnail?.url ??
+    "";
+
+  const videoUrl =
+    item?.video_url ??
+    item?.video_versions?.[0]?.url ??
+    item?.video_versions?.[0]?.url_list?.[0] ??
+    "";
+
+  return {
+    shortcode: item?.shortcode ?? item?.code ?? null,
+    mediaType: item?.media_type ?? item?.product_type ?? null,
+    availableFields: Object.keys(item ?? {}),
+    captionAvailable: Boolean(caption),
+    imageUrlAvailable: Boolean(imageUrl),
+    videoUrlAvailable: Boolean(videoUrl),
+  };
+});
 
     return Response.json({
       ok: true,
