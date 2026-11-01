@@ -1865,8 +1865,9 @@ const internationalEvents = internationalEventCandidates.filter(
 
         hijriDate: hijriText,
 
-        gregorianDate: new Intl.DateTimeFormat("fa-IR", {
+        gregorianDate: new Intl.DateTimeFormat("fa-IR-u-ca-gregory", {
   timeZone: TIME_ZONE,
+  calendar: "gregory",
   day: "numeric",
   month: "long",
   year: "numeric",
