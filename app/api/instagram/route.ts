@@ -361,17 +361,36 @@ async function getProfileId(
 function looksLikeAd(post: Post): boolean {
   if (post.sponsored) return true;
 
-  return [
+  const caption = post.caption
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/\u200c/g, " ")
+    .toLowerCase();
+
+  const adPatterns = [
     /#ad\b/i,
     /#sponsored\b/i,
     /paid partnership/i,
     /تبلیغ(?:ات)?/i,
     /همکاری تبلیغاتی/i,
     /پست تبلیغاتی/i,
+    /اسپانسر/i,
     /کد تخفیف/i,
     /ثبت سفارش/i,
-    /اسپانسر/i,
-  ].some((pattern) => pattern.test(post.caption));
+
+    // اطلاعات تماس و هدایت مخاطب برای خرید یا دریافت خدمات
+    /اطلاعات تماس.{0,30}(?:bio|بیو)/i,
+    /(?:bio|بیو).{0,30}اطلاعات تماس/i,
+    /برای تماس.{0,50}(?:اقدام کنید|تماس بگیرید)/i,
+    /جهت تماس.{0,50}(?:اقدام کنید|تماس بگیرید)/i,
+    /برای سفارش.{0,50}(?:تماس|دایرکت)/i,
+    /جهت سفارش.{0,50}(?:تماس|دایرکت)/i,
+    /(?:تماس|ارتباط).{0,40}(?:دایرکت|پیام دهید|اطلاعات تماس)/i,
+    /مشاوره رایگان/i,
+    /جذب مشتری/i,
+  ];
+
+  return adPatterns.some((pattern) => pattern.test(caption));
 }
 
 function parseToolzerPost(node: any): Post | null {
