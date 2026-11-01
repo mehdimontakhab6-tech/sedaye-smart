@@ -525,9 +525,7 @@ async function sendToBale(
   const method = post.mediaType === "video" ? "sendVideo" : "sendPhoto";
   const mediaField = post.mediaType === "video" ? "video" : "photo";
 
-  const caption =
-    `${post.caption}\n\nمنبع: @${username}\n` +
-    `https://www.instagram.com/p/${post.shortcode}/`;
+  const caption = post.caption;
 
   const response = await fetch(
     `https://tapi.bale.ai/bot${token}/${method}`,
