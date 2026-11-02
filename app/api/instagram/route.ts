@@ -693,11 +693,12 @@ async function sendToBale(
       return false;
     }
 
-    return true;
-  })
-  .join("\n")
-  .replace(/\n{3,}/g, "\n\n")
-  .trim();
+      return true;
+})
+.join("\n")
+.replace(/\n{3,}/g, "\n\n")
+.replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
+.trim();
 
   const chunks: string[] = [];
   const maxLength = 900;
