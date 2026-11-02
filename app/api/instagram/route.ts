@@ -4,6 +4,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 export const dynamic = "force-dynamic";
 
 const STATE_KEY = "instagram_bale_repost_state_v1";
+const LOCK_KEY = "instagram_bale_repost_lock_v1";
+const LOCK_LEASE_MS = 10 * 60 * 1000;
 const TIME_ZONE = "Asia/Tehran";
 
 const SOURCES = {
@@ -44,9 +46,9 @@ type State = {
   sources: Record<Username, SourceState>;
 };
 
-type SettingRow = {
-  key: string;
-  value: unknown;
+type LockValue = {
+  token: string;
+  leaseUntil: number;
 };
 
 const TOOLZERHUB_BASE = "https://api.toolzerhub.com";
@@ -185,6 +187,149 @@ async function writeSetting(
     throw new Error(
       `Supabase write failed for ${key}: HTTP ${response.status} ${await response.text()}`,
     );
+  }
+}
+
+/**
+ * Acquires a global Instagram execution lock.
+ *
+ * The insert is atomic because the settings.key column has a unique
+ * constraint. An expired lock can only be replaced using a conditional
+ * update matching its previous exact value.
+ */
+async function acquireInstagramLock(
+  env: Env,
+): Promise<LockValue | null> {
+  const lock: LockValue = {
+    token: crypto.randomUUID(),
+    leaseUntil: Date.now() + LOCK_LEASE_MS,
+  };
+
+  const lockRaw = JSON.stringify(lock);
+
+  // First try to create the lock. The unique key prevents two
+  // concurrent executions from successfully inserting it.
+  const insertResponse = await supabase(
+    env,
+    "settings?on_conflict=key",
+    {
+      method: "POST",
+      headers: {
+        Prefer: "resolution=ignore-duplicates,return=representation",
+      },
+      body: JSON.stringify({
+        key: LOCK_KEY,
+        value: lockRaw,
+      }),
+    },
+  );
+
+  if (!insertResponse.ok) {
+    throw new Error(
+      `Instagram lock insert failed: HTTP ${insertResponse.status} ${await insertResponse.text()}`,
+    );
+  }
+
+  const insertedRows = (await insertResponse.json()) as Array<{
+    key: string;
+    value: string;
+  }>;
+
+  if (insertedRows.length > 0) {
+    return lock;
+  }
+
+  // A lock already exists. Read its exact stored value.
+  const readResponse = await supabase(
+    env,
+    `settings?key=eq.${encodeURIComponent(LOCK_KEY)}&select=value&limit=1`,
+  );
+
+  if (!readResponse.ok) {
+    throw new Error(
+      `Instagram lock read failed: HTTP ${readResponse.status}`,
+    );
+  }
+
+  const rows = (await readResponse.json()) as Array<{
+    value: string;
+  }>;
+
+  const previousRaw = rows[0]?.value;
+
+  if (typeof previousRaw !== "string") {
+    return null;
+  }
+
+  let previousLock: LockValue;
+
+  try {
+    previousLock = JSON.parse(previousRaw) as LockValue;
+  } catch {
+    throw new Error("Instagram lock contains invalid JSON.");
+  }
+
+  // Do not take over a lock that is still active.
+  if (
+    typeof previousLock.leaseUntil !== "number" ||
+    previousLock.leaseUntil > Date.now()
+  ) {
+    return null;
+  }
+
+  // Replace an expired lock only if its value has not changed
+  // since it was read. This is a compare-and-swap operation.
+  const updateResponse = await supabase(
+    env,
+    `settings?key=eq.${encodeURIComponent(LOCK_KEY)}&value=eq.${encodeURIComponent(previousRaw)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        value: lockRaw,
+      }),
+    },
+  );
+
+  if (!updateResponse.ok) {
+    throw new Error(
+      `Instagram lock renewal failed: HTTP ${updateResponse.status}`,
+    );
+  }
+
+  const updatedRows = (await updateResponse.json()) as Array<{
+    key: string;
+    value: string;
+  }>;
+
+  return updatedRows.length > 0 ? lock : null;
+}
+
+/**
+ * Releases only the lock owned by this execution.
+ * A failed release is harmless: the lease will expire automatically.
+ */
+async function releaseInstagramLock(
+  env: Env,
+  lock: LockValue,
+): Promise<void> {
+  try {
+    const ownRaw = JSON.stringify(lock);
+
+    await supabase(
+      env,
+      `settings?key=eq.${encodeURIComponent(LOCK_KEY)}&value=eq.${encodeURIComponent(ownRaw)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Prefer: "return=minimal",
+        },
+      },
+    );
+  } catch {
+    // The lock has a finite lease and can be reclaimed after expiry.
   }
 }
 
@@ -525,7 +670,7 @@ async function sendToBale(
   const method = post.mediaType === "video" ? "sendVideo" : "sendPhoto";
   const mediaField = post.mediaType === "video" ? "video" : "photo";
 
-    const caption = post.caption
+  const caption = post.caption
     .replace(
       /(?:^|\n)\s*#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار\s*/giu,
       "\n",
@@ -600,7 +745,7 @@ async function sendToBale(
       | { ok?: boolean; description?: string }
       | null;
 
-        if (!textResponse.ok || textResult?.ok !== true) {
+    if (!textResponse.ok || textResult?.ok !== true) {
       throw new Error(
         `Bale sendMessage failed: ${textResult?.description ?? `HTTP ${textResponse.status}`}`,
       );
@@ -652,83 +797,102 @@ export async function GET(request: Request): Promise<Response> {
         : "modiryar_com"
       : scheduledSource!;
 
-    const state = await readState(runtimeEnv, now.date);
-    const sourceState = state.sources[username];
+    // Acquire the global lock before reading or changing Instagram state.
+    const lock = await acquireInstagramLock(runtimeEnv);
 
-    if (sourceState.sentToday >= SOURCES[username].limit) {
+    if (!lock) {
+      return Response.json(
+        {
+          ok: true,
+          skipped: true,
+          reason: "Another Instagram execution is already active.",
+          username,
+        },
+        { status: 409 },
+      );
+    }
+
+    try {
+      const state = await readState(runtimeEnv, now.date);
+      const sourceState = state.sources[username];
+
+      if (sourceState.sentToday >= SOURCES[username].limit) {
+        return Response.json({
+          ok: true,
+          skipped: true,
+          reason: "Daily limit reached.",
+          username,
+          sentToday: sourceState.sentToday,
+          dailyLimit: SOURCES[username].limit,
+        });
+      }
+
+      const posts = await fetchPosts(
+        runtimeEnv,
+        username,
+        now.date,
+      );
+
+      const sent = new Set(sourceState.sentIds);
+      const pending = new Set(sourceState.pendingIds ?? []);
+
+      const candidate = posts.find(
+        (post) =>
+          !sent.has(post.id) &&
+          !pending.has(post.id) &&
+          !looksLikeAd(post),
+      );
+
+      if (!candidate) {
+        return Response.json({
+          ok: true,
+          skipped: true,
+          reason: "No eligible unsent post was found.",
+          username,
+          scanned: posts.length,
+        });
+      }
+
+      // Save a pending marker before sending. If the request times out
+      // or the result becomes ambiguous, this post will not be retried
+      // automatically and risk being sent twice.
+      sourceState.pendingIds = [
+        ...(sourceState.pendingIds ?? []),
+        candidate.id,
+      ].slice(-3000);
+
+      state.tehranDate = now.date;
+      await writeState(runtimeEnv, state);
+
+      await sendToBale(runtimeEnv, username, candidate);
+
+      sourceState.pendingIds = (
+        sourceState.pendingIds ?? []
+      ).filter((id) => id !== candidate.id);
+
+      sourceState.sentIds = [
+        ...sourceState.sentIds,
+        candidate.id,
+      ].slice(-3000);
+
+      sourceState.sentToday += 1;
+
+      await writeState(runtimeEnv, state);
+
       return Response.json({
         ok: true,
-        skipped: true,
-        reason: "Daily limit reached.",
+        sent: true,
         username,
+        postId: candidate.id,
+        mediaType: candidate.mediaType,
         sentToday: sourceState.sentToday,
         dailyLimit: SOURCES[username].limit,
+        tehranTime:
+          `${now.date} ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")}`,
       });
+    } finally {
+      await releaseInstagramLock(runtimeEnv, lock);
     }
-
-    const posts = await fetchPosts(
-      runtimeEnv,
-      username,
-      now.date,
-    );
-
-    const sent = new Set(sourceState.sentIds);
-    const pending = new Set(sourceState.pendingIds ?? []);
-
-    const candidate = posts.find(
-      (post) =>
-        !sent.has(post.id) &&
-        !pending.has(post.id) &&
-        !looksLikeAd(post),
-    );
-
-    if (!candidate) {
-      return Response.json({
-        ok: true,
-        skipped: true,
-        reason: "No eligible unsent post was found.",
-        username,
-        scanned: posts.length,
-      });
-    }
-
-    // Save a pending marker before sending. If the request times out
-    // or the result becomes ambiguous, this post will not be retried
-    // automatically and risk being sent twice.
-    sourceState.pendingIds = [
-      ...(sourceState.pendingIds ?? []),
-      candidate.id,
-    ].slice(-3000);
-
-    state.tehranDate = now.date;
-    await writeState(runtimeEnv, state);
-
-    await sendToBale(runtimeEnv, username, candidate);
-
-    sourceState.pendingIds = (
-      sourceState.pendingIds ?? []
-    ).filter((id) => id !== candidate.id);
-
-    sourceState.sentIds = [
-      ...sourceState.sentIds,
-      candidate.id,
-    ].slice(-3000);
-
-    sourceState.sentToday += 1;
-
-    await writeState(runtimeEnv, state);
-
-    return Response.json({
-      ok: true,
-      sent: true,
-      username,
-      postId: candidate.id,
-      mediaType: candidate.mediaType,
-      sentToday: sourceState.sentToday,
-      dailyLimit: SOURCES[username].limit,
-      tehranTime:
-        `${now.date} ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")}`,
-    });
   } catch (error) {
     return Response.json(
       {
