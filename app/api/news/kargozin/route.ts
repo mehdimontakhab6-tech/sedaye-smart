@@ -212,6 +212,21 @@ function isReplyPost(block: string): boolean {
   return false;
 }
 
+function isServicePost(block: string): boolean {
+  const tags = /<[a-z][^>]*>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = tags.exec(block)) !== null) {
+    if (
+      hasClass(match[0], "tgme_widget_message_service")
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function htmlToText(html: string): string {
   return decodeHtml(
     html
@@ -337,9 +352,11 @@ function parseTelegramPosts(html: string): TelegramPost[] {
     if (!postMatch) continue;
 
     const id = postMatch[1];
-
+    
+if (isServicePost(block)) continue;
+    
     if (isReplyPost(block)) continue;
-
+    
     if (seenIds.has(id)) continue;
     seenIds.add(id);
 
