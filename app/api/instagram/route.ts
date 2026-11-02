@@ -672,56 +672,45 @@ async function sendToBale(
   const mediaField = post.mediaType === "video" ? "video" : "photo";
 
   const caption = post.caption
-  .replace(/\r\n?/g, "\n")
-  .split("\n")
-  .filter((line) => {
-    const normalizedLine = line
-      .replace(/[\u200c\u200f\u200e\u200b]/g, "")
-      .trim()
-      .toLowerCase();
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .filter((line) => {
+      const normalizedLine = line
+        .replace(/[\u200c\u200f\u200e\u200b]/g, "")
+        .trim()
+        .toLowerCase();
 
-    // حذف هشتگ اختصاصی قبلی
-    if (/^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)) {
-      return false;
-    }
+      // حذف هشتگ اختصاصی قبلی
+      if (/^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)) {
+        return false;
+      }
 
-    // حذف شناسه‌ها، فقط وقتی در یک خط مستقل باشند
-    if (
-      /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
-        normalizedLine,
-      )
-    ) {
-      return false;
-    }
+      // حذف شناسه‌ها، فقط وقتی در یک خط مستقل باشند
+      if (
+        /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
+          normalizedLine,
+        )
+      ) {
+        return false;
+      }
 
       return true;
-})
-.join("\n")
-.replace(/\n{3,}/g, "\n\n")
-.replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
-.trim();
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
+    .trim();
 
-  const chunks: string[] = [];
-  const maxLength = 900;
+  // کپشن رسانه حداکثر ۱۰۲۴ کاراکتر
+  const MEDIA_CAPTION_LIMIT = 1024;
 
-  let remaining = caption;
+  // سقف محافظه‌کارانه برای هر پیام متنی
+  const TEXT_MESSAGE_LIMIT = 4000;
 
-  while (remaining.length > maxLength) {
-    let splitAt = remaining.lastIndexOf("\n", maxLength);
-
-    if (splitAt < maxLength * 0.5) {
-      splitAt = remaining.lastIndexOf(" ", maxLength);
-    }
-
-    if (splitAt < maxLength * 0.5) {
-      splitAt = maxLength;
-    }
-
-    chunks.push(remaining.slice(0, splitAt).trim());
-    remaining = remaining.slice(splitAt).trim();
-  }
-
-  if (remaining) chunks.push(remaining);
+  // فقط وقتی کل متن در محدوده کپشن جا می‌شود،
+  // آن را همراه عکس یا ویدئو ارسال می‌کنیم.
+  const mediaCaption =
+    caption.length <= MEDIA_CAPTION_LIMIT ? caption : "";
 
   const firstResponse = await fetch(
     `https://tapi.bale.ai/bot${token}/${method}`,
@@ -731,7 +720,7 @@ async function sendToBale(
       body: JSON.stringify({
         chat_id: chatId,
         [mediaField]: post.mediaUrl,
-        caption: chunks[0] ?? "",
+        caption: mediaCaption,
       }),
       signal: AbortSignal.timeout(25000),
     },
@@ -747,7 +736,35 @@ async function sendToBale(
     );
   }
 
-  for (const chunk of chunks.slice(1)) {
+  // اگر کپشن همراه رسانه ارسال شده، کار تمام است.
+  if (!caption || mediaCaption) {
+    return;
+  }
+
+  // متن بلند را کامل و بدون حذف، به پیام‌های متنی تقسیم می‌کنیم.
+  const chunks: string[] = [];
+  let remaining = caption;
+
+  while (remaining.length > TEXT_MESSAGE_LIMIT) {
+    let splitAt = remaining.lastIndexOf("\n", TEXT_MESSAGE_LIMIT);
+
+    if (splitAt < TEXT_MESSAGE_LIMIT * 0.5) {
+      splitAt = remaining.lastIndexOf(" ", TEXT_MESSAGE_LIMIT);
+    }
+
+    if (splitAt < TEXT_MESSAGE_LIMIT * 0.5) {
+      splitAt = TEXT_MESSAGE_LIMIT;
+    }
+
+    chunks.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trim();
+  }
+
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  for (const chunk of chunks) {
     const textResponse = await fetch(
       `https://tapi.bale.ai/bot${token}/sendMessage`,
       {
