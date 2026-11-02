@@ -671,15 +671,33 @@ async function sendToBale(
   const mediaField = post.mediaType === "video" ? "video" : "photo";
 
   const caption = post.caption
-    .replace(
-      /(?:^|\n)\s*#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار\s*/giu,
-      "\n",
-    )
-    .replace(
-      /(?:^|\n)\s*@(?:athir_360|modiryar_com|mahdi_yarahmadi)\s*/giu,
-      "\n",
-    )
-    .trim();
+  .replace(/\r\n?/g, "\n")
+  .split("\n")
+  .filter((line) => {
+    const normalizedLine = line
+      .replace(/[\u200c\u200f\u200e\u200b]/g, "")
+      .trim()
+      .toLowerCase();
+
+    // حذف هشتگ اختصاصی قبلی
+    if (/^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)) {
+      return false;
+    }
+
+    // حذف شناسه‌ها، فقط وقتی در یک خط مستقل باشند
+    if (
+      /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
+        normalizedLine,
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  })
+  .join("\n")
+  .replace(/\n{3,}/g, "\n\n")
+  .trim();
 
   const chunks: string[] = [];
   const maxLength = 900;
