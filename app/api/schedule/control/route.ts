@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic";
 type ScheduleKey =
   | "calendar"
   | "news"
-  | "kargozin";
+  | "kargozin"
+  | "instagram";
 
 function getSupabaseConfig(env: CloudflareEnv) {
   return {
@@ -19,8 +20,7 @@ async function getSetting(
   key: string,
   fallback = true
 ) {
-  const { url, serviceKey } =
-    getSupabaseConfig(env);
+  const { url, serviceKey } = getSupabaseConfig(env);
 
   if (!url || !serviceKey) {
     throw new Error(
@@ -61,10 +61,7 @@ async function getSetting(
     );
   }
 
-  if (
-    !Array.isArray(rows) ||
-    rows.length === 0
-  ) {
+  if (!Array.isArray(rows) || rows.length === 0) {
     return fallback;
   }
 
@@ -76,8 +73,7 @@ async function setSetting(
   key: string,
   enabled: boolean
 ) {
-  const { url, serviceKey } =
-    getSupabaseConfig(env);
+  const { url, serviceKey } = getSupabaseConfig(env);
 
   if (!url || !serviceKey) {
     throw new Error(
@@ -115,33 +111,48 @@ async function setSetting(
   return text;
 }
 
+function getSettingKey(schedule: ScheduleKey) {
+  switch (schedule) {
+    case "calendar":
+      return "schedule_calendar";
+    case "news":
+      return "schedule_news";
+    case "kargozin":
+      return "schedule_kargozin";
+    case "instagram":
+      return "instagram_bale_repost_enabled_v1";
+  }
+}
+
 export async function GET() {
   try {
-    const { env } =
-      await getCloudflareContext({
-        async: true,
-      });
+    const { env } = await getCloudflareContext({
+      async: true,
+    });
 
-    const calendar =
-      await getSetting(
-        env,
-        "schedule_calendar",
-        true
-      );
+    const calendar = await getSetting(
+      env,
+      "schedule_calendar",
+      true
+    );
 
-    const news =
-      await getSetting(
-        env,
-        "schedule_news",
-        true
-      );
+    const news = await getSetting(
+      env,
+      "schedule_news",
+      true
+    );
 
-    const kargozin =
-      await getSetting(
-        env,
-        "schedule_kargozin",
-        true
-      );
+    const kargozin = await getSetting(
+      env,
+      "schedule_kargozin",
+      true
+    );
+
+    const instagram = await getSetting(
+      env,
+      "instagram_bale_repost_enabled_v1",
+      true
+    );
 
     return Response.json(
       {
@@ -149,6 +160,7 @@ export async function GET() {
         calendar,
         news,
         kargozin,
+        instagram,
       },
       {
         headers: {
@@ -176,21 +188,18 @@ export async function GET() {
   }
 }
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const schedule =
-      body?.schedule as ScheduleKey;
-
+    const schedule = body?.schedule as ScheduleKey;
     const enabled = body?.enabled;
 
     if (
       schedule !== "calendar" &&
       schedule !== "news" &&
-      schedule !== "kargozin"
+      schedule !== "kargozin" &&
+      schedule !== "instagram"
     ) {
       return Response.json(
         {
@@ -201,34 +210,23 @@ export async function POST(
       );
     }
 
-    if (
-      typeof enabled !== "boolean"
-    ) {
+    if (typeof enabled !== "boolean") {
       return Response.json(
         {
           ok: false,
-          error:
-            "وضعیت ارسال نامعتبر است.",
+          error: "وضعیت ارسال نامعتبر است.",
         },
         { status: 400 }
       );
     }
 
-    const { env } =
-      await getCloudflareContext({
-        async: true,
-      });
-
-    const settingKey =
-      schedule === "calendar"
-        ? "schedule_calendar"
-        : schedule === "news"
-        ? "schedule_news"
-        : "schedule_kargozin";
+    const { env } = await getCloudflareContext({
+      async: true,
+    });
 
     await setSetting(
       env,
-      settingKey,
+      getSettingKey(schedule),
       enabled
     );
 
