@@ -18,7 +18,7 @@ const TEHRAN_TIME_ZONE = "Asia/Tehran";
 const SEND_START_MINUTES = 8 * 60;
 const SEND_END_MINUTES = 23 * 60;
 
-const NOTICE = "🔴 نبض خبر گروه صدای کارکنان ثبت احوال";
+const NOTICE = "🔴 نبض خبر";
 
 type TelegramPost = {
   id: string;
