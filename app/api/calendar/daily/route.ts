@@ -881,11 +881,38 @@ function getInternationalEvents(
   return fixed[`${month}-${day}`] || [];
 }
 
-function getDailyContent(dayOfYear: number) {
-  const item =
-    DAILY_CONTENT[
-      (dayOfYear - 1) % DAILY_CONTENT.length
-    ] as any;
+function getDailyContent(dateKey: string) {
+  const authors = Array.from(
+    new Set(
+      DAILY_CONTENT.map((item: any) =>
+        Array.isArray(item) ? item[0] : item.author
+      )
+    )
+  );
+
+  const authorIndex =
+    Math.floor(
+      (new Date(`${dateKey}T12:00:00Z`).getTime() / 86400000)
+    ) % authors.length;
+
+  const author = authors[
+    (authorIndex + authors.length) % authors.length
+  ];
+
+  const authorQuotes = DAILY_CONTENT.filter((item: any) => {
+    const itemAuthor = Array.isArray(item)
+      ? item[0]
+      : item.author;
+
+    return itemAuthor === author;
+  });
+
+  const quoteIndex =
+    Math.floor(
+      new Date(`${dateKey}T12:00:00Z`).getTime() / 86400000
+    ) % authorQuotes.length;
+
+  const item = authorQuotes[quoteIndex] as any;
 
   if (Array.isArray(item)) {
     return {
@@ -1841,7 +1868,7 @@ const internationalEvents = internationalEventCandidates.filter(
       persian.year
     );
 
-    const content = getDailyContent(progress.dayOfYear);
+    const content = getDailyContent(gregorian);
     const animal = getAnimal(persian.year);
 
     const hijriText = hijri
