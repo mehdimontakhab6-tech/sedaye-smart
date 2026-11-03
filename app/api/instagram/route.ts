@@ -667,7 +667,7 @@ async function sendToBale(
   }
 
   const TITLE =
-    "🟢 مبانی توسعه مدیریت، گروه صدای کارکنان ثبت احوال";
+    "🟢 رویکردها و فرآیند توسعه مدیریت";
 
   const MEDIA_CAPTION_LIMIT = 1024;
   const TEXT_MESSAGE_LIMIT = 4000;
