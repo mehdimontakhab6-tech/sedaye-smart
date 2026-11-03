@@ -907,12 +907,12 @@ async function sendToBale(
     });
   }
 
-  console.info("Instagram continuation completed", {
+    console.info("Instagram continuation completed", {
     username,
     postId: post.id,
     chunkCount: chunks.length,
   });
-    }
+}
 
 export async function GET(request: Request): Promise<Response> {
   try {
