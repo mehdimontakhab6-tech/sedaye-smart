@@ -678,14 +678,43 @@ async function sendToBale(
   const mediaField =
     post.mediaType === "video" ? "video" : "photo";
 
-  const cleanedCaption = post.caption
+    const cleanedCaption = post.caption
     .replace(/\r\n?/g, "\n")
     .split("\n")
-    .filter((line) => {
+    .map((line) => {
       const normalizedLine = line
-        .replace(/[\u200c\u200f\u200e\u200b]/g, "")
+        .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff]/g, "")
         .trim()
         .toLowerCase();
+
+      // خطوطی که فقط شامل فاصله یا کاراکتر نامرئی هستند،
+      // به خط خالی تبدیل می‌شوند.
+      if (!normalizedLine) {
+        return "";
+      }
+
+      if (
+        /^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
+      ) {
+        return null;
+      }
+
+      if (
+        /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
+          normalizedLine,
+        )
+      ) {
+        return null;
+      }
+
+      // نیم‌فاصله‌های داخل متن فارسی حفظ می‌شوند.
+      return line.replace(/[ \t\u200b\u200d\u200e\u200f\u2060\ufeff]+$/g, "");
+    })
+    .filter((line): line is string => line !== null)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
+    .trim();
 
       if (
         /^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
