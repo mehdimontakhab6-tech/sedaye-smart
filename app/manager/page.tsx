@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -5,7 +6,8 @@ import { useEffect, useState } from "react";
 type ScheduleKind =
   | "calendar"
   | "news"
-  | "kargozin";
+  | "kargozin"
+  | "instagram";
 
 const schedules = [
   {
@@ -28,12 +30,21 @@ const schedules = [
   },
   {
     kind: "kargozin" as ScheduleKind,
-    title: "📚 مجله کارگزینی",
+    title: "📚 کارگزین",
     time: "⏱ بررسی هر دقیقه",
     description:
-      "بررسی خودکار مطالب جدید مجله کارگزینی و ارسال مطالب جدید به گروه",
-    cancelLabel: "🛑 خاموش کردن مجله کارگزینی",
-    enableLabel: "▶️ روشن کردن مجله کارگزینی",
+      "بررسی خودکار مطالب جدید کارگزین و ارسال مطالب جدید به گروه",
+    cancelLabel: "🛑 لغو کارگزین",
+    enableLabel: "▶️ فعال سازی کارگزین",
+  },
+  {
+    kind: "instagram" as ScheduleKind,
+    title: "📸 بازنشر اینستاگرام در گروه بله",
+    time: "۱۲:۱۵، ۱۴:۱۵، ۱۶:۱۵، ۱۸:۱۵، ۲۰:۱۵ و ۲۲:۱۵ تهران",
+    description:
+      "بازنشر خودکار مطالب دو صفحه اینستاگرام در گروه بله",
+    cancelLabel: "🛑 لغو ارسال اینستاگرام",
+    enableLabel: "▶️ فعال‌سازی ارسال اینستاگرام",
   },
 ];
 
@@ -48,6 +59,7 @@ export default function ManagerPage() {
     calendar: true,
     news: true,
     kargozin: true,
+    instagram: true,
   });
 
   const [saving, setSaving] =
@@ -107,6 +119,8 @@ export default function ManagerPage() {
             data.news !== false,
           kargozin:
             data.kargozin !== false,
+          instagram:
+            data.instagram !== false,
         });
       }
     } catch {
@@ -772,4 +786,4 @@ export default function ManagerPage() {
 
     </main>
   );
-                  }
+}
