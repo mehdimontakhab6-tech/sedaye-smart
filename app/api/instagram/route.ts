@@ -716,30 +716,6 @@ async function sendToBale(
     .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
     .trim();
 
-      if (
-        /^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
-      ) {
-        return false;
-      }
-
-      if (
-        /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
-          normalizedLine,
-        )
-      ) {
-        return false;
-      }
-
-      return true;
-    })
-        .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
-    .replace(/^[\s\u200b\u200c\u200d\u200e\u200f\ufeff]+/u, "")
-    .replace(/[\s\u200b\u200c\u200d\u200e\u200f\ufeff]+$/u, "")
-    .replace(/\n{2,}/g, "\n")
-    .trim();
-
   // عنوان همیشه فقط یک بار و با یک خط خالی بعد از آن قرار می‌گیرد.
   const completeText = cleanedCaption
     ? `${TITLE}\n\n${cleanedCaption}`
