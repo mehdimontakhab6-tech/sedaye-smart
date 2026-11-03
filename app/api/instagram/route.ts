@@ -1,4 +1,3 @@
-
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
@@ -668,10 +667,16 @@ async function sendToBale(
     throw new Error("BALE_SMART_TOKEN or BALE_GROUP_ID is missing.");
   }
 
-  const method = post.mediaType === "video" ? "sendVideo" : "sendPhoto";
-  const mediaField = post.mediaType === "video" ? "video" : "photo";
+  const TITLE =
+    "♦️مبانی توسعه مدیریت، گروه صدای کارکنان ثبت احوال";
 
-  const caption = post.caption
+  const method =
+    post.mediaType === "video" ? "sendVideo" : "sendPhoto";
+
+  const mediaField =
+    post.mediaType === "video" ? "video" : "photo";
+
+  const cleanedCaption = post.caption
     .replace(/\r\n?/g, "\n")
     .split("\n")
     .filter((line) => {
@@ -680,12 +685,14 @@ async function sendToBale(
         .trim()
         .toLowerCase();
 
-      // حذف هشتگ اختصاصی قبلی
-      if (/^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)) {
+      if (
+        /^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(
+          normalizedLine,
+        )
+      ) {
         return false;
       }
 
-      // حذف شناسه‌ها، فقط وقتی در یک خط مستقل باشند
       if (
         /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
           normalizedLine,
@@ -701,22 +708,29 @@ async function sendToBale(
     .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
     .trim();
 
-  // کپشن رسانه حداکثر ۱۰۲۴ کاراکتر
-  const MEDIA_CAPTION_LIMIT = 1024;
+  // تیتر فقط یک بار و در ابتدای هر پست قرار می‌گیرد.
+  const caption = cleanedCaption
+    ? `${TITLE}\n${cleanedCaption}`
+    : TITLE;
 
-  // سقف محافظه‌کارانه برای هر پیام متنی
+  const MEDIA_CAPTION_LIMIT = 1024;
   const TEXT_MESSAGE_LIMIT = 4000;
 
-  // فقط وقتی کل متن در محدوده کپشن جا می‌شود،
-  // آن را همراه عکس یا ویدئو ارسال می‌کنیم.
+  // Array.from مانع شکستن ایموجی‌ها و کاراکترهای چندواحدی می‌شود.
+  const characters = Array.from(caption);
+
   const mediaCaption =
-    caption.length <= MEDIA_CAPTION_LIMIT ? caption : "";
+    characters.length <= MEDIA_CAPTION_LIMIT
+      ? caption
+      : "";
 
   const firstResponse = await fetch(
     `https://tapi.bale.ai/bot${token}/${method}`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         chat_id: chatId,
         [mediaField]: post.mediaUrl,
@@ -727,49 +741,112 @@ async function sendToBale(
   );
 
   const firstResult = await firstResponse.json().catch(() => null) as
-    | { ok?: boolean; description?: string }
+    | {
+        ok?: boolean;
+        description?: string;
+        result?: {
+          caption?: string;
+          message_id?: number;
+        };
+      }
     | null;
 
   if (!firstResponse.ok || firstResult?.ok !== true) {
     throw new Error(
-      `Bale ${method} failed: ${firstResult?.description ?? `HTTP ${firstResponse.status}`}`,
+      `Bale ${method} failed: ${
+        firstResult?.description ??
+        `HTTP ${firstResponse.status}`
+      }`,
     );
   }
 
-  // اگر کپشن همراه رسانه ارسال شده، کار تمام است.
-  if (!caption || mediaCaption) {
+  // ثبت اطلاعات تشخیصی بدون ذخیره متن کپشن
+  console.info("Instagram media sent", {
+    username,
+    postId: post.id,
+    originalCaptionLength: Array.from(post.caption).length,
+    finalCaptionLength: characters.length,
+    mediaCaptionLength: Array.from(mediaCaption).length,
+    mediaMessageId: firstResult.result?.message_id ?? null,
+    mediaType: post.mediaType,
+  });
+
+  // اگر متن کامل همراه رسانه ارسال شده، کار تمام است.
+  if (mediaCaption) {
     return;
   }
 
-  // متن بلند را کامل و بدون حذف، به پیام‌های متنی تقسیم می‌کنیم.
+  // تقسیم متن بلند به قطعات مستقل، بدون حذف متن
   const chunks: string[] = [];
-  let remaining = caption;
+  let remaining = characters;
 
-  while (remaining.length > TEXT_MESSAGE_LIMIT) {
-    let splitAt = remaining.lastIndexOf("\n", TEXT_MESSAGE_LIMIT);
-
-    if (splitAt < TEXT_MESSAGE_LIMIT * 0.5) {
-      splitAt = remaining.lastIndexOf(" ", TEXT_MESSAGE_LIMIT);
+  while (remaining.length > 0) {
+    if (remaining.length <= TEXT_MESSAGE_LIMIT) {
+      chunks.push(remaining.join(""));
+      break;
     }
 
-    if (splitAt < TEXT_MESSAGE_LIMIT * 0.5) {
+    let splitAt = -1;
+
+    // ابتدا نزدیک‌ترین خط جدید را پیدا می‌کنیم.
+    for (let i = TEXT_MESSAGE_LIMIT; i > TEXT_MESSAGE_LIMIT * 0.5; i--) {
+      if (remaining[i] === "\n") {
+        splitAt = i;
+        break;
+      }
+    }
+
+    // اگر خط جدید مناسبی نبود، فاصله را پیدا می‌کنیم.
+    if (splitAt === -1) {
+      for (let i = TEXT_MESSAGE_LIMIT; i > TEXT_MESSAGE_LIMIT * 0.5; i--) {
+        if (remaining[i] === " ") {
+          splitAt = i;
+          break;
+        }
+      }
+    }
+
+    // اگر مرز مناسبی پیدا نشد، در حد مجاز تقسیم می‌کنیم.
+    if (splitAt === -1) {
       splitAt = TEXT_MESSAGE_LIMIT;
     }
 
-    chunks.push(remaining.slice(0, splitAt).trim());
-    remaining = remaining.slice(splitAt).trim();
+    const chunk = remaining.slice(0, splitAt).join("").trim();
+
+    if (chunk) {
+      chunks.push(chunk);
+    }
+
+    remaining = remaining.slice(splitAt);
+
+    // فاصله یا خط جدیدِ مرز دو پیام حذف می‌شود.
+    while (
+      remaining.length > 0 &&
+      (remaining[0] === " " || remaining[0] === "\n")
+    ) {
+      remaining.shift();
+    }
   }
 
-  if (remaining) {
-    chunks.push(remaining);
-  }
+  console.info("Instagram long caption prepared", {
+    username,
+    postId: post.id,
+    totalCharacters: characters.length,
+    chunkCount: chunks.length,
+    chunkLengths: chunks.map((chunk) => Array.from(chunk).length),
+  });
 
-  for (const chunk of chunks) {
+  // ارسال تمام قطعات و بررسی جداگانه نتیجه هر ارسال
+  for (let index = 0; index < chunks.length; index++) {
+    const chunk = chunks[index];
+
     const textResponse = await fetch(
       `https://tapi.bale.ai/bot${token}/sendMessage`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           chat_id: chatId,
           text: chunk,
@@ -779,14 +856,41 @@ async function sendToBale(
     );
 
     const textResult = await textResponse.json().catch(() => null) as
-      | { ok?: boolean; description?: string }
+      | {
+          ok?: boolean;
+          description?: string;
+          result?: {
+            message_id?: number;
+          };
+        }
       | null;
 
     if (!textResponse.ok || textResult?.ok !== true) {
+      console.error("Instagram text message failed", {
+        username,
+        postId: post.id,
+        chunkIndex: index + 1,
+        chunkCount: chunks.length,
+        chunkLength: Array.from(chunk).length,
+        httpStatus: textResponse.status,
+        error: textResult?.description ?? "Unknown Bale API error",
+      });
+
       throw new Error(
-        `Bale sendMessage failed: ${textResult?.description ?? `HTTP ${textResponse.status}`}`,
+        `Bale sendMessage failed for chunk ${index + 1}/${chunks.length}: ${
+          textResult?.description ??
+          `HTTP ${textResponse.status}`
+        }`,
       );
     }
+
+    console.info("Instagram text chunk sent", {
+      username,
+      postId: post.id,
+      chunkIndex: index + 1,
+      chunkCount: chunks.length,
+      messageId: textResult.result?.message_id ?? null,
+    });
   }
 }
 
