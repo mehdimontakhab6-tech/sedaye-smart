@@ -668,7 +668,7 @@ async function sendToBale(
   }
 
   const TITLE =
-    "♦️مبانی توسعه مدیریت، گروه صدای کارکنان ثبت احوال";
+    "🟢 مبانی توسعه مدیریت، گروه صدای کارکنان ثبت احوال";
 
   const method =
     post.mediaType === "video" ? "sendVideo" : "sendPhoto";
