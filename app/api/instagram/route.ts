@@ -703,9 +703,12 @@ async function sendToBale(
 
       return true;
     })
-    .join("\n")
+        .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
+    .replace(/^[\s\u200b\u200c\u200d\u200e\u200f\ufeff]+/u, "")
+    .replace(/[\s\u200b\u200c\u200d\u200e\u200f\ufeff]+$/u, "")
+    .replace(/\n{2,}/g, "\n")
     .trim();
 
   // عنوان همیشه فقط یک بار و با یک خط خالی بعد از آن قرار می‌گیرد.
