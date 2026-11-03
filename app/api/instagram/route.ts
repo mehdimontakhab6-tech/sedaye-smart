@@ -581,14 +581,13 @@ function parseToolzerPost(node: any): Post | null {
   );
 
   if (
-    !id ||
-    !shortcode ||
-    !caption ||
-    !mediaUrl ||
-    !Number.isFinite(timestamp) ||
-    timestamp <= 0
-  ) {
-    return null;
+  !id ||
+  !shortcode ||
+  !mediaUrl ||
+  !Number.isFinite(timestamp) ||
+  timestamp <= 0
+) {
+  return null;
   }
 
   return {
@@ -670,6 +669,9 @@ async function sendToBale(
   const TITLE =
     "🟢 مبانی توسعه مدیریت، گروه صدای کارکنان ثبت احوال";
 
+  const MEDIA_CAPTION_LIMIT = 1024;
+  const TEXT_MESSAGE_LIMIT = 4000;
+
   const method =
     post.mediaType === "video" ? "sendVideo" : "sendPhoto";
 
@@ -686,9 +688,7 @@ async function sendToBale(
         .toLowerCase();
 
       if (
-        /^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(
-          normalizedLine,
-        )
+        /^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
       ) {
         return false;
       }
@@ -708,21 +708,66 @@ async function sendToBale(
     .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
     .trim();
 
-  // تیتر فقط یک بار و در ابتدای هر پست قرار می‌گیرد.
-  const caption = cleanedCaption
-    ? `${TITLE}\n${cleanedCaption}`
+  // عنوان همیشه فقط یک بار و با یک خط خالی بعد از آن قرار می‌گیرد.
+  const completeText = cleanedCaption
+    ? `${TITLE}\n\n${cleanedCaption}`
     : TITLE;
 
-  const MEDIA_CAPTION_LIMIT = 1024;
-  const TEXT_MESSAGE_LIMIT = 4000;
+  /**
+   * متن را در محدوده مجاز تقسیم می‌کند.
+   * اولویت با خط جدید و سپس فاصله است.
+   * هیچ کاراکتری از متن حذف نمی‌شود.
+   */
+  function takeChunk(
+    text: string,
+    limit: number,
+  ): { chunk: string; remaining: string } {
+    const characters = Array.from(text);
 
-  // Array.from مانع شکستن ایموجی‌ها و کاراکترهای چندواحدی می‌شود.
-  const characters = Array.from(caption);
+    if (characters.length <= limit) {
+      return {
+        chunk: text,
+        remaining: "",
+      };
+    }
 
-  const mediaCaption =
-    characters.length <= MEDIA_CAPTION_LIMIT
-      ? caption
-      : "";
+    let splitAt = -1;
+
+    for (let i = limit; i > limit * 0.5; i--) {
+      if (characters[i] === "\n") {
+        splitAt = i + 1;
+        break;
+      }
+    }
+
+    if (splitAt === -1) {
+      for (let i = limit; i > limit * 0.5; i--) {
+        if (characters[i] === " ") {
+          splitAt = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (splitAt === -1) {
+      splitAt = limit;
+    }
+
+    return {
+      chunk: characters.slice(0, splitAt).join(""),
+      remaining: characters.slice(splitAt).join(""),
+    };
+  }
+
+  // کپشن رسانه شامل عنوان و در صورت وجود، متن پست است.
+  // کپشن به‌صورت پیش‌فرض زیر عکس یا فیلم نمایش داده می‌شود.
+  const firstPart = takeChunk(
+    completeText,
+    MEDIA_CAPTION_LIMIT,
+  );
+
+  const mediaCaption = firstPart.chunk;
+  let remainingText = firstPart.remaining;
 
   const firstResponse = await fetch(
     `https://tapi.bale.ai/bot${token}/${method}`,
@@ -745,7 +790,6 @@ async function sendToBale(
         ok?: boolean;
         description?: string;
         result?: {
-          caption?: string;
           message_id?: number;
         };
       }
@@ -760,83 +804,45 @@ async function sendToBale(
     );
   }
 
-  // ثبت اطلاعات تشخیصی بدون ذخیره متن کپشن
   console.info("Instagram media sent", {
     username,
     postId: post.id,
     originalCaptionLength: Array.from(post.caption).length,
-    finalCaptionLength: characters.length,
+    finalCaptionLength: Array.from(completeText).length,
     mediaCaptionLength: Array.from(mediaCaption).length,
+    remainingLength: Array.from(remainingText).length,
     mediaMessageId: firstResult.result?.message_id ?? null,
     mediaType: post.mediaType,
   });
 
-  // اگر متن کامل همراه رسانه ارسال شده، کار تمام است.
-  if (mediaCaption) {
+  // اگر ادامه‌ای وجود ندارد، کار تمام است.
+  if (!remainingText) {
     return;
   }
 
-  // تقسیم متن بلند به قطعات مستقل، بدون حذف متن
+  // ادامه متن بدون تکرار عنوان ارسال می‌شود.
   const chunks: string[] = [];
-  let remaining = characters;
 
-  while (remaining.length > 0) {
-    if (remaining.length <= TEXT_MESSAGE_LIMIT) {
-      chunks.push(remaining.join(""));
-      break;
-    }
+  while (remainingText.length > 0) {
+    const part = takeChunk(
+      remainingText,
+      TEXT_MESSAGE_LIMIT,
+    );
 
-    let splitAt = -1;
-
-    // ابتدا نزدیک‌ترین خط جدید را پیدا می‌کنیم.
-    for (let i = TEXT_MESSAGE_LIMIT; i > TEXT_MESSAGE_LIMIT * 0.5; i--) {
-      if (remaining[i] === "\n") {
-        splitAt = i;
-        break;
-      }
-    }
-
-    // اگر خط جدید مناسبی نبود، فاصله را پیدا می‌کنیم.
-    if (splitAt === -1) {
-      for (let i = TEXT_MESSAGE_LIMIT; i > TEXT_MESSAGE_LIMIT * 0.5; i--) {
-        if (remaining[i] === " ") {
-          splitAt = i;
-          break;
-        }
-      }
-    }
-
-    // اگر مرز مناسبی پیدا نشد، در حد مجاز تقسیم می‌کنیم.
-    if (splitAt === -1) {
-      splitAt = TEXT_MESSAGE_LIMIT;
-    }
-
-    const chunk = remaining.slice(0, splitAt).join("").trim();
-
-    if (chunk) {
-      chunks.push(chunk);
-    }
-
-    remaining = remaining.slice(splitAt);
-
-    // فاصله یا خط جدیدِ مرز دو پیام حذف می‌شود.
-    while (
-      remaining.length > 0 &&
-      (remaining[0] === " " || remaining[0] === "\n")
-    ) {
-      remaining.shift();
-    }
+    chunks.push(part.chunk);
+    remainingText = part.remaining;
   }
 
   console.info("Instagram long caption prepared", {
     username,
     postId: post.id,
-    totalCharacters: characters.length,
     chunkCount: chunks.length,
-    chunkLengths: chunks.map((chunk) => Array.from(chunk).length),
+    chunkLengths: chunks.map(
+      (chunk) => Array.from(chunk).length,
+    ),
   });
 
-  // ارسال تمام قطعات و بررسی جداگانه نتیجه هر ارسال
+  // ارسال تمام قطعات متن و بررسی پاسخ هر درخواست
   for (let index = 0; index < chunks.length; index++) {
     const chunk = chunks[index];
 
@@ -892,7 +898,13 @@ async function sendToBale(
       messageId: textResult.result?.message_id ?? null,
     });
   }
-}
+
+  console.info("Instagram continuation completed", {
+    username,
+    postId: post.id,
+    chunkCount: chunks.length,
+  });
+    }
 
 export async function GET(request: Request): Promise<Response> {
   try {
