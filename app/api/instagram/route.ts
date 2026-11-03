@@ -806,11 +806,26 @@ export async function GET(request: Request): Promise<Response> {
       Boolean(secret) &&
       request.headers.get("x-instagram-test-secret") === secret;
 
-    if (forceRequested && !force) {
+        if (forceRequested && !force) {
       return Response.json(
         { ok: false, error: "Invalid test authorization." },
         { status: 403 },
       );
+    }
+
+    // Check the persistent Instagram repost switch.
+    // Missing setting means enabled, preserving the previous behavior.
+    const instagramEnabled = await readSetting(
+      runtimeEnv,
+      "instagram_bale_repost_enabled_v1",
+    );
+
+    if (instagramEnabled === false) {
+      return Response.json({
+        ok: true,
+        skipped: true,
+        reason: "Instagram reposting is disabled.",
+      });
     }
 
     const now = tehranTime();
