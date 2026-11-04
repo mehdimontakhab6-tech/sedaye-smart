@@ -694,9 +694,9 @@ async function sendToBale(
       }
 
       if (
-        /^#پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
-      ) {
-        return null;
+  /^#?پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
+) {
+  return null;
       }
 
       if (
@@ -714,7 +714,9 @@ async function sendToBale(
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
-    .trim();
+.replace(/[\p{S}\p{Z}\s_#]+$/gu, "")
+.replace(/[،؛:!?؟]+$/gu, "")
+.trim();
 
   // عنوان همیشه فقط یک بار و با یک خط خالی بعد از آن قرار می‌گیرد.
   const completeText = cleanedCaption
@@ -761,10 +763,19 @@ async function sendToBale(
       splitAt = limit;
     }
 
+        let chunk = characters.slice(0, splitAt).join("");
+    let remaining = characters.slice(splitAt).join("");
+
+    // جلوگیری از باقی ماندن فضای خالی در انتهای پیام اول
+    chunk = chunk.replace(/\n+$/g, "");
+
+    // حذف خط‌های خالی اضافی ابتدای پیام ادامه
+    remaining = remaining.replace(/^\n+/g, "");
+
     return {
-      chunk: characters.slice(0, splitAt).join(""),
-      remaining: characters.slice(splitAt).join(""),
-    };
+  chunk,
+  remaining,
+};
   }
 
   // کپشن رسانه شامل عنوان و در صورت وجود، متن پست است.
