@@ -217,7 +217,7 @@ function isServicePost(block: string): boolean {
 
   while ((match = tags.exec(block)) !== null) {
     if (
-      hasClass(match[0], "tgme_widget_message_service")
+      hasClass(match[0], "service_message")
     ) {
       return true;
     }
