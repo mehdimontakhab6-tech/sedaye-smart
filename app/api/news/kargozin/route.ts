@@ -1,4 +1,3 @@
-
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +14,7 @@ const STATE_KEY = "kargozin_telegram_state";
 const MAX_SEEN_IDS = 1500;
 const MIN_SEND_INTERVAL_MS = 20 * 60 * 1000;
 const TEHRAN_TIME_ZONE = "Asia/Tehran";
-const SEND_START_MINUTES = 8 * 60;
+const SEND_START_MINUTES = 8 * 60 + 5;
 const SEND_END_MINUTES = 23 * 60;
 
 const NOTICE = "🔴 نبض خبر";
