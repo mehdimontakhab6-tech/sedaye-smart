@@ -231,6 +231,31 @@ function htmlToText(html: string): string {
     html
       .replace(/<!--[\s\S]*?-->/g, "")
       .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "")
+      .replace(
+        /<a\b([^>]*)>([\s\S]*?)<\/a>/gi,
+        (match, attributes: string, inner: string) => {
+          const hrefMatch = attributes.match(
+            /\bhref\s*=\s*(["'])(.*?)\1/i,
+          );
+
+          if (!hrefMatch) return inner;
+
+          const href = decodeHtml(hrefMatch[2]).trim();
+          const linkText = decodeHtml(
+            inner.replace(/<[^>]*>/g, ""),
+          ).trim();
+
+          if (!/^https?:\/\//i.test(href)) {
+            return inner;
+          }
+
+          if (linkText.includes(href)) {
+            return inner;
+          }
+
+          return `${inner}\n${href}`;
+        },
+      )
       .replace(/<br\b[^>]*>/gi, "\n")
       .replace(/<\/(?:p|div|li|blockquote|h[1-6])\s*>/gi, "\n")
       .replace(/<[^>]*>/g, ""),
@@ -247,6 +272,13 @@ function cleanPostText(input: string): string {
     .replace(/\u00a0/g, " ")
     .replace(/\r/g, "")
     .trim();
+
+  // حذف علامت جداکننده و تمام مطالب بعد از آن
+  const separatorIndex = text.indexOf("🔹🔸🔹🔸");
+
+  if (separatorIndex !== -1) {
+    text = text.slice(0, separatorIndex);
+  }
 
   const footerMarkers = [
     /با\s*[\(（]?\s*کانال\s*[\)）]?\s*کارگزین\s*آنلاین\s*به\s*روز\s*باشید/i,
@@ -282,13 +314,8 @@ function cleanPostText(input: string): string {
     )
     .replace(/(?:^|\n)[ \t\u200c]+(?=\n|$)/g, "\n");
 
+  // آدرس‌های اینترنتی حذف نمی‌شوند.
   text = text
-    .replace(/https?:\/\/[^\s]+/gi, "")
-    .replace(
-      /\b(?:www\.)?(?:t\.me|telegram\.me|ble\.ir|eitaa\.com|rubika\.ir)\/[^\s]*/gi,
-      "",
-    )
-    .replace(/\bwww\.[^\s]+/gi, "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n[ \t]+/g, "\n")
