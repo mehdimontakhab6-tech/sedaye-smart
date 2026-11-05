@@ -678,45 +678,53 @@ async function sendToBale(
   const mediaField =
     post.mediaType === "video" ? "video" : "photo";
 
-    const cleanedCaption = post.caption
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => {
-      const normalizedLine = line
-        .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff]/g, "")
-        .trim()
-        .toLowerCase();
+    
+const cleanedCaption = post.caption
+  .replace(/\r\n?/g, "\n")
+  .split("\n")
+  .map((line) => {
+    const normalizedLine = line
+      .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff]/g, "")
+      .trim()
+      .toLowerCase();
 
-      // خطوطی که فقط شامل فاصله یا کاراکتر نامرئی هستند،
-      // به خط خالی تبدیل می‌شوند.
-      if (!normalizedLine) {
-        return "";
-      }
+    if (!normalizedLine) {
+      return "";
+    }
 
-      if (
-  /^#?پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
-) {
-  return null;
-      }
+    // حذف نام پایگاه جامع مدیریار
+    if (
+      /^#?پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
+    ) {
+      return null;
+    }
 
-      if (
-        /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
-          normalizedLine,
-        )
-      ) {
-        return null;
-      }
+    // حذف آیدی‌های مشخص‌شده
+    if (
+      /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
+        normalizedLine,
+      )
+    ) {
+      return null;
+    }
 
-      // نیم‌فاصله‌های داخل متن فارسی حفظ می‌شوند.
-      return line.replace(/[ \t\u200b\u200d\u200e\u200f\u2060\ufeff]+$/g, "");
-    })
-    .filter((line): line is string => line !== null)
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
-.replace(/[\p{S}\p{Z}\s_#]+$/gu, "")
-.replace(/[،؛:!?؟]+$/gu, "")
-.trim();
+    // حفظ نیم‌فاصله‌های متن فارسی
+    return line.replace(/[ \t\u200b\u200d\u200e\u200f\u2060\ufeff]+$/g, "");
+  })
+  .filter((line): line is string => line !== null)
+  .join("\n")
+  .replace(/\n{3,}/g, "\n\n")
+
+  // حذف منشن‌های انتهای متن
+  .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
+
+  // حذف کامل هشتگ‌های انتهایی، حتی اگر چند خط باشند
+  .replace(/(?:\s*#[\p{L}\p{N}_‌]+)+\s*$/gu, "")
+
+  // حذف علائم اضافی انتهای متن
+  .replace(/[\p{S}\p{Z}\s_#]+$/gu, "")
+  .replace(/[،؛:!?؟]+$/gu, "")
+  .trim();
 
   // عنوان همیشه فقط یک بار و با یک خط خالی بعد از آن قرار می‌گیرد.
   const completeText = cleanedCaption
