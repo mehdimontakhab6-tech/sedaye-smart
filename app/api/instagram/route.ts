@@ -79,7 +79,7 @@ function sourceForHour(hour: number): Username | null {
     return "modiryar_com";
   }
 
-  if ([12, 18].includes(hour)) {
+  if ([15, 18].includes(hour)) {
     return "hr.garden";
   }
 
