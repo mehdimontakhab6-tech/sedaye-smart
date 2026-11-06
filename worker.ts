@@ -1,4 +1,3 @@
-
  // @ts-ignore .open-next/worker.js is generated at build time
 import { default as handler } from "./.open-next/worker.js";
 
@@ -255,7 +254,7 @@ export default {
         );
 
         const instagramHours = [
-  12, 14, 16, 18, 20, 22
+  14, 15, 16, 18, 20, 22
 ];
 
         if (
