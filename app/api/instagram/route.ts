@@ -677,51 +677,63 @@ async function sendToBale(
 
   const mediaField =
     post.mediaType === "video" ? "video" : "photo";
-
-    
-const cleanedCaption = post.caption
+ 
+let cleanedCaption = post.caption
   .replace(/\r\n?/g, "\n")
+  // حذف کاراکترهای نامرئی
+  .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff]/g, "")
   .split("\n")
-  .map((line) => {
-    const normalizedLine = line
-      .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff]/g, "")
-      .trim()
-      .toLowerCase();
-
-    if (!normalizedLine) {
-      return "";
-    }
+  .map((line) => line.trim())
+  .filter((line) => {
+    if (!line) return true;
 
     // حذف نام پایگاه جامع مدیریار
     if (
-      /^#?پایگاه[_\s‌]+جامع[_\s‌]+مدیریار$/u.test(normalizedLine)
+      /^#?پایگاه[_\s]+جامع[_\s]+مدیریار$/u.test(line)
     ) {
-      return null;
+      return false;
     }
 
     // حذف آیدی‌های مشخص‌شده
     if (
-      /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(
-        normalizedLine,
-      )
+      /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(line)
     ) {
-      return null;
+      return false;
     }
 
-    // حفظ نیم‌فاصله‌های متن فارسی
-    return line.replace(/[ \t\u200b\u200d\u200e\u200f\u2060\ufeff]+$/g, "");
+    return true;
   })
-  .filter((line): line is string => line !== null)
-  .join("\n")
-  .replace(/\n{3,}/g, "\n\n")
+  .join("\n");
 
-  // حذف منشن‌های انتهای متن
-  .replace(/(?:\s+@[\p{L}\p{N}_.]+)+\s*$/gu, "")
+// شناسایی خطوطی که فقط هشتگ دارند
+const hashtagOnlyLine =
+  /^(?:#[\p{L}\p{M}\p{N}_‌]+[ \t]*)+$/u;
 
-  // حذف کامل هشتگ‌های انتهایی، حتی اگر چند خط باشند
-  .replace(/(?:\s*#[\p{L}\p{N}_‌]+)+\s*$/gu, "")
+let finalLines = cleanedCaption.split("\n");
 
-  // حذف علائم اضافی انتهای متن
+// حذف تمام خطوط خالی و هشتگ‌دار از انتهای متن
+while (finalLines.length > 0) {
+  const lastLine = finalLines[finalLines.length - 1].trim();
+
+  if (!lastLine || hashtagOnlyLine.test(lastLine)) {
+    finalLines.pop();
+  } else {
+    break;
+  }
+}
+
+cleanedCaption = finalLines.join("\n");
+
+// حذف هشتگ‌های انتهایی در همان خط آخر
+cleanedCaption = cleanedCaption.replace(
+  /(?:[ \t]+#[\p{L}\p{M}\p{N}_‌]+)+[ \t]*$/gu,
+  ""
+);
+
+// پاک‌سازی انتهای متن
+cleanedCaption = cleanedCaption
+  .replace(/[ \t]+$/gm, "")
+  .replace(/\n+$/g, "")
   .replace(/[\p{S}\p{Z}\s_#]+$/gu, "")
   .replace(/[،؛:!?؟]+$/gu, "")
   .trim();
