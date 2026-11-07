@@ -25,7 +25,7 @@ const IMAGE_WIDTH = 1200;
 const IMAGE_HEIGHT = 630;
 
 const FONT_URL =
-  "https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn[wght].ttf";
+  "https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn-Regular.ttf";
 
 type TelegramPost = {
   id: string;
