@@ -1099,9 +1099,9 @@ async function generateKargozinImage(
   post: TelegramPost,
 ): Promise<Uint8Array> {
   const [{ satori }, { Resvg }] = await Promise.all([
-    import("@cf-wasm/satori/workerd"),
-    import("@cf-wasm/resvg/workerd"),
-  ]);
+  import("@cf-wasm/satori"),
+  import("@cf-wasm/resvg"),
+]);
 
   const font = await getVazirmatnFont();
   const headline = buildImageHeadline(post.text);
