@@ -37,6 +37,11 @@ type TelegramPost = {
 
 type QueuedPost = TelegramPost;
 
+type ParsedTelegramFeed = {
+  posts: TelegramPost[];
+  videoIds: string[];
+};
+
 type KargozinState = {
   version: 1;
   initialized: boolean;
@@ -203,7 +208,7 @@ function removeDivElementsByClass(
 }
 
 // --------------------------------------------------
-// Telegram reply and service detection
+// Telegram reply, service and video detection
 // --------------------------------------------------
 
 const REPLY_CLASSES = [
@@ -238,6 +243,59 @@ function isServicePost(block: string): boolean {
 
   while ((match = tags.exec(block)) !== null) {
     if (hasClass(match[0], "service_message")) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * تشخیص ویدئو مستقل از متن کپشن انجام می‌شود.
+ * عکس معمولی با این تابع فیلتر نمی‌شود.
+ */
+function isVideoPost(block: string): boolean {
+  // تگ واقعی ویدئو یا منبع ویدئویی
+  if (/<video\b/i.test(block)) {
+    return true;
+  }
+
+  if (
+    /<source\b[^>]*\btype\s*=\s*["']video\//i.test(block)
+  ) {
+    return true;
+  }
+
+  if (/\bvideo\/(?:mp4|webm|ogg|quicktime)\b/i.test(block)) {
+    return true;
+  }
+
+  // کلاس‌های رایج ویدئوی تلگرام
+  const videoClassPatterns = [
+    /\btgme_widget_message_video(?:_player|_wrap|_thumb)?\b/i,
+    /\btgme_widget_message_roundvideo\b/i,
+    /\btgme_widget_message_video_player\b/i,
+    /\btgme_widget_message_video_wrap\b/i,
+    /\btgme_widget_message_video_thumb\b/i,
+  ];
+
+  for (const pattern of videoClassPatterns) {
+    if (pattern.test(block)) {
+      return true;
+    }
+  }
+
+  // نشانه‌های ویدئو در عناصر HTML
+  const tags = /<[a-z][^>]*>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = tags.exec(block)) !== null) {
+    const tag = match[0];
+
+    if (
+      /\bdata-media-type\s*=\s*["']video["']/i.test(tag) ||
+      /\bdata-video\b/i.test(tag)
+    ) {
       return true;
     }
   }
@@ -373,7 +431,6 @@ function cleanPostText(input: string): string {
 }
 
 function hasUsefulText(text: string): boolean {
-  // فقط ایموجی، علامت، لینک یا عدد به‌تنهایی خبر محسوب نمی‌شود.
   return /\p{L}/u.test(
     text.replace(/https?:\/\/\S+/gi, ""),
   );
@@ -409,8 +466,11 @@ function compareIds(
   return first < second ? -1 : first > second ? 1 : 0;
 }
 
-function parseTelegramPosts(html: string): TelegramPost[] {
+function parseTelegramPosts(
+  html: string,
+): ParsedTelegramFeed {
   const posts: TelegramPost[] = [];
+  const videoIds = new Set<string>();
   const seenIds = new Set<string>();
 
   const wrapRegex =
@@ -427,16 +487,23 @@ function parseTelegramPosts(html: string): TelegramPost[] {
 
     const id = postMatch[1];
 
-    if (isServicePost(block)) continue;
-    if (isReplyPost(block)) continue;
     if (seenIds.has(id)) continue;
 
-    /*
-     * نکته مهم:
-     * پست‌های دارای عکس، ویدئو و سایر رسانه‌ها حذف نمی‌شوند.
-     * فقط متن داخل پیام تلگرام استخراج می‌شود.
-     */
+    // پست‌های سیستمی و پاسخ‌ها پردازش نمی‌شوند.
+    if (isServicePost(block)) continue;
+    if (isReplyPost(block)) continue;
 
+    /*
+     * ویدئو پیش از استخراج کپشن شناسایی می‌شود.
+     * بنابراین متن همراه ویدئو نیز هرگز وارد صف نمی‌شود.
+     */
+    if (isVideoPost(block)) {
+      videoIds.add(id);
+      seenIds.add(id);
+      continue;
+    }
+
+    // عکس‌ها فیلتر نمی‌شوند.
     const messageHtml = extractDivInnerByClass(
       block,
       "tgme_widget_message_text",
@@ -450,10 +517,8 @@ function parseTelegramPosts(html: string): TelegramPost[] {
       htmlToText(mainHtml),
     );
 
-    // خبرهای خالی، تبلیغاتی و بدون متن مفید وارد صف نمی‌شوند.
     if (!isValidNewsText(text)) continue;
 
-    // شناسه فقط پس از تأیید متن معتبر ثبت می‌شود.
     seenIds.add(id);
 
     posts.push({
@@ -463,14 +528,17 @@ function parseTelegramPosts(html: string): TelegramPost[] {
     });
   }
 
-  return posts.sort(compareIds);
+  return {
+    posts: posts.sort(compareIds),
+    videoIds: [...videoIds],
+  };
 }
 
 // --------------------------------------------------
 // Telegram fetch
 // --------------------------------------------------
 
-async function fetchTelegramPosts(): Promise<TelegramPost[]> {
+async function fetchTelegramPosts(): Promise<ParsedTelegramFeed> {
   let response: Response;
 
   try {
@@ -502,9 +570,13 @@ async function fetchTelegramPosts(): Promise<TelegramPost[]> {
     throw new Error("Telegram returned an empty HTML response.");
   }
 
-  const posts = parseTelegramPosts(html);
+  const feed = parseTelegramPosts(html);
 
-  if (posts.length === 0) {
+  // صفحه‌ای که فقط ویدئو دارد نیز پاسخ معتبر محسوب می‌شود.
+  if (
+    feed.posts.length === 0 &&
+    feed.videoIds.length === 0
+  ) {
     const hasPostIds =
       /\bdata-post=["']kargozinonline\/\d+["']/i.test(html);
 
@@ -525,7 +597,7 @@ async function fetchTelegramPosts(): Promise<TelegramPost[]> {
     );
   }
 
-  return posts;
+  return feed;
 }
 
 // --------------------------------------------------
@@ -698,7 +770,6 @@ function parseQueue(value: unknown): QueuedPost[] {
       );
     }
 
-    // داده‌های تبلیغاتی و خالی از صف نیز عبور نمی‌کنند.
     const cleanedText = cleanPostText(item.text);
 
     if (!isValidNewsText(cleanedText)) {
@@ -938,7 +1009,7 @@ function buildImageHeadline(text: string): string {
     .trim();
 
   if (!cleaned) {
-    return "خبر جدید کارگزین آنلاین";
+    return "خبر جدید";
   }
 
   const firstPart =
@@ -949,11 +1020,81 @@ function buildImageHeadline(text: string): string {
 
   const characters = Array.from(firstPart);
 
-  if (characters.length <= 115) {
+  if (characters.length <= 100) {
     return firstPart;
   }
 
-  return `${characters.slice(0, 112).join("").trim()}…`;
+  return `${characters.slice(0, 97).join("").trim()}…`;
+}
+
+/**
+ * نقاط تزئینی برای ساخت نقشه نقطه‌ای جهان.
+ * این نقاط فقط گرافیکی هستند و متن یا منبعی نمایش نمی‌دهند.
+ */
+function buildWorldMapDots(): ReturnType<typeof h>[] {
+  const dots: ReturnType<typeof h>[] = [];
+
+  const continentRows: Array<Array<[number, number]>> = [
+    [[7, 18], [26, 31], [45, 58], [62, 80]],
+    [[5, 22], [25, 31], [43, 86]],
+    [[4, 23], [42, 88]],
+    [[5, 24], [42, 91]],
+    [[8, 25], [43, 90]],
+    [[12, 25], [43, 89]],
+    [[16, 27], [45, 86]],
+    [[20, 29], [47, 83]],
+    [[24, 31], [49, 78]],
+    [[27, 34], [50, 70]],
+    [[29, 36], [51, 65]],
+    [[31, 37], [52, 63]],
+    [[32, 38], [53, 64]],
+    [[33, 38], [54, 66]],
+    [[34, 38], [55, 68]],
+    [[35, 39], [56, 70]],
+    [[36, 40], [57, 72]],
+    [[37, 41], [59, 74]],
+    [[38, 42], [62, 76]],
+    [[39, 43], [67, 80]],
+    [[40, 44], [72, 84]],
+    [[41, 45], [77, 88]],
+    [[42, 46], [80, 91]],
+    [[43, 47], [82, 94]],
+  ];
+
+  const dotSize = 9;
+  const stepX = 12;
+  const stepY = 12;
+  const startX = 35;
+  const startY = 8;
+
+  for (let row = 0; row < continentRows.length; row++) {
+    const ranges = continentRows[row];
+
+    for (const [start, end] of ranges) {
+      for (let col = start; col <= end; col++) {
+        // خلوت‌سازی منظم برای جلوگیری از شلوغی تصویر
+        if ((row + col) % 5 === 0) continue;
+
+        dots.push(
+          h("div", {
+            key: `dot-${row}-${col}`,
+            style: {
+              position: "absolute",
+              left: `${startX + col * stepX}px`,
+              top: `${startY + row * stepY}px`,
+              width: `${dotSize}px`,
+              height: `${dotSize}px`,
+              borderRadius: "50%",
+              backgroundColor: "#168de0",
+              opacity: 0.27,
+            },
+          }),
+        );
+      }
+    }
+  }
+
+  return dots;
 }
 
 async function generateKargozinImage(
@@ -961,6 +1102,17 @@ async function generateKargozinImage(
 ): Promise<Uint8Array> {
   const font = await getVazirmatnFont();
   const headline = buildImageHeadline(post.text);
+
+  const headlineLength = Array.from(headline).length;
+
+  const headlineFontSize =
+    headlineLength <= 45
+      ? 68
+      : headlineLength <= 75
+        ? 58
+        : 48;
+
+  const dots = buildWorldMapDots();
 
   const element = h(
     "div",
@@ -972,135 +1124,222 @@ async function generateKargozinImage(
         flexDirection: "column",
         position: "relative",
         overflow: "hidden",
-        backgroundColor: "#071b36",
-        color: "#ffffff",
+        backgroundColor: "#eaf8ff",
+        color: "#102b65",
         fontFamily: "Vazirmatn",
         direction: "rtl",
-        padding: "52px 64px",
       },
-      children: [
-        h(
-          "div",
-          {
-            style: {
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              width: "100%",
-              height: "72px",
-            },
-            children: [
-              h(
-                "div",
-                {
-                  style: {
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    fontSize: "31px",
-                    fontWeight: 800,
-                    color: "#ffffff",
-                  },
-                  children: [
-                    h(
-                      "span",
-                      {
-                        style: {
-                          color: "#ff4545",
-                          marginLeft: "12px",
-                        },
-                        children: "●",
-                      },
-                    ),
-                    h("span", {
-                      children: "نبض خبر",
-                    }),
-                  ],
-                },
-              ),
-              h(
-                "div",
-                {
-                  style: {
-                    display: "flex",
-                    fontSize: "25px",
-                    color: "#b9c9dc",
-                    fontWeight: 500,
-                  },
-                  children: "کارگزین آنلاین",
-                },
-              ),
-            ],
-          },
-        ),
 
+      children: [
+        // پس‌زمینه روشن و نقشه نقطه‌ای
+        ...dots,
+
+        // قوس‌های تزئینی بالای سمت چپ
         h("div", {
           style: {
-            width: "100%",
-            height: "5px",
-            backgroundColor: "#e63946",
-            marginTop: "22px",
-            marginBottom: "32px",
-            borderRadius: "4px",
+            position: "absolute",
+            left: "-520px",
+            top: "-555px",
+            width: "1000px",
+            height: "850px",
+            borderRadius: "50%",
+            border: "25px solid #0878e8",
+            opacity: 0.95,
           },
         }),
 
+        h("div", {
+          style: {
+            position: "absolute",
+            left: "-550px",
+            top: "-575px",
+            width: "1060px",
+            height: "900px",
+            borderRadius: "50%",
+            border: "12px solid #073cae",
+            opacity: 0.9,
+          },
+        }),
+
+        // هاله آبی روشن بالای تصویر
+        h("div", {
+          style: {
+            position: "absolute",
+            left: "0px",
+            top: "0px",
+            width: "100%",
+            height: "100px",
+            backgroundColor: "#d9f2ff",
+            opacity: 0.2,
+          },
+        }),
+
+        // پلاک قرمز براق عنوان
         h(
           "div",
           {
             style: {
+              position: "absolute",
+              top: "38px",
+              left: "290px",
+              width: "620px",
+              height: "145px",
               display: "flex",
-              flex: 1,
               alignItems: "center",
               justifyContent: "center",
-              width: "100%",
-              padding: "8px 22px",
-              textAlign: "right",
-              direction: "rtl",
-              fontSize: "48px",
-              lineHeight: 1.65,
-              fontWeight: 800,
-              color: "#ffffff",
-              overflow: "hidden",
-            },
-            children: headline,
-          },
-        ),
-
-        h("div", {
-          style: {
-            width: "100%",
-            height: "1px",
-            backgroundColor: "#36516f",
-            marginTop: "22px",
-            marginBottom: "20px",
-          },
-        }),
-
-        h(
-          "div",
-          {
-            style: {
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              width: "100%",
-              color: "#b9c9dc",
-              fontSize: "21px",
-              fontWeight: 500,
+              backgroundColor: "#e51b16",
+              borderRadius: "38px",
+              border: "5px solid #ffb3a5",
+              boxShadow: "0px 9px 22px rgba(110, 20, 20, 0.35)",
             },
             children: [
-              h("span", {
-                children: "منبع: کارگزین آنلاین",
+              h("div", {
+                style: {
+                  position: "absolute",
+                  top: "8px",
+                  left: "28px",
+                  right: "28px",
+                  height: "3px",
+                  backgroundColor: "#ffaaa0",
+                  opacity: 0.8,
+                },
               }),
               h("span", {
-                children: "اخبار و اطلاع‌رسانی",
+                style: {
+                  color: "#ffffff",
+                  fontSize: "82px",
+                  fontWeight: 800,
+                  textAlign: "center",
+                  textShadow: "0px 4px 4px rgba(80, 0, 0, 0.35)",
+                },
+                children: "نبض خبر",
               }),
             ],
           },
         ),
+
+        // درخشش زیر پلاک
+        h("div", {
+          style: {
+            position: "absolute",
+            top: "185px",
+            left: "0px",
+            width: "100%",
+            height: "5px",
+            backgroundColor: "#ff6550",
+            opacity: 0.85,
+          },
+        }),
+
+        // فضای مرکزی تیتر
+        h(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              left: "45px",
+              top: "215px",
+              width: "1110px",
+              height: "295px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px 45px",
+              backgroundColor: "#f8fdff",
+              borderRadius: "35px",
+              border: "3px solid #b7e6ff",
+              boxShadow: "0px 7px 20px rgba(0, 90, 180, 0.14)",
+              opacity: 0.96,
+            },
+            children: [
+              h("div", {
+                style: {
+                  width: "100%",
+                  color: "#092b70",
+                  fontSize: `${headlineFontSize}px`,
+                  fontWeight: 800,
+                  lineHeight: 1.55,
+                  textAlign: "center",
+                  direction: "rtl",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textShadow: "0px 2px 1px rgba(0, 40, 100, 0.12)",
+                },
+                children: headline,
+              }),
+            ],
+          },
+        ),
+
+        // قوس‌های موجی پایین تصویر
+        h("div", {
+          style: {
+            position: "absolute",
+            left: "-120px",
+            bottom: "-205px",
+            width: "1440px",
+            height: "350px",
+            borderRadius: "50%",
+            backgroundColor: "#0646b9",
+            transform: "rotate(-3deg)",
+          },
+        }),
+
+        h("div", {
+          style: {
+            position: "absolute",
+            left: "-100px",
+            bottom: "-175px",
+            width: "1400px",
+            height: "315px",
+            borderRadius: "50%",
+            backgroundColor: "#0878e8",
+            transform: "rotate(-3deg)",
+          },
+        }),
+
+        h("div", {
+          style: {
+            position: "absolute",
+            left: "-80px",
+            bottom: "-155px",
+            width: "1360px",
+            height: "280px",
+            borderRadius: "50%",
+            border: "9px solid #32b5ff",
+            backgroundColor: "#0a5ed0",
+            transform: "rotate(-3deg)",
+          },
+        }),
+
+        // نوار قرمز پایین، مشابه نمونه ارسالی
+        h("div", {
+          style: {
+            position: "absolute",
+            left: "-50px",
+            bottom: "47px",
+            width: "1320px",
+            height: "9px",
+            backgroundColor: "#ed2727",
+            transform: "rotate(5deg)",
+            boxShadow: "0px 2px 5px rgba(100, 0, 0, 0.25)",
+          },
+        }),
+
+        // خط روشن بالای قوس پایین
+        h("div", {
+          style: {
+            position: "absolute",
+            left: "-40px",
+            bottom: "68px",
+            width: "1300px",
+            height: "4px",
+            backgroundColor: "#d8f5ff",
+            transform: "rotate(5deg)",
+            opacity: 0.9,
+          },
+        }),
       ],
     },
   );
@@ -1337,7 +1576,6 @@ async function sendKargozinPost(
   }
 
   // ادامه خبر فقط پس از ارسال موفق عکس فرستاده می‌شود.
-  // این قسمت عمداً بیرون try/catch عکس قرار دارد.
   if (continuation.trim()) {
     await sendBaleMessage(
       env,
@@ -1366,7 +1604,11 @@ export async function GET(): Promise<Response> {
 
     const now = new Date();
 
-    const posts = await fetchTelegramPosts();
+    const feed = await fetchTelegramPosts();
+    const posts = feed.posts;
+    const videoIds = feed.videoIds;
+
+    const videoIdSet = new Set(videoIds);
 
     const savedState = await getSetting(
       env,
@@ -1385,13 +1627,17 @@ export async function GET(): Promise<Response> {
       );
 
       if (legacySeen === null) {
-        // اجرای اولیه: پست‌های موجود فقط ثبت می‌شوند.
+        // اجرای اولیه: خبرهای موجود و ویدئوهای موجود ثبت می‌شوند.
+        // هیچ‌کدام از پست‌های قبلی ارسال نمی‌شوند.
         state = {
           version: 1,
           initialized: true,
-          seenIds: posts
-            .map((post) => post.id)
-            .slice(-MAX_SEEN_IDS),
+          seenIds: [
+            ...new Set([
+              ...posts.map((post) => post.id),
+              ...videoIds,
+            ]),
+          ].slice(-MAX_SEEN_IDS),
           queue: [],
           lastSentAt: null,
         };
@@ -1406,8 +1652,9 @@ export async function GET(): Promise<Response> {
           ok: true,
           initialized: true,
           baselineCount: state.seenIds.length,
+          ignoredVideoCount: videoIds.length,
           sent: 0,
-          reason: "Existing posts recorded as baseline",
+          reason: "Existing posts and videos recorded as baseline",
         });
       }
 
@@ -1415,11 +1662,46 @@ export async function GET(): Promise<Response> {
       state = {
         version: 1,
         initialized: true,
-        seenIds: parseSeenIds(legacySeen),
+        seenIds: [
+          ...new Set([
+            ...parseSeenIds(legacySeen),
+            ...videoIds,
+          ]),
+        ].slice(-MAX_SEEN_IDS),
         queue: [],
         lastSentAt: null,
       };
     }
+
+    // ویدئوهایی که قبلاً وارد صف شده‌اند نیز حذف می‌شوند،
+    // به شرط آنکه هنوز در صفحه فعلی تلگرام قابل شناسایی باشند.
+    const previousQueueLength = state.queue.length;
+
+    const filteredQueue = state.queue.filter(
+      (post) => !videoIdSet.has(post.id),
+    );
+
+    const removedVideoQueueCount =
+      previousQueueLength - filteredQueue.length;
+
+    const updatedSeenIds = [
+      ...new Set([
+        ...state.seenIds,
+        ...videoIds,
+      ]),
+    ].slice(-MAX_SEEN_IDS);
+
+    const seenChanged =
+      updatedSeenIds.length !== state.seenIds.length ||
+      updatedSeenIds.some(
+        (id, index) => id !== state.seenIds[index],
+      );
+
+    state = {
+      ...state,
+      seenIds: updatedSeenIds,
+      queue: filteredQueue,
+    };
 
     const seen = new Set(state.seenIds);
 
@@ -1431,7 +1713,8 @@ export async function GET(): Promise<Response> {
       .filter(
         (post) =>
           !seen.has(post.id) &&
-          !queued.has(post.id),
+          !queued.has(post.id) &&
+          !videoIdSet.has(post.id),
       )
       .sort(compareIds);
 
@@ -1440,10 +1723,12 @@ export async function GET(): Promise<Response> {
       ...discovered,
     ].sort(compareIds);
 
-    // صف جدید پیش از ارسال ذخیره می‌شود.
+    // صف جدید و حذف ویدئوها پیش از ارسال ذخیره می‌شود.
     if (
       discovered.length > 0 ||
-      savedState === null
+      savedState === null ||
+      removedVideoQueueCount > 0 ||
+      seenChanged
     ) {
       state = {
         ...state,
@@ -1461,6 +1746,8 @@ export async function GET(): Promise<Response> {
       return Response.json({
         ok: true,
         foundNew: discovered.length,
+        ignoredVideos: videoIds.length,
+        removedQueuedVideos: removedVideoQueueCount,
         queued: 0,
         sent: 0,
         reason: "No posts waiting",
@@ -1471,6 +1758,8 @@ export async function GET(): Promise<Response> {
       return Response.json({
         ok: true,
         foundNew: discovered.length,
+        ignoredVideos: videoIds.length,
+        removedQueuedVideos: removedVideoQueueCount,
         queued: state.queue.length,
         sent: 0,
         reason: "Outside Tehran sending hours",
@@ -1490,6 +1779,8 @@ export async function GET(): Promise<Response> {
         return Response.json({
           ok: true,
           foundNew: discovered.length,
+          ignoredVideos: videoIds.length,
+          removedQueuedVideos: removedVideoQueueCount,
           queued: state.queue.length,
           sent: 0,
           reason: "Waiting for 20-minute interval",
@@ -1501,6 +1792,34 @@ export async function GET(): Promise<Response> {
     }
 
     const nextPost = state.queue[0];
+
+    // بررسی نهایی متن قبل از ارسال
+    if (!isValidNewsText(nextPost.text)) {
+      const invalidState: KargozinState = {
+        ...state,
+        seenIds: [
+          ...new Set([
+            ...state.seenIds,
+            nextPost.id,
+          ]),
+        ].slice(-MAX_SEEN_IDS),
+        queue: state.queue.slice(1),
+      };
+
+      await saveSetting(
+        env,
+        STATE_KEY,
+        invalidState,
+      );
+
+      return Response.json({
+        ok: true,
+        skipped: true,
+        reason: "Invalid, empty or advertising post removed",
+        skippedId: nextPost.id,
+        queued: invalidState.queue.length,
+      });
+    }
 
     // ارسال عکس و کپشن؛ در صورت شکست، ارسال متنی کامل
     const deliveryMode = await sendKargozinPost(
@@ -1533,6 +1852,8 @@ export async function GET(): Promise<Response> {
     return Response.json({
       ok: true,
       foundNew: discovered.length,
+      ignoredVideos: videoIds.length,
+      removedQueuedVideos: removedVideoQueueCount,
       sent: 1,
       sentIds: [nextPost.id],
       deliveryMode,
