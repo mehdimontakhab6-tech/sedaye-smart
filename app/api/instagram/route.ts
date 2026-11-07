@@ -1040,25 +1040,58 @@ export async function GET(request: Request): Promise<Response> {
         now.date,
       );
 
-      const sent = new Set(sourceState.sentIds);
-      const pending = new Set(sourceState.pendingIds ?? []);
+const sent = new Set(sourceState.sentIds);
+const pending = new Set(sourceState.pendingIds ?? []);
 
-      const candidate = posts.find(
-        (post) =>
-          !sent.has(post.id) &&
-          !pending.has(post.id) &&
-          !looksLikeAd(post),
-      );
+const candidate = posts.find(
+  (post) =>
+    !sent.has(post.id) &&
+    !pending.has(post.id) &&
+    !looksLikeAd(post),
+);
 
-      if (!candidate) {
-        return Response.json({
-          ok: true,
-          skipped: true,
-          reason: "No eligible unsent post was found.",
-          username,
-          scanned: posts.length,
-        });
-      }
+if (!candidate) {
+  let sentExcluded = 0;
+  let pendingExcluded = 0;
+  let adExcluded = 0;
+  let eligibleCount = 0;
+
+  for (const post of posts) {
+    if (sent.has(post.id)) {
+      sentExcluded++;
+    } else if (pending.has(post.id)) {
+      pendingExcluded++;
+    } else if (looksLikeAd(post)) {
+      adExcluded++;
+    } else {
+      eligibleCount++;
+    }
+  }
+
+  const diagnostics = {
+    sentExcluded,
+    pendingExcluded,
+    adExcluded,
+    eligibleCount,
+    savedSentIds: sourceState.sentIds.length,
+    savedPendingIds: sourceState.pendingIds?.length ?? 0,
+  };
+
+  console.info("[Instagram] Candidate diagnostics:", {
+    username,
+    scanned: posts.length,
+    ...diagnostics,
+  });
+
+  return Response.json({
+    ok: true,
+    skipped: true,
+    reason: "No eligible unsent post was found.",
+    username,
+    scanned: posts.length,
+    diagnostics,
+  });
+}
 
       // Save a pending marker before sending. If the request times out
       // or the result becomes ambiguous, this post will not be retried
