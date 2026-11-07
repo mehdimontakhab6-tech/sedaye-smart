@@ -1194,13 +1194,15 @@ async function sendBalePhoto(
 
   form.append("chat_id", chatId);
   form.append("caption", caption);
-  form.append(
-    "photo",
-    new Blob([photo], {
-      type: "image/png",
-    }),
-    "kargozin-news.png",
-  );
+  const photoBuffer = new ArrayBuffer(photo.byteLength);
+new Uint8Array(photoBuffer).set(photo);
+form.append(
+  "photo",
+  new Blob([photoBuffer], {
+    type: "image/png",
+  }),
+  "kargozin-news.png",
+);
 
   const response = await fetch(
     `https://tapi.bale.ai/bot${token}/sendPhoto`,
