@@ -1,7 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createElement as h } from "react";
-import { satori } from "@cf-wasm/satori";
-import { Resvg } from "@cf-wasm/resvg";
 
 export const dynamic = "force-dynamic";
 
@@ -1100,6 +1098,11 @@ function buildWorldMapDots(): ReturnType<typeof h>[] {
 async function generateKargozinImage(
   post: TelegramPost,
 ): Promise<Uint8Array> {
+  const [{ satori }, { Resvg }] = await Promise.all([
+    import("@cf-wasm/satori/workerd"),
+    import("@cf-wasm/resvg/workerd"),
+  ]);
+
   const font = await getVazirmatnFont();
   const headline = buildImageHeadline(post.text);
 
