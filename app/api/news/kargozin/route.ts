@@ -742,7 +742,7 @@ function getNextSendingWindow(date: Date): string {
 
   // تبدیل ساعت محلی ایران به UTC با استفاده از اختلاف زمانی همان تاریخ.
   const targetDate = new Date(
-    Date.UTC(year, month - 1, day + (addDay ? 1 : 0), 8, 0, 0),
+    Date.UTC(year, month - 1, day + (addDay ? 1 : 0), 8, 5, 0),
   );
 
   // ایران در حال حاضر UTC+03:30 است.
@@ -924,7 +924,7 @@ export async function GET(): Promise<Response> {
           foundNew: discovered.length,
           queued: state.queue.length,
           sent: 0,
-          reason: "Waiting for 10-minute interval",
+          reason: "Waiting for 20-minute interval",
           nextEligibleAt: new Date(
             nextEligibleTime,
           ).toISOString(),
