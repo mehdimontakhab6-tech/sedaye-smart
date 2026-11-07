@@ -1,23 +1,36 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { createElement as h } from "react";
+import { satori } from "@cf-wasm/satori";
+import { Resvg } from "@cf-wasm/resvg";
 
 export const dynamic = "force-dynamic";
 
 const SOURCE_URL = "https://t.me/s/kargozinonline";
 
-// تنظیمات قدیمی برای سازگاری با داده‌های موجود
 const SETTINGS_KEY = "kargozin_telegram_seen_posts";
 const SCHEDULE_KEY = "schedule_kargozin";
-
-// تمام وضعیت صف در یک رکورد ذخیره می‌شود.
 const STATE_KEY = "kargozin_telegram_state";
 
 const MAX_SEEN_IDS = 1500;
 const MIN_SEND_INTERVAL_MS = 20 * 60 * 1000;
+
 const TEHRAN_TIME_ZONE = "Asia/Tehran";
 const SEND_START_MINUTES = 8 * 60 + 5;
 const SEND_END_MINUTES = 23 * 60;
 
 const NOTICE = "🔴 نبض خبر";
+
+// محدودیت‌های محافظه‌کارانه برای ارسال
+const PHOTO_CAPTION_LIMIT = 1024;
+const TEXT_MESSAGE_LIMIT = 4000;
+
+// ابعاد قالب ثابت تصویر
+const IMAGE_WIDTH = 1200;
+const IMAGE_HEIGHT = 630;
+
+// فونت فارسی
+const FONT_URL =
+  "https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn[wght].ttf";
 
 type TelegramPost = {
   id: string;
@@ -41,6 +54,13 @@ type Env = {
   BALE_SMART_TOKEN?: string;
   BALE_GROUP_ID?: string;
 };
+
+let cachedFont: ArrayBuffer | null = null;
+let fontPromise: Promise<ArrayBuffer> | null = null;
+
+// --------------------------------------------------
+// HTML helpers
+// --------------------------------------------------
 
 function decodeHtml(value: string): string {
   const entities: Record<string, string> = {
@@ -216,9 +236,7 @@ function isServicePost(block: string): boolean {
   let match: RegExpExecArray | null;
 
   while ((match = tags.exec(block)) !== null) {
-    if (
-      hasClass(match[0], "service_message")
-    ) {
+    if (hasClass(match[0], "service_message")) {
       return true;
     }
   }
@@ -273,7 +291,6 @@ function cleanPostText(input: string): string {
     .replace(/\r/g, "")
     .trim();
 
-  // حذف علامت جداکننده و تمام مطالب بعد از آن
   const separatorIndex = text.indexOf("🔹🔸🔹🔸");
 
   if (separatorIndex !== -1) {
@@ -314,7 +331,6 @@ function cleanPostText(input: string): string {
     )
     .replace(/(?:^|\n)[ \t\u200c]+(?=\n|$)/g, "\n");
 
-  // آدرس‌های اینترنتی حذف نمی‌شوند.
   text = text
     .replace(/[ \t]{2,}/g, " ")
     .replace(/[ \t]+\n/g, "\n")
@@ -378,12 +394,11 @@ function parseTelegramPosts(html: string): TelegramPost[] {
     if (!postMatch) continue;
 
     const id = postMatch[1];
-    
-if (isServicePost(block)) continue;
-    
+
+    if (isServicePost(block)) continue;
     if (isReplyPost(block)) continue;
-    
     if (seenIds.has(id)) continue;
+
     seenIds.add(id);
 
     if (containsMedia(block)) continue;
@@ -409,6 +424,10 @@ if (isServicePost(block)) continue;
 
   return posts.sort(compareIds);
 }
+
+// --------------------------------------------------
+// Telegram fetch
+// --------------------------------------------------
 
 async function fetchTelegramPosts(): Promise<TelegramPost[]> {
   let response: Response;
@@ -467,6 +486,10 @@ async function fetchTelegramPosts(): Promise<TelegramPost[]> {
 
   return posts;
 }
+
+// --------------------------------------------------
+// Supabase
+// --------------------------------------------------
 
 function getEnv(): Env {
   return getCloudflareContext().env as Env;
@@ -573,6 +596,10 @@ function isEnabled(value: unknown): boolean {
 async function isScheduleEnabled(env: Env): Promise<boolean> {
   return isEnabled(await getSetting(env, SCHEDULE_KEY));
 }
+
+// --------------------------------------------------
+// State validation
+// --------------------------------------------------
 
 function parseSeenIds(value: unknown): string[] {
   let parsed = value;
@@ -692,6 +719,10 @@ function parseState(value: unknown): KargozinState {
   };
 }
 
+// --------------------------------------------------
+// Tehran time
+// --------------------------------------------------
+
 function getTehranMinutes(date: Date): number {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: TEHRAN_TIME_ZONE,
@@ -736,25 +767,356 @@ function getNextSendingWindow(date: Date): string {
   const day = Number(getPart("day"));
 
   const localMinutes = getTehranMinutes(date);
-
-  // ساعت ۲۳ یا بعد از آن: روز بعد، ساعت ۰۸:۰۵ ایران
   const addDay = localMinutes >= SEND_END_MINUTES;
 
-  // تبدیل ساعت محلی ایران به UTC با استفاده از اختلاف زمانی همان تاریخ.
+  // ساعت هدف: ۰۸:۰۵ به وقت تهران
   const targetDate = new Date(
-    Date.UTC(year, month - 1, day + (addDay ? 1 : 0), 8, 5, 0),
+    Date.UTC(
+      year,
+      month - 1,
+      day + (addDay ? 1 : 0),
+      8,
+      5,
+      0,
+    ),
   );
 
-  // ایران در حال حاضر UTC+03:30 است.
-  targetDate.setUTCMinutes(targetDate.getUTCMinutes() - 210);
+  // اختلاف زمانی تهران با UTC
+  targetDate.setUTCMinutes(
+    targetDate.getUTCMinutes() - 210,
+  );
 
   return targetDate.toISOString();
 }
 
-async function sendBaleMessage(
-  env: Env,
+// --------------------------------------------------
+// Text splitting
+// --------------------------------------------------
+
+/**
+ * متن را بدون حذف فاصله، خط جدید یا هیچ کاراکتری تقسیم می‌کند.
+ * Array.from مانع شکستن زوج‌های surrogate ایموجی می‌شود.
+ */
+function splitTextSafely(
   text: string,
-): Promise<void> {
+  maxLength: number,
+): string[] {
+  if (!text) return [];
+
+  const characters = Array.from(text);
+  const chunks: string[] = [];
+
+  let position = 0;
+
+  while (position < characters.length) {
+    const remaining = characters.length - position;
+
+    if (remaining <= maxLength) {
+      chunks.push(characters.slice(position).join(""));
+      break;
+    }
+
+    let end = position + maxLength;
+
+    // اگر نزدیک انتهای بخش، فاصله یا خط جدید وجود دارد،
+    // تقسیم را در همان نقطه انجام می‌دهیم.
+    const minimumPreferredEnd = position + Math.floor(maxLength * 0.65);
+
+    for (let i = end - 1; i >= minimumPreferredEnd; i--) {
+      if (
+        characters[i] === "\n" ||
+        characters[i] === " " ||
+        characters[i] === "\t"
+      ) {
+        end = i + 1;
+        break;
+      }
+    }
+
+    if (end <= position) {
+      end = position + maxLength;
+    }
+
+    chunks.push(
+      characters.slice(position, end).join(""),
+    );
+
+    position = end;
+  }
+
+  return chunks;
+}
+
+// --------------------------------------------------
+// Image generation
+// --------------------------------------------------
+
+async function getVazirmatnFont(): Promise<ArrayBuffer> {
+  if (cachedFont) {
+    return cachedFont;
+  }
+
+  if (!fontPromise) {
+    fontPromise = (async () => {
+      const response = await fetch(FONT_URL, {
+        method: "GET",
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Font download failed: HTTP ${response.status}`,
+        );
+      }
+
+      const buffer = await response.arrayBuffer();
+
+      if (buffer.byteLength < 1000) {
+        throw new Error("Downloaded font file is invalid.");
+      }
+
+      cachedFont = buffer;
+      return buffer;
+    })();
+  }
+
+  try {
+    return await fontPromise;
+  } catch (error) {
+    fontPromise = null;
+    throw error;
+  }
+}
+
+function buildImageHeadline(text: string): string {
+  const cleaned = text
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "خبر جدید کارگزین آنلاین";
+  }
+
+  // اولین خط یا پاراگراف به عنوان تیتر تصویری
+  const firstPart =
+    cleaned
+      .split(/\n+/)
+      .map((part) => part.trim())
+      .find((part) => part.length > 0) ?? cleaned;
+
+  const characters = Array.from(firstPart);
+
+  if (characters.length <= 115) {
+    return firstPart;
+  }
+
+  return `${characters.slice(0, 112).join("").trim()}…`;
+}
+
+async function generateKargozinImage(
+  post: TelegramPost,
+): Promise<Uint8Array> {
+  const font = await getVazirmatnFont();
+  const headline = buildImageHeadline(post.text);
+
+  const element = h(
+    "div",
+    {
+      style: {
+        width: `${IMAGE_WIDTH}px`,
+        height: `${IMAGE_HEIGHT}px`,
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+        overflow: "hidden",
+        backgroundColor: "#071b36",
+        color: "#ffffff",
+        fontFamily: "Vazirmatn",
+        direction: "rtl",
+        padding: "52px 64px",
+      },
+      children: [
+        // نوار بالایی
+        h(
+          "div",
+          {
+            style: {
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              width: "100%",
+              height: "72px",
+            },
+            children: [
+              h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    fontSize: "31px",
+                    fontWeight: 800,
+                    color: "#ffffff",
+                  },
+                  children: [
+                    h(
+                      "span",
+                      {
+                        style: {
+                          color: "#ff4545",
+                          marginLeft: "12px",
+                        },
+                        children: "●",
+                      },
+                    ),
+                    h("span", {
+                      children: "نبض خبر",
+                    }),
+                  ],
+                },
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    fontSize: "25px",
+                    color: "#b9c9dc",
+                    fontWeight: 500,
+                  },
+                  children: "کارگزین آنلاین",
+                },
+              ),
+            ],
+          },
+        ),
+
+        // خط قرمز جداکننده
+        h("div", {
+          style: {
+            width: "100%",
+            height: "5px",
+            backgroundColor: "#e63946",
+            marginTop: "22px",
+            marginBottom: "32px",
+            borderRadius: "4px",
+          },
+        }),
+
+        // عنوان خبر
+        h(
+          "div",
+          {
+            style: {
+              display: "flex",
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+              padding: "8px 22px",
+              textAlign: "right",
+              direction: "rtl",
+              fontSize: "48px",
+              lineHeight: 1.65,
+              fontWeight: 800,
+              color: "#ffffff",
+              overflow: "hidden",
+            },
+            children: headline,
+          },
+        ),
+
+        // خط پایینی
+        h("div", {
+          style: {
+            width: "100%",
+            height: "1px",
+            backgroundColor: "#36516f",
+            marginTop: "22px",
+            marginBottom: "20px",
+          },
+        }),
+
+        // فوتر
+        h(
+          "div",
+          {
+            style: {
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              width: "100%",
+              color: "#b9c9dc",
+              fontSize: "21px",
+              fontWeight: 500,
+            },
+            children: [
+              h("span", {
+                children: "منبع: کارگزین آنلاین",
+              }),
+              h("span", {
+                children: "اخبار و اطلاع‌رسانی",
+              }),
+            ],
+          },
+        ),
+      ],
+    },
+  );
+
+  const svg = await satori(element, {
+    width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT,
+    fonts: [
+      {
+        name: "Vazirmatn",
+        data: font,
+        weight: 400,
+        style: "normal",
+      },
+      {
+        name: "Vazirmatn",
+        data: font,
+        weight: 700,
+        style: "normal",
+      },
+      {
+        name: "Vazirmatn",
+        data: font,
+        weight: 800,
+        style: "normal",
+      },
+    ],
+  });
+
+  const renderer = await Resvg.async(svg, {
+    fitTo: {
+      mode: "width",
+      value: IMAGE_WIDTH,
+    },
+  });
+
+  const png = renderer.render().asPng();
+
+  if (!png || png.byteLength === 0) {
+    throw new Error("Generated image is empty.");
+  }
+
+  return png;
+}
+
+// --------------------------------------------------
+// Bale API
+// --------------------------------------------------
+
+function getBaleCredentials(env: Env): {
+  token: string;
+  chatId: string;
+} {
   const token = env.BALE_SMART_TOKEN;
   const chatId = env.BALE_GROUP_ID;
 
@@ -762,19 +1124,90 @@ async function sendBaleMessage(
     throw new Error("Bale bot token or group ID is missing.");
   }
 
+  return { token, chatId };
+}
+
+async function sendBaleMessage(
+  env: Env,
+  text: string,
+): Promise<void> {
+  const { token, chatId } = getBaleCredentials(env);
+
+  if (!text) return;
+
+  const chunks = splitTextSafely(
+    text,
+    TEXT_MESSAGE_LIMIT,
+  );
+
+  for (let index = 0; index < chunks.length; index++) {
+    const response = await fetch(
+      `https://tapi.bale.ai/bot${token}/sendMessage`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: chunks[index],
+          disable_web_page_preview: true,
+        }),
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+
+    let result: {
+      ok?: boolean;
+      description?: string;
+    };
+
+    try {
+      result = (await response.json()) as {
+        ok?: boolean;
+        description?: string;
+      };
+    } catch {
+      throw new Error(
+        `Bale sendMessage returned non-JSON response; HTTP ${response.status}.`,
+      );
+    }
+
+    if (!response.ok || result.ok !== true) {
+      throw new Error(
+        `Bale sendMessage failed on chunk ${index + 1}/${chunks.length}: ${
+          result.description ?? `HTTP ${response.status}`
+        }`,
+      );
+    }
+  }
+}
+
+async function sendBalePhoto(
+  env: Env,
+  photo: Uint8Array,
+  caption: string,
+): Promise<void> {
+  const { token, chatId } = getBaleCredentials(env);
+
+  const form = new FormData();
+
+  form.append("chat_id", chatId);
+  form.append("caption", caption);
+  form.append(
+    "photo",
+    new Blob([photo], {
+      type: "image/png",
+    }),
+    "kargozin-news.png",
+  );
+
   const response = await fetch(
-    `https://tapi.bale.ai/bot${token}/sendMessage`,
+    `https://tapi.bale.ai/bot${token}/sendPhoto`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        disable_web_page_preview: true,
-      }),
-      signal: AbortSignal.timeout(15000),
+      body: form,
+      signal: AbortSignal.timeout(30000),
     },
   );
 
@@ -790,13 +1223,13 @@ async function sendBaleMessage(
     };
   } catch {
     throw new Error(
-      `Bale returned a non-JSON response; HTTP ${response.status}.`,
+      `Bale sendPhoto returned non-JSON response; HTTP ${response.status}.`,
     );
   }
 
   if (!response.ok || result.ok !== true) {
     throw new Error(
-      `Bale sendMessage failed: ${
+      `Bale sendPhoto failed: ${
         result.description ?? `HTTP ${response.status}`
       }`,
     );
@@ -806,6 +1239,74 @@ async function sendBaleMessage(
 function buildMessage(post: TelegramPost): string {
   return `${NOTICE}\n\n${post.text}`;
 }
+
+// --------------------------------------------------
+// Post delivery
+// --------------------------------------------------
+
+type DeliveryMode = "image" | "text-fallback";
+
+async function sendKargozinPost(
+  env: Env,
+  post: TelegramPost,
+): Promise<DeliveryMode> {
+  const fullMessage = buildMessage(post);
+
+  // کپشن از ابتدای پیام ساخته می‌شود.
+  // هیچ بخشی از متن خبر حذف نمی‌شود.
+  const captionParts = splitTextSafely(
+    fullMessage,
+    PHOTO_CAPTION_LIMIT,
+  );
+
+  const caption = captionParts[0] ?? "";
+  const continuation = fullMessage.slice(caption.length);
+
+  let photo: Uint8Array;
+
+  // فقط خطای ساخت تصویر یا ارسال عکس باعث fallback می‌شود.
+  try {
+    photo = await generateKargozinImage(post);
+
+    await sendBalePhoto(
+      env,
+      photo,
+      caption,
+    );
+  } catch (error) {
+    const detail =
+      error instanceof Error ? error.message : String(error);
+
+    console.error(
+      "Kargozin image delivery failed; switching to text:",
+      detail,
+    );
+
+    // مسیر جایگزین: ارسال کل خبر به صورت متن
+    await sendBaleMessage(
+      env,
+      fullMessage,
+    );
+
+    return "text-fallback";
+  }
+
+  // این قسمت عمداً بیرون try/catch تصویر است.
+  // اگر عکس ارسال شده باشد و ادامه متن خطا بدهد،
+  // کل خبر دوباره به صورت متنی ارسال نمی‌شود.
+  if (continuation.length > 0) {
+    await sendBaleMessage(
+      env,
+      continuation,
+    );
+  }
+
+  return "image";
+}
+
+// --------------------------------------------------
+// Main route
+// --------------------------------------------------
 
 export async function GET(): Promise<Response> {
   try {
@@ -822,15 +1323,21 @@ export async function GET(): Promise<Response> {
     const now = new Date();
     const posts = await fetchTelegramPosts();
 
-    const savedState = await getSetting(env, STATE_KEY);
+    const savedState = await getSetting(
+      env,
+      STATE_KEY,
+    );
 
     let state: KargozinState;
 
     if (savedState !== null) {
       state = parseState(savedState);
     } else {
-      // سازگاری با نسخه قبلی که فقط SETTINGS_KEY داشت.
-      const legacySeen = await getSetting(env, SETTINGS_KEY);
+      // سازگاری با نسخه قبلی
+      const legacySeen = await getSetting(
+        env,
+        SETTINGS_KEY,
+      );
 
       if (legacySeen === null) {
         // اجرای اولیه: پست‌های موجود فقط ثبت می‌شوند.
@@ -844,7 +1351,11 @@ export async function GET(): Promise<Response> {
           lastSentAt: null,
         };
 
-        await saveSetting(env, STATE_KEY, state);
+        await saveSetting(
+          env,
+          STATE_KEY,
+          state,
+        );
 
         return Response.json({
           ok: true,
@@ -855,7 +1366,7 @@ export async function GET(): Promise<Response> {
         });
       }
 
-      // نسخه قدیمی قبلاً فعال بوده است؛ پست‌های جدید را صف می‌کنیم.
+      // نسخه قدیمی قبلاً فعال بوده است.
       state = {
         version: 1,
         initialized: true,
@@ -866,7 +1377,9 @@ export async function GET(): Promise<Response> {
     }
 
     const seen = new Set(state.seenIds);
-    const queued = new Set(state.queue.map((post) => post.id));
+    const queued = new Set(
+      state.queue.map((post) => post.id),
+    );
 
     const discovered = posts
       .filter(
@@ -881,14 +1394,21 @@ export async function GET(): Promise<Response> {
       ...discovered,
     ].sort(compareIds);
 
-    // وضعیت تازه‌ی صف را پیش از ارسال ثبت می‌کنیم.
-    if (discovered.length > 0 || savedState === null) {
+    // صف جدید پیش از ارسال ذخیره می‌شود.
+    if (
+      discovered.length > 0 ||
+      savedState === null
+    ) {
       state = {
         ...state,
         queue: mergedQueue,
       };
 
-      await saveSetting(env, STATE_KEY, state);
+      await saveSetting(
+        env,
+        STATE_KEY,
+        state,
+      );
     }
 
     if (state.queue.length === 0) {
@@ -913,7 +1433,9 @@ export async function GET(): Promise<Response> {
     }
 
     if (state.lastSentAt !== null) {
-      const lastSentTime = Date.parse(state.lastSentAt);
+      const lastSentTime = Date.parse(
+        state.lastSentAt,
+      );
 
       const nextEligibleTime =
         lastSentTime + MIN_SEND_INTERVAL_MS;
@@ -934,10 +1456,13 @@ export async function GET(): Promise<Response> {
 
     const nextPost = state.queue[0];
 
-    // تا دریافت پاسخ موفق از بله، پست از صف حذف نمی‌شود.
-    await sendBaleMessage(env, buildMessage(nextPost));
+    // ارسال تصویر و کپشن؛ در صورت شکست، ارسال متنی کامل
+    const deliveryMode = await sendKargozinPost(
+      env,
+      nextPost,
+    );
 
-    // زمان را بعد از موفقیت ارسال ثبت می‌کنیم.
+    // فقط بعد از تکمیل مسیر ارسال، پست از صف خارج می‌شود.
     const sentAt = new Date().toISOString();
 
     const updatedState: KargozinState = {
@@ -953,14 +1478,18 @@ export async function GET(): Promise<Response> {
       lastSentAt: sentAt,
     };
 
-    // وضعیت جدید صف، شناسه‌ها و زمان ارسال در یک رکورد نوشته می‌شود.
-    await saveSetting(env, STATE_KEY, updatedState);
+    await saveSetting(
+      env,
+      STATE_KEY,
+      updatedState,
+    );
 
     return Response.json({
       ok: true,
       foundNew: discovered.length,
       sent: 1,
       sentIds: [nextPost.id],
+      deliveryMode,
       queued: updatedState.queue.length,
       lastSentAt: sentAt,
       nextEligibleAt: new Date(
