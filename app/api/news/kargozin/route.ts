@@ -20,15 +20,12 @@ const SEND_END_MINUTES = 23 * 60;
 
 const NOTICE = "🔴 نبض خبر";
 
-// محدودیت‌های محافظه‌کارانه برای ارسال
 const PHOTO_CAPTION_LIMIT = 1024;
 const TEXT_MESSAGE_LIMIT = 4000;
 
-// ابعاد قالب ثابت تصویر
 const IMAGE_WIDTH = 1200;
 const IMAGE_HEIGHT = 630;
 
-// فونت فارسی
 const FONT_URL =
   "https://cdn.jsdelivr.net/npm/vazirmatn@33.0.3/fonts/ttf/Vazirmatn[wght].ttf";
 
@@ -205,6 +202,10 @@ function removeDivElementsByClass(
   return result;
 }
 
+// --------------------------------------------------
+// Telegram reply and service detection
+// --------------------------------------------------
+
 const REPLY_CLASSES = [
   "tgme_widget_message_reply",
   "tgme_widget_message_text_reply",
@@ -244,6 +245,10 @@ function isServicePost(block: string): boolean {
   return false;
 }
 
+// --------------------------------------------------
+// HTML to text
+// --------------------------------------------------
+
 function htmlToText(html: string): string {
   return decodeHtml(
     html
@@ -259,6 +264,7 @@ function htmlToText(html: string): string {
           if (!hrefMatch) return inner;
 
           const href = decodeHtml(hrefMatch[2]).trim();
+
           const linkText = decodeHtml(
             inner.replace(/<[^>]*>/g, ""),
           ).trim();
@@ -283,6 +289,30 @@ function htmlToText(html: string): string {
     .replace(/\n[ \t]+/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// --------------------------------------------------
+// Advertisement and empty-content filtering
+// --------------------------------------------------
+
+function isAdvertisementText(text: string): boolean {
+  const advertisementPatterns = [
+    /برای\s+سفارش\s+تبلیغات/i,
+    /جهت\s+سفارش\s+تبلیغات/i,
+    /جهت\s+تبلیغات/i,
+    /سفارش\s+تبلیغات/i,
+    /پذیرش\s+تبلیغات/i,
+    /تبلیغات\s+در\s+کانال/i,
+    /تعرفه\s+تبلیغات/i,
+    /تبلیغ\s+در\s+کانال/i,
+    /جهت\s+هماهنگی\s+تبلیغات/i,
+    /ارتباط\s+با\s+واحد\s+تبلیغات/i,
+    /ثبت\s+سفارش\s+تبلیغات/i,
+  ];
+
+  return advertisementPatterns.some((pattern) =>
+    pattern.test(text),
+  );
 }
 
 function cleanPostText(input: string): string {
@@ -324,9 +354,10 @@ function cleanPostText(input: string): string {
 
   text = text.slice(0, cutAt);
 
+  // حذف خطوطی که فقط از علائم تزئینی تشکیل شده‌اند.
   text = text
     .replace(
-      /(?:^|\n)[ \t\u200c]*(?:(?:🔹|🔸|🔷|🔶|🔴|🔵|⚫️?|⚪️?|♦️?|◆|◇|💠)[ \t\u200c]*)+(?=\n|$)/gu,
+      /(?:^|\n)[ \t\u200c]*(?:(?:🔹|🔸|🔷|🔶|🔴|🔵|⚫️?|⚪️?|♦️?|◆|◇|💠|▪️?|▫️?|◾️?|◽️?|➖|➕|⭐️?|✨|❤️|♥️|⬛️?|⬜️?)[ \t\u200c]*)+(?=\n|$)/gu,
       "\n",
     )
     .replace(/(?:^|\n)[ \t\u200c]+(?=\n|$)/g, "\n");
@@ -342,30 +373,31 @@ function cleanPostText(input: string): string {
 }
 
 function hasUsefulText(text: string): boolean {
-  return /[\p{L}\p{N}]/u.test(text);
+  // فقط ایموجی، علامت، لینک یا عدد به‌تنهایی خبر محسوب نمی‌شود.
+  return /\p{L}/u.test(
+    text.replace(/https?:\/\/\S+/gi, ""),
+  );
 }
 
-function containsMedia(block: string): boolean {
-  const mediaPatterns = [
-    /\btgme_widget_message_photo_wrap\b/i,
-    /\btgme_widget_message_video_player\b/i,
-    /\btgme_widget_message_document_wrap\b/i,
-    /\btgme_widget_message_voice_player\b/i,
-    /\btgme_widget_message_sticker_wrap\b/i,
-    /\btgme_widget_message_roundvideo\b/i,
-    /\btgme_widget_message_audio_player\b/i,
-    /\btgme_widget_message_poll\b/i,
-    /<video\b/i,
-    /<audio\b/i,
-    /<source\b[^>]*\bsrc=/i,
-    /\bdata-roundvideo=/i,
-    /\bvideo_player\b/i,
-    /\bphoto_wrap\b/i,
-    /\bsticker_wrap\b/i,
-  ];
+function isValidNewsText(text: string): boolean {
+  if (!text || !text.trim()) {
+    return false;
+  }
 
-  return mediaPatterns.some((pattern) => pattern.test(block));
+  if (!hasUsefulText(text)) {
+    return false;
+  }
+
+  if (isAdvertisementText(text)) {
+    return false;
+  }
+
+  return true;
 }
+
+// --------------------------------------------------
+// Telegram post parsing
+// --------------------------------------------------
 
 function compareIds(
   a: TelegramPost,
@@ -399,9 +431,11 @@ function parseTelegramPosts(html: string): TelegramPost[] {
     if (isReplyPost(block)) continue;
     if (seenIds.has(id)) continue;
 
-    seenIds.add(id);
-
-    if (containsMedia(block)) continue;
+    /*
+     * نکته مهم:
+     * پست‌های دارای عکس، ویدئو و سایر رسانه‌ها حذف نمی‌شوند.
+     * فقط متن داخل پیام تلگرام استخراج می‌شود.
+     */
 
     const messageHtml = extractDivInnerByClass(
       block,
@@ -411,9 +445,16 @@ function parseTelegramPosts(html: string): TelegramPost[] {
     if (messageHtml === null) continue;
 
     const mainHtml = removeReplyElements(messageHtml);
-    const text = cleanPostText(htmlToText(mainHtml));
 
-    if (!hasUsefulText(text)) continue;
+    const text = cleanPostText(
+      htmlToText(mainHtml),
+    );
+
+    // خبرهای خالی، تبلیغاتی و بدون متن مفید وارد صف نمی‌شوند.
+    if (!isValidNewsText(text)) continue;
+
+    // شناسه فقط پس از تأیید متن معتبر ثبت می‌شود.
+    seenIds.add(id);
 
     posts.push({
       id,
@@ -476,7 +517,7 @@ async function fetchTelegramPosts(): Promise<TelegramPost[]> {
       );
 
     throw new Error(
-      `No valid text-only posts found. HTTP ${response.status}; ` +
+      `No valid news posts found. HTTP ${response.status}; ` +
         `htmlLength=${html.length}; ` +
         `hasPostIds=${hasPostIds}; ` +
         `hasMessageText=${hasMessageText}; ` +
@@ -594,7 +635,9 @@ function isEnabled(value: unknown): boolean {
 }
 
 async function isScheduleEnabled(env: Env): Promise<boolean> {
-  return isEnabled(await getSetting(env, SCHEDULE_KEY));
+  return isEnabled(
+    await getSetting(env, SCHEDULE_KEY),
+  );
 }
 
 // --------------------------------------------------
@@ -655,10 +698,17 @@ function parseQueue(value: unknown): QueuedPost[] {
       );
     }
 
+    // داده‌های تبلیغاتی و خالی از صف نیز عبور نمی‌کنند.
+    const cleanedText = cleanPostText(item.text);
+
+    if (!isValidNewsText(cleanedText)) {
+      continue;
+    }
+
     queue.push({
       id: String(item.id),
       url: item.url,
-      text: item.text,
+      text: cleanedText,
     });
   }
 
@@ -769,7 +819,6 @@ function getNextSendingWindow(date: Date): string {
   const localMinutes = getTehranMinutes(date);
   const addDay = localMinutes >= SEND_END_MINUTES;
 
-  // ساعت هدف: ۰۸:۰۵ به وقت تهران
   const targetDate = new Date(
     Date.UTC(
       year,
@@ -781,7 +830,6 @@ function getNextSendingWindow(date: Date): string {
     ),
   );
 
-  // اختلاف زمانی تهران با UTC
   targetDate.setUTCMinutes(
     targetDate.getUTCMinutes() - 210,
   );
@@ -793,10 +841,6 @@ function getNextSendingWindow(date: Date): string {
 // Text splitting
 // --------------------------------------------------
 
-/**
- * متن را بدون حذف فاصله، خط جدید یا هیچ کاراکتری تقسیم می‌کند.
- * Array.from مانع شکستن زوج‌های surrogate ایموجی می‌شود.
- */
 function splitTextSafely(
   text: string,
   maxLength: number,
@@ -818,9 +862,8 @@ function splitTextSafely(
 
     let end = position + maxLength;
 
-    // اگر نزدیک انتهای بخش، فاصله یا خط جدید وجود دارد،
-    // تقسیم را در همان نقطه انجام می‌دهیم.
-    const minimumPreferredEnd = position + Math.floor(maxLength * 0.65);
+    const minimumPreferredEnd =
+      position + Math.floor(maxLength * 0.65);
 
     for (let i = end - 1; i >= minimumPreferredEnd; i--) {
       if (
@@ -898,7 +941,6 @@ function buildImageHeadline(text: string): string {
     return "خبر جدید کارگزین آنلاین";
   }
 
-  // اولین خط یا پاراگراف به عنوان تیتر تصویری
   const firstPart =
     cleaned
       .split(/\n+/)
@@ -937,7 +979,6 @@ async function generateKargozinImage(
         padding: "52px 64px",
       },
       children: [
-        // نوار بالایی
         h(
           "div",
           {
@@ -994,7 +1035,6 @@ async function generateKargozinImage(
           },
         ),
 
-        // خط قرمز جداکننده
         h("div", {
           style: {
             width: "100%",
@@ -1006,7 +1046,6 @@ async function generateKargozinImage(
           },
         }),
 
-        // عنوان خبر
         h(
           "div",
           {
@@ -1029,7 +1068,6 @@ async function generateKargozinImage(
           },
         ),
 
-        // خط پایینی
         h("div", {
           style: {
             width: "100%",
@@ -1040,7 +1078,6 @@ async function generateKargozinImage(
           },
         }),
 
-        // فوتر
         h(
           "div",
           {
@@ -1133,7 +1170,7 @@ async function sendBaleMessage(
 ): Promise<void> {
   const { token, chatId } = getBaleCredentials(env);
 
-  if (!text) return;
+  if (!text || !text.trim()) return;
 
   const chunks = splitTextSafely(
     text,
@@ -1141,6 +1178,8 @@ async function sendBaleMessage(
   );
 
   for (let index = 0; index < chunks.length; index++) {
+    if (!chunks[index].trim()) continue;
+
     const response = await fetch(
       `https://tapi.bale.ai/bot${token}/sendMessage`,
       {
@@ -1194,15 +1233,18 @@ async function sendBalePhoto(
 
   form.append("chat_id", chatId);
   form.append("caption", caption);
+
+  // تبدیل امن Uint8Array به ArrayBuffer برای Blob
   const photoBuffer = new ArrayBuffer(photo.byteLength);
-new Uint8Array(photoBuffer).set(photo);
-form.append(
-  "photo",
-  new Blob([photoBuffer], {
-    type: "image/png",
-  }),
-  "kargozin-news.png",
-);
+  new Uint8Array(photoBuffer).set(photo);
+
+  form.append(
+    "photo",
+    new Blob([photoBuffer], {
+      type: "image/png",
+    }),
+    "kargozin-news.png",
+  );
 
   const response = await fetch(
     `https://tapi.bale.ai/bot${token}/sendPhoto`,
@@ -1254,21 +1296,22 @@ async function sendKargozinPost(
 ): Promise<DeliveryMode> {
   const fullMessage = buildMessage(post);
 
-  // کپشن از ابتدای پیام ساخته می‌شود.
-  // هیچ بخشی از متن خبر حذف نمی‌شود.
   const captionParts = splitTextSafely(
     fullMessage,
     PHOTO_CAPTION_LIMIT,
   );
 
   const caption = captionParts[0] ?? "";
-  const continuation = fullMessage.slice(caption.length);
 
-  let photo: Uint8Array;
+  // محاسبه ادامه متن بر اساس Unicode code points
+  const fullCharacters = Array.from(fullMessage);
 
-  // فقط خطای ساخت تصویر یا ارسال عکس باعث fallback می‌شود.
+  const continuation = fullCharacters
+    .slice(Array.from(caption).length)
+    .join("");
+
   try {
-    photo = await generateKargozinImage(post);
+    const photo = await generateKargozinImage(post);
 
     await sendBalePhoto(
       env,
@@ -1284,7 +1327,7 @@ async function sendKargozinPost(
       detail,
     );
 
-    // مسیر جایگزین: ارسال کل خبر به صورت متن
+    // اگر تولید یا ارسال عکس شکست خورد، کل خبر متنی ارسال می‌شود.
     await sendBaleMessage(
       env,
       fullMessage,
@@ -1293,10 +1336,9 @@ async function sendKargozinPost(
     return "text-fallback";
   }
 
-  // این قسمت عمداً بیرون try/catch تصویر است.
-  // اگر عکس ارسال شده باشد و ادامه متن خطا بدهد،
-  // کل خبر دوباره به صورت متنی ارسال نمی‌شود.
-  if (continuation.length > 0) {
+  // ادامه خبر فقط پس از ارسال موفق عکس فرستاده می‌شود.
+  // این قسمت عمداً بیرون try/catch عکس قرار دارد.
+  if (continuation.trim()) {
     await sendBaleMessage(
       env,
       continuation,
@@ -1323,6 +1365,7 @@ export async function GET(): Promise<Response> {
     }
 
     const now = new Date();
+
     const posts = await fetchTelegramPosts();
 
     const savedState = await getSetting(
@@ -1379,6 +1422,7 @@ export async function GET(): Promise<Response> {
     }
 
     const seen = new Set(state.seenIds);
+
     const queued = new Set(
       state.queue.map((post) => post.id),
     );
@@ -1458,15 +1502,15 @@ export async function GET(): Promise<Response> {
 
     const nextPost = state.queue[0];
 
-    // ارسال تصویر و کپشن؛ در صورت شکست، ارسال متنی کامل
+    // ارسال عکس و کپشن؛ در صورت شکست، ارسال متنی کامل
     const deliveryMode = await sendKargozinPost(
       env,
       nextPost,
     );
 
-    // فقط بعد از تکمیل مسیر ارسال، پست از صف خارج می‌شود.
     const sentAt = new Date().toISOString();
 
+    // فقط پس از تکمیل ارسال، خبر از صف خارج می‌شود.
     const updatedState: KargozinState = {
       version: 1,
       initialized: true,
@@ -1499,6 +1543,11 @@ export async function GET(): Promise<Response> {
       ).toISOString(),
     });
   } catch (error) {
+    console.error(
+      "Kargozin route failed:",
+      error,
+    );
+
     return Response.json(
       {
         ok: false,
