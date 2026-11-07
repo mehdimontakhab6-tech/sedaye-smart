@@ -737,7 +737,7 @@ function getNextSendingWindow(date: Date): string {
 
   const localMinutes = getTehranMinutes(date);
 
-  // ساعت ۲۳ یا بعد از آن: روز بعد، ساعت ۰۸ ایران
+  // ساعت ۲۳ یا بعد از آن: روز بعد، ساعت ۰۸:۰۵ ایران
   const addDay = localMinutes >= SEND_END_MINUTES;
 
   // تبدیل ساعت محلی ایران به UTC با استفاده از اختلاف زمانی همان تاریخ.
