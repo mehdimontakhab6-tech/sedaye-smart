@@ -1,3 +1,4 @@
+
 name: Deploy sedaye-smart to Cloudflare
 
 on:
@@ -25,6 +26,13 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Inspect installed WASM and framework packages
+        run: |
+          echo "===== Installed package versions ====="
+          npm ls @cf-wasm/satori @cf-wasm/resvg @opennextjs/cloudflare next --depth=3 || true
+          echo "===== Package resolution ====="
+          node -e "for (const p of ['@cf-wasm/satori','@cf-wasm/resvg','@opennextjs/cloudflare','next']) { try { console.log(p + ': ' + require(p + '/package.json').version) } catch (e) { console.log(p + ': version lookup unavailable - ' + e.message) } }"
 
       - name: Deploy to Cloudflare
         run: npm run deploy
