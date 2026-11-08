@@ -1,4 +1,3 @@
-
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
@@ -397,19 +396,35 @@ async function readState(
       throw new Error(`Invalid saved state for ${username}.`);
     }
 
+    const sentIds: string[] = Array.isArray(entry?.sentIds)
+      ? Array.from(
+          new Set<string>(
+            (entry.sentIds as unknown[]).map(
+              (id: unknown): string => String(id),
+            ),
+          ),
+        )
+      : [];
+
+    const pendingIds: string[] = Array.isArray(entry?.pendingIds)
+      ? Array.from(
+          new Set<string>(
+            (entry.pendingIds as unknown[]).map(
+              (id: unknown): string => String(id),
+            ),
+          ),
+        )
+      : [];
+
     sources[username] = {
       sentToday:
         sameDay && Number.isInteger(entry?.sentToday)
           ? entry.sentToday
           : 0,
 
-      sentIds: Array.isArray(entry?.sentIds)
-        ? [...new Set(entry.sentIds.map(String))]
-        : [],
+      sentIds,
 
-      pendingIds: Array.isArray(entry?.pendingIds)
-        ? [...new Set(entry.pendingIds.map(String))]
-        : [],
+      pendingIds,
     };
   }
 
