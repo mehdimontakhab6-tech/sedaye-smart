@@ -254,7 +254,7 @@ export default {
         );
 
         const instagramHours = [
-  14, 15, 16, 18, 20, 22
+  14, 15, 16, 17, 18, 19, 20, 21, 22
 ];
 
         if (
