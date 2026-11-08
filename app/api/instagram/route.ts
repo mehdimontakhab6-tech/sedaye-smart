@@ -587,9 +587,12 @@ async function getProfileId(
   if (
     cached &&
     typeof cached === "object" &&
-    typeof (cached as any).id === "string"
+    (
+      typeof (cached as any).id === "string" ||
+      typeof (cached as any).id === "number"
+    )
   ) {
-    return (cached as any).id;
+    return String((cached as any).id);
   }
 
   const result = await toolzerGet(
@@ -797,8 +800,8 @@ async function readArchiveMeta(
 /**
  * Imports the current day's legacy cache, if present.
  *
- * This prevents already-collected posts from being ignored
- * during the transition to the page-based archive.
+ * The migrated page is preserved and is not overwritten by
+ * a new ToolzerHub request during the same execution.
  */
 async function migrateLegacyDailyCache(
   env: Env,
@@ -847,7 +850,7 @@ async function migrateLegacyDailyCache(
     ...meta,
     pageCount: 1,
     nextMaxId: null,
-    moreAvailable: true,
+    moreAvailable: false,
   };
 
   await writeSetting(
@@ -859,16 +862,22 @@ async function migrateLegacyDailyCache(
   console.info("[Instagram] Legacy cache migrated", {
     username,
     posts: posts.length,
+    date,
   });
 
   return migrated;
 }
 
 /**
- * Fetches at most one new page per account per Tehran day.
+ * Fetches at most one new posts page per account per Tehran day.
  *
- * If a profile ID is missing, only the profile lookup is performed.
- * The first posts page is then fetched on a later day.
+ * Daily paid request policy:
+ * - One request for each account per day.
+ * - Maximum three paid requests across all accounts per day.
+ * - A missing profile ID uses that account's daily request.
+ * - The posts page is fetched on a later day after profile lookup.
+ *
+ * Each page is saved before the pagination cursor is advanced.
  */
 async function ensureDailyArchivePage(
   env: Env,
@@ -881,6 +890,11 @@ async function ensureDailyArchivePage(
   );
 
   if (meta.lastRequestDate === date) {
+    console.info("[Instagram] Daily archive request already completed", {
+      username,
+      date,
+      pageCount: meta.pageCount,
+    });
     return;
   }
 
@@ -888,8 +902,14 @@ async function ensureDailyArchivePage(
     meta.pageCount > 0 &&
     !meta.moreAvailable
   ) {
+    console.info("[Instagram] Archive has no more pages", {
+      username,
+      pageCount: meta.pageCount,
+    });
     return;
   }
+
+  const previousPageCount = meta.pageCount;
 
   meta = await migrateLegacyDailyCache(
     env,
@@ -898,7 +918,13 @@ async function ensureDailyArchivePage(
     meta,
   );
 
-  if (meta.lastRequestDate === date) {
+  // اگر کش قدیمی مهاجرت شد، همان صفحه را نگه می‌داریم.
+  // در این اجرا صفحه جدید دریافت نمی‌کنیم تا صفحه صفر بازنویسی نشود.
+  if (meta.pageCount > previousPageCount) {
+    console.info("[Instagram] Legacy archive migration completed; fetch deferred", {
+      username,
+      pageCount: meta.pageCount,
+    });
     return;
   }
 
@@ -917,8 +943,8 @@ async function ensureDailyArchivePage(
     profileCacheKey,
   );
 
-  // Record the daily attempt before any paid request.
-  // This prevents repeated attempts in the same day.
+  // ثبت تاریخ تلاش پیش از درخواست پولی؛
+  // در صورت timeout نیز همان روز درخواست دیگری نمی‌زنیم.
   meta.lastRequestDate = date;
 
   await writeSetting(
@@ -932,17 +958,26 @@ async function ensureDailyArchivePage(
   if (
     cachedProfile &&
     typeof cachedProfile === "object" &&
-    typeof (cachedProfile as any).id === "string"
+    (
+      typeof (cachedProfile as any).id === "string" ||
+      typeof (cachedProfile as any).id === "number"
+    )
   ) {
-    profileId = (cachedProfile as any).id;
+    profileId = String((cachedProfile as any).id);
   } else {
-    // One paid profile lookup.
-    // The posts page will be fetched on a later day.
+    // فقط یک درخواست پولی برای شناسایی پروفایل.
+    // دریافت صفحه پست‌ها به روز بعد موکول می‌شود.
     await getProfileId(
       env,
       username,
       date,
     );
+
+    console.info("[Instagram] Profile ID initialized", {
+      username,
+      date,
+      note: "Posts collection starts on the next Tehran day.",
+    });
 
     return;
   }
@@ -982,36 +1017,58 @@ async function ensureDailyArchivePage(
         a.timestamp - b.timestamp,
     );
 
-  // Save the page before advancing the cursor.
-  // If metadata saving fails, the same page can be fetched again.
+  const currentPage = meta.pageCount;
+
+  // ابتدا صفحه را ذخیره می‌کنیم.
+  // تا قبل از ذخیره موفق، cursor جلو نمی‌رود.
   await writeSetting(
     env,
-    archivePageKey(username, meta.pageCount),
+    archivePageKey(username, currentPage),
     {
       username,
-      page: meta.pageCount,
+      page: currentPage,
       posts,
+      receivedFromApi: items.length,
       savedAt: new Date().toISOString(),
     },
   );
 
+  // next_max_id ممکن است رشته یا عدد باشد.
+  const rawNextMaxId =
+    data?.next_max_id ??
+    data?.nextMaxId ??
+    null;
+
   const nextMaxId =
-    typeof data.next_max_id === "string" &&
-    data.next_max_id.length > 0
-      ? data.next_max_id
-      : null;
+    rawNextMaxId === null ||
+    rawNextMaxId === undefined ||
+    String(rawNextMaxId).trim() === ""
+      ? null
+      : String(rawNextMaxId);
+
+  const rawMoreAvailable =
+    data?.more_available ??
+    data?.moreAvailable ??
+    false;
 
   const moreAvailable =
-    data.more_available === true &&
+    rawMoreAvailable === true ||
+    rawMoreAvailable === 1 ||
+    rawMoreAvailable === "true";
+
+  const canContinue =
+    moreAvailable &&
     nextMaxId !== null &&
     nextMaxId !== meta.nextMaxId;
+
+  const previousCursor = meta.nextMaxId;
 
   meta = {
     version: 1,
     username,
-    pageCount: meta.pageCount + 1,
-    nextMaxId,
-    moreAvailable,
+    pageCount: currentPage + 1,
+    nextMaxId: canContinue ? nextMaxId : null,
+    moreAvailable: canContinue,
     lastRequestDate: date,
   };
 
@@ -1023,10 +1080,26 @@ async function ensureDailyArchivePage(
 
   console.info("[Instagram] Archive page saved", {
     username,
-    page: meta.pageCount,
-    received: posts.length,
+    page: currentPage,
+    receivedFromApi: items.length,
+    validPostsSaved: posts.length,
+    previousCursor,
+    nextCursor: meta.nextMaxId,
     moreAvailable: meta.moreAvailable,
+    nextPageWillBeCollected: meta.moreAvailable,
+    date,
   });
+
+  if (moreAvailable && !canContinue) {
+    console.warn(
+      "[Instagram] API reported more posts but returned no usable next cursor",
+      {
+        username,
+        rawNextMaxId,
+        previousCursor,
+      },
+    );
+  }
 }
 
 /**
@@ -1042,7 +1115,7 @@ async function readArchivedPosts(
 
   const response = await supabase(
     env,
-    `settings?key=like.${encodeURIComponent(prefix)}%2A&select=value&order=key.asc`,
+    `settings?key=like.${encodeURIComponent(prefix)}%2A&select=key,value&order=key.asc`,
   );
 
   if (!response.ok) {
@@ -1052,6 +1125,7 @@ async function readArchivedPosts(
   }
 
   const rows = (await response.json()) as Array<{
+    key: string;
     value: unknown;
   }>;
 
@@ -1064,12 +1138,17 @@ async function readArchivedPosts(
       try {
         page = JSON.parse(page);
       } catch {
+        console.warn("[Instagram] Invalid archive page JSON", {
+          username,
+          key: row.key,
+        });
         continue;
       }
     }
 
     if (
       !page ||
+      page.username !== username ||
       !Array.isArray(page.posts)
     ) {
       continue;
@@ -1079,8 +1158,10 @@ async function readArchivedPosts(
       if (
         post &&
         typeof post.id === "string" &&
+        post.id.length > 0 &&
         typeof post.shortcode === "string" &&
         typeof post.timestamp === "number" &&
+        Number.isFinite(post.timestamp) &&
         post.timestamp > 0 &&
         typeof post.mediaUrl === "string" &&
         post.mediaUrl.length > 0 &&
@@ -1094,9 +1175,25 @@ async function readArchivedPosts(
     }
   }
 
-  return [...unique.values()].sort(
-    (a, b) => a.timestamp - b.timestamp,
+  const posts = [...unique.values()].sort(
+    (a, b) =>
+      a.timestamp - b.timestamp ||
+      a.id.localeCompare(b.id),
   );
+
+  console.info("[Instagram] Archive loaded", {
+    username,
+    pagesRead: rows.length,
+    uniquePosts: posts.length,
+    oldestPostTime:
+      posts.length > 0 ? posts[0].timestamp : null,
+    newestPostTime:
+      posts.length > 0
+        ? posts[posts.length - 1].timestamp
+        : null,
+  });
+
+  return posts;
 }
 
 async function sendToBale(
@@ -1512,14 +1609,14 @@ export async function GET(
         });
       }
 
-      // Fetch at most one new archive page per account per day.
+      // دریافت حداکثر یک صفحه جدید برای هر حساب در هر روز تهران.
       await ensureDailyArchivePage(
         runtimeEnv,
         username,
         now.date,
       );
 
-      // Read all stored pages, including older days.
+      // خواندن تمام صفحات آرشیو، شامل صفحات روزهای قبل.
       const posts = await readArchivedPosts(
         runtimeEnv,
         username,
@@ -1533,13 +1630,15 @@ export async function GET(
         sourceState.pendingIds ?? [],
       );
 
-      // Posts are sorted from oldest to newest.
-      const candidate = posts.find(
+      // انتخاب قدیمی‌ترین پست ارسال‌نشده در کل آرشیو.
+      const eligiblePosts = posts.filter(
         (post) =>
           !sent.has(post.id) &&
           !pending.has(post.id) &&
           !looksLikeAd(post),
       );
+
+      const candidate = eligiblePosts[0] ?? null;
 
       if (!candidate) {
         let sentExcluded = 0;
@@ -1588,8 +1687,8 @@ export async function GET(
         });
       }
 
-      // Save a pending marker before sending.
-      // Ambiguous send results are not retried automatically.
+      // ثبت pending قبل از ارسال.
+      // نتیجه مبهم ارسال به‌صورت خودکار دوباره ارسال نمی‌شود.
       sourceState.pendingIds = [
         ...new Set([
           ...(sourceState.pendingIds ?? []),
