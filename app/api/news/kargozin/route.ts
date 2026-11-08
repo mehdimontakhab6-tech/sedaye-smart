@@ -1,3 +1,4 @@
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,9 @@ const SCHEDULE_KEY = "schedule_kargozin";
 const STATE_KEY = "kargozin_telegram_state";
 
 const MAX_SEEN_IDS = 1500;
-const MIN_SEND_INTERVAL_MS = 10 * 60 * 1000;
+const MORNING_SEND_INTERVAL_MS = 20 * 60 * 1000;
+const AFTERNOON_SEND_INTERVAL_MS = 10 * 60 * 1000;
+const AFTERNOON_START_MINUTES = 14 * 60;
 const TEHRAN_TIME_ZONE = "Asia/Tehran";
 const SEND_START_MINUTES = 8 * 60 + 5;
 const SEND_END_MINUTES = 23 * 60;
@@ -720,6 +723,15 @@ function isWithinSendingHours(date: Date): boolean {
   );
 }
 
+// تعیین فاصله ارسال بر اساس ساعت تهران
+function getSendIntervalMs(date: Date): number {
+  const minutes = getTehranMinutes(date);
+
+  return minutes < AFTERNOON_START_MINUTES
+    ? MORNING_SEND_INTERVAL_MS
+    : AFTERNOON_SEND_INTERVAL_MS;
+}
+
 function getNextSendingWindow(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TEHRAN_TIME_ZONE,
@@ -915,8 +927,11 @@ export async function GET(): Promise<Response> {
     if (state.lastSentAt !== null) {
       const lastSentTime = Date.parse(state.lastSentAt);
 
+      // فاصله ارسال متناسب با ساعت فعلی تهران تعیین می‌شود.
+      const sendInterval = getSendIntervalMs(now);
+
       const nextEligibleTime =
-        lastSentTime + MIN_SEND_INTERVAL_MS;
+        lastSentTime + sendInterval;
 
       if (now.getTime() < nextEligibleTime) {
         return Response.json({
@@ -924,7 +939,8 @@ export async function GET(): Promise<Response> {
           foundNew: discovered.length,
           queued: state.queue.length,
           sent: 0,
-          reason: "Waiting for 10-minute interval",
+          reason: "Waiting for scheduled interval",
+          intervalMinutes: sendInterval / 60000,
           nextEligibleAt: new Date(
             nextEligibleTime,
           ).toISOString(),
@@ -964,7 +980,7 @@ export async function GET(): Promise<Response> {
       queued: updatedState.queue.length,
       lastSentAt: sentAt,
       nextEligibleAt: new Date(
-        Date.parse(sentAt) + MIN_SEND_INTERVAL_MS,
+        Date.parse(sentAt) + getSendIntervalMs(now),
       ).toISOString(),
     });
   } catch (error) {
