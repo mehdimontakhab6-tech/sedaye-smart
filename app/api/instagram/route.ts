@@ -1,3 +1,4 @@
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ const TIME_ZONE = "Asia/Tehran";
 const SOURCES = {
   modiryar_com: { limit: 4 },
   "hr.garden": { limit: 2 },
+  "hr.gofteman": { limit: 3 },
 } as const;
 
 type Username = keyof typeof SOURCES;
@@ -50,8 +52,26 @@ type LockValue = {
   leaseUntil: number;
 };
 
+type ArchiveMeta = {
+  version: 1;
+  username: Username;
+  pageCount: number;
+  nextMaxId: string | null;
+  moreAvailable: boolean;
+  lastRequestDate: string | null;
+};
+
 const TOOLZERHUB_BASE = "https://api.toolzerhub.com";
 const TOOLZERHUB_POST_COUNT = 20;
+const TOOLZER_DAILY_LIMIT = 3;
+
+const TOOLZER_DAILY_KEY = "instagram_toolzerhub_daily_calls_v1";
+
+const ARCHIVE_META_PREFIX =
+  "instagram_toolzerhub_archive_meta_v1_";
+
+const ARCHIVE_PAGE_PREFIX =
+  "instagram_toolzerhub_archive_page_v1_";
 
 function tehranTime() {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -83,6 +103,10 @@ function sourceForHour(hour: number): Username | null {
     return "hr.garden";
   }
 
+  if ([17, 19, 21].includes(hour)) {
+    return "hr.gofteman";
+  }
+
   return null;
 }
 
@@ -97,6 +121,11 @@ function emptyState(date: string): State {
         pendingIds: [],
       },
       "hr.garden": {
+        sentToday: 0,
+        sentIds: [],
+        pendingIds: [],
+      },
+      "hr.gofteman": {
         sentToday: 0,
         sentIds: [],
         pendingIds: [],
@@ -150,7 +179,10 @@ async function readSetting(
     );
   }
 
-  const rows = (await response.json()) as Array<{ value: unknown }>;
+  const rows = (await response.json()) as Array<{
+    value: unknown;
+  }>;
+
   const raw = rows[0]?.value;
 
   if (raw == null) return null;
@@ -206,8 +238,6 @@ async function acquireInstagramLock(
 
   const lockRaw = JSON.stringify(lock);
 
-  // First try to create the lock. The unique key prevents two
-  // concurrent executions from successfully inserting it.
   const insertResponse = await supabase(
     env,
     "settings?on_conflict=key",
@@ -238,7 +268,6 @@ async function acquireInstagramLock(
     return lock;
   }
 
-  // A lock already exists. Read its exact stored value.
   const readResponse = await supabase(
     env,
     `settings?key=eq.${encodeURIComponent(LOCK_KEY)}&select=value&limit=1`,
@@ -268,7 +297,6 @@ async function acquireInstagramLock(
     throw new Error("Instagram lock contains invalid JSON.");
   }
 
-  // Do not take over a lock that is still active.
   if (
     typeof previousLock.leaseUntil !== "number" ||
     previousLock.leaseUntil > Date.now()
@@ -276,8 +304,6 @@ async function acquireInstagramLock(
     return null;
   }
 
-  // Replace an expired lock only if its value has not changed
-  // since it was read. This is a compare-and-swap operation.
   const updateResponse = await supabase(
     env,
     `settings?key=eq.${encodeURIComponent(LOCK_KEY)}&value=eq.${encodeURIComponent(previousRaw)}`,
@@ -308,7 +334,6 @@ async function acquireInstagramLock(
 
 /**
  * Releases only the lock owned by this execution.
- * A failed release is harmless: the lease will expire automatically.
  */
 async function releaseInstagramLock(
   env: Env,
@@ -332,60 +357,73 @@ async function releaseInstagramLock(
   }
 }
 
-async function readState(env: Env, date: string): Promise<State> {
+async function readState(
+  env: Env,
+  date: string,
+): Promise<State> {
   const value = await readSetting(env, STATE_KEY);
 
-  if (value == null) return emptyState(date);
+  if (value == null) {
+    return emptyState(date);
+  }
 
   if (
     typeof value !== "object" ||
-    (value as State).version !== 1 ||
-    !(value as State).sources
+    (value as any).version !== 1 ||
+    !(value as any).sources ||
+    typeof (value as any).sources !== "object"
   ) {
     throw new Error("Saved Instagram state has an invalid format.");
   }
 
-  const saved = value as State;
+  const saved = value as any;
+  const sameDay = saved.tehranDate === date;
+
+  const sources = {} as Record<Username, SourceState>;
 
   for (const username of Object.keys(SOURCES) as Username[]) {
     const entry = saved.sources[username];
 
     if (
-      !entry ||
-      !Number.isInteger(entry.sentToday) ||
-      !Array.isArray(entry.sentIds)
+      entry &&
+      (
+        !Array.isArray(entry.sentIds) ||
+        (
+          entry.pendingIds !== undefined &&
+          !Array.isArray(entry.pendingIds)
+        )
+      )
     ) {
       throw new Error(`Invalid saved state for ${username}.`);
     }
 
-    if (!Array.isArray(entry.pendingIds)) {
-      entry.pendingIds = [];
-    }
-  }
+    sources[username] = {
+      sentToday:
+        sameDay && Number.isInteger(entry?.sentToday)
+          ? entry.sentToday
+          : 0,
 
-  if (saved.tehranDate !== date) {
-    return {
-      version: 1,
-      tehranDate: date,
-      sources: {
-        modiryar_com: {
-          sentToday: 0,
-          sentIds: saved.sources.modiryar_com.sentIds,
-          pendingIds: saved.sources.modiryar_com.pendingIds ?? [],
-        },
-        "hr.garden": {
-          sentToday: 0,
-          sentIds: saved.sources["hr.garden"].sentIds,
-          pendingIds: saved.sources["hr.garden"].pendingIds ?? [],
-        },
-      },
+      sentIds: Array.isArray(entry?.sentIds)
+        ? [...new Set(entry.sentIds.map(String))]
+        : [],
+
+      pendingIds: Array.isArray(entry?.pendingIds)
+        ? [...new Set(entry.pendingIds.map(String))]
+        : [],
     };
   }
 
-  return saved;
+  return {
+    version: 1,
+    tehranDate: date,
+    sources,
+  };
 }
 
-async function writeState(env: Env, state: State) {
+async function writeState(
+  env: Env,
+  state: State,
+) {
   await writeSetting(env, STATE_KEY, state);
 }
 
@@ -402,13 +440,18 @@ function toolzerHeaders(env: Env) {
   };
 }
 
-async function checkToolzerCredits(env: Env): Promise<number> {
-  const response = await fetch(`${TOOLZERHUB_BASE}/v1/credits`, {
-    method: "GET",
-    headers: toolzerHeaders(env),
-    cache: "no-store",
-    signal: AbortSignal.timeout(15000),
-  });
+async function checkToolzerCredits(
+  env: Env,
+): Promise<number> {
+  const response = await fetch(
+    `${TOOLZERHUB_BASE}/v1/credits`,
+    {
+      method: "GET",
+      headers: toolzerHeaders(env),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(
@@ -417,6 +460,7 @@ async function checkToolzerCredits(env: Env): Promise<number> {
   }
 
   const result = (await response.json()) as any;
+
   const candidates = [
     result?.balance,
     result?.data?.balance,
@@ -427,19 +471,64 @@ async function checkToolzerCredits(env: Env): Promise<number> {
   ];
 
   const available = candidates.find(
-    (value) => typeof value === "number" && Number.isFinite(value),
+    (value) =>
+      typeof value === "number" &&
+      Number.isFinite(value),
   );
 
   if (typeof available !== "number") {
-    throw new Error("ToolzerHub credit balance was not recognized.");
+    throw new Error(
+      "ToolzerHub credit balance was not recognized.",
+    );
   }
 
   return available;
 }
 
+/**
+ * Reserves one daily request slot before making a paid request.
+ *
+ * Instagram executions are serialized by the global lock.
+ * The reservation is deliberately conservative: an ambiguous
+ * timeout must not allow another request to exceed the daily limit.
+ */
+async function reserveToolzerRequest(
+  env: Env,
+  date: string,
+): Promise<void> {
+  const saved = await readSetting(
+    env,
+    TOOLZER_DAILY_KEY,
+  );
+
+  let calls = 0;
+
+  if (
+    saved &&
+    typeof saved === "object" &&
+    (saved as any).date === date &&
+    Number.isInteger((saved as any).calls)
+  ) {
+    calls = (saved as any).calls;
+  }
+
+  if (calls >= TOOLZER_DAILY_LIMIT) {
+    throw new Error(
+      `Daily ToolzerHub request limit reached (${TOOLZER_DAILY_LIMIT}).`,
+    );
+  }
+
+  await writeSetting(env, TOOLZER_DAILY_KEY, {
+    date,
+    calls: calls + 1,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 async function toolzerGet(
   env: Env,
   path: string,
+  date: string,
 ): Promise<any> {
   const credits = await checkToolzerCredits(env);
 
@@ -449,12 +538,17 @@ async function toolzerGet(
     );
   }
 
-  const response = await fetch(`${TOOLZERHUB_BASE}${path}`, {
-    method: "GET",
-    headers: toolzerHeaders(env),
-    cache: "no-store",
-    signal: AbortSignal.timeout(20000),
-  });
+  await reserveToolzerRequest(env, date);
+
+  const response = await fetch(
+    `${TOOLZERHUB_BASE}${path}`,
+    {
+      method: "GET",
+      headers: toolzerHeaders(env),
+      cache: "no-store",
+      signal: AbortSignal.timeout(20000),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(
@@ -468,8 +562,11 @@ async function toolzerGet(
 async function getProfileId(
   env: Env,
   username: Username,
+  date: string,
 ): Promise<string> {
-  const cacheKey = `instagram_toolzerhub_profile_v1_${username}`;
+  const cacheKey =
+    `instagram_toolzerhub_profile_v1_${username}`;
+
   const cached = await readSetting(env, cacheKey);
 
   if (
@@ -483,12 +580,15 @@ async function getProfileId(
   const result = await toolzerGet(
     env,
     `/v1/instagram/user/info?username_or_url=${encodeURIComponent(username)}&detail=summary`,
+    date,
   );
 
   const id = result?.data?.id;
 
   if (id == null || String(id).length === 0) {
-    throw new Error(`ToolzerHub did not return an ID for @${username}.`);
+    throw new Error(
+      `ToolzerHub did not return an ID for @${username}.`,
+    );
   }
 
   const profileId = String(id);
@@ -522,7 +622,6 @@ function looksLikeAd(post: Post): boolean {
     /کد تخفیف/i,
     /ثبت سفارش/i,
 
-    // اطلاعات تماس و هدایت مخاطب برای خرید یا دریافت خدمات
     /اطلاعات تماس.{0,30}(?:bio|بیو)/i,
     /(?:bio|بیو).{0,30}اطلاعات تماس/i,
     /برای تماس.{0,50}(?:اقدام کنید|تماس بگیرید)/i,
@@ -535,14 +634,23 @@ function looksLikeAd(post: Post): boolean {
     /جذب مشتری/i,
   ];
 
-  return adPatterns.some((pattern) => pattern.test(caption));
+  return adPatterns.some((pattern) =>
+    pattern.test(caption),
+  );
 }
 
 function parseToolzerPost(node: any): Post | null {
-  if (!node || typeof node !== "object") return null;
+  if (!node || typeof node !== "object") {
+    return null;
+  }
 
-  const shortcode = String(node.code ?? node.shortcode ?? "");
-  const id = String(node.id ?? node.pk ?? shortcode);
+  const shortcode = String(
+    node.code ?? node.shortcode ?? "",
+  );
+
+  const id = String(
+    node.id ?? node.pk ?? shortcode,
+  );
 
   const captionValue =
     typeof node.caption === "string"
@@ -551,12 +659,20 @@ function parseToolzerPost(node: any): Post | null {
 
   const caption = String(captionValue).trim();
 
-  const mediaTypeNumber = Number(node.media_type ?? 0);
-  const productType = String(node.product_type ?? "").toLowerCase();
+  const mediaTypeNumber = Number(
+    node.media_type ?? 0,
+  );
+
+  const productType = String(
+    node.product_type ?? "",
+  ).toLowerCase();
 
   // Carousel posts are skipped because the current Bale sender
   // supports one photo or one video per message.
-  if (mediaTypeNumber === 8 || productType === "carousel") {
+  if (
+    mediaTypeNumber === 8 ||
+    productType === "carousel"
+  ) {
     return null;
   }
 
@@ -571,8 +687,13 @@ function parseToolzerPost(node: any): Post | null {
     node.display_url ??
     "";
 
-  const isVideo = mediaTypeNumber === 2 || Boolean(videoUrl);
-  const mediaUrl = String(isVideo ? videoUrl : imageUrl);
+  const isVideo =
+    mediaTypeNumber === 2 ||
+    Boolean(videoUrl);
+
+  const mediaUrl = String(
+    isVideo ? videoUrl : imageUrl,
+  );
 
   const timestamp = Number(
     node.taken_at ??
@@ -581,13 +702,13 @@ function parseToolzerPost(node: any): Post | null {
   );
 
   if (
-  !id ||
-  !shortcode ||
-  !mediaUrl ||
-  !Number.isFinite(timestamp) ||
-  timestamp <= 0
-) {
-  return null;
+    !id ||
+    !shortcode ||
+    !mediaUrl ||
+    !Number.isFinite(timestamp) ||
+    timestamp <= 0
+  ) {
+    return null;
   }
 
   return {
@@ -601,37 +722,233 @@ function parseToolzerPost(node: any): Post | null {
       node.is_paid_partnership ||
       node.branded_content ||
       node.is_sponsored ||
-      (Array.isArray(node.sponsor_tags) && node.sponsor_tags.length > 0),
+      (
+        Array.isArray(node.sponsor_tags) &&
+        node.sponsor_tags.length > 0
+      ),
     ),
   };
 }
 
-async function fetchPosts(
+function archiveMetaKey(username: Username) {
+  return `${ARCHIVE_META_PREFIX}${username}`;
+}
+
+function archivePageKey(
+  username: Username,
+  page: number,
+) {
+  return (
+    `${ARCHIVE_PAGE_PREFIX}${username}_` +
+    String(page).padStart(6, "0")
+  );
+}
+
+async function readArchiveMeta(
+  env: Env,
+  username: Username,
+): Promise<ArchiveMeta> {
+  const saved = await readSetting(
+    env,
+    archiveMetaKey(username),
+  );
+
+  if (saved == null) {
+    return {
+      version: 1,
+      username,
+      pageCount: 0,
+      nextMaxId: null,
+      moreAvailable: true,
+      lastRequestDate: null,
+    };
+  }
+
+  if (
+    typeof saved !== "object" ||
+    (saved as any).version !== 1 ||
+    (saved as any).username !== username ||
+    !Number.isInteger((saved as any).pageCount) ||
+    (saved as any).pageCount < 0
+  ) {
+    throw new Error(
+      `Invalid archive metadata for @${username}.`,
+    );
+  }
+
+  return saved as ArchiveMeta;
+}
+
+/**
+ * Imports the current day's legacy cache, if present.
+ *
+ * This prevents already-collected posts from being ignored
+ * during the transition to the page-based archive.
+ */
+async function migrateLegacyDailyCache(
   env: Env,
   username: Username,
   date: string,
-): Promise<Post[]> {
-  const cacheKey =
-    `instagram_toolzerhub_posts_v1_${username}_${date}`;
-
-  const cached = await readSetting(env, cacheKey);
-
-  if (
-    cached &&
-    typeof cached === "object" &&
-    Array.isArray((cached as any).posts)
-  ) {
-    return (cached as any).posts as Post[];
+  meta: ArchiveMeta,
+): Promise<ArchiveMeta> {
+  if (meta.pageCount !== 0) {
+    return meta;
   }
 
-  const profileId = await getProfileId(env, username);
+  const legacyKey =
+    `instagram_toolzerhub_posts_v1_${username}_${date}`;
+
+  const cached = await readSetting(env, legacyKey);
+
+  if (
+    !cached ||
+    typeof cached !== "object" ||
+    !Array.isArray((cached as any).posts)
+  ) {
+    return meta;
+  }
+
+  const posts = (cached as any).posts.filter(
+    (post: any) =>
+      post &&
+      typeof post.id === "string" &&
+      typeof post.timestamp === "number" &&
+      typeof post.mediaUrl === "string",
+  ) as Post[];
+
+  await writeSetting(
+    env,
+    archivePageKey(username, 0),
+    {
+      username,
+      page: 0,
+      posts,
+      savedAt: new Date().toISOString(),
+      migratedFromLegacyCache: true,
+    },
+  );
+
+  const migrated: ArchiveMeta = {
+    ...meta,
+    pageCount: 1,
+    nextMaxId: null,
+    moreAvailable: true,
+  };
+
+  await writeSetting(
+    env,
+    archiveMetaKey(username),
+    migrated,
+  );
+
+  console.info("[Instagram] Legacy cache migrated", {
+    username,
+    posts: posts.length,
+  });
+
+  return migrated;
+}
+
+/**
+ * Fetches at most one new page per account per Tehran day.
+ *
+ * If a profile ID is missing, only the profile lookup is performed.
+ * The first posts page is then fetched on a later day.
+ */
+async function ensureDailyArchivePage(
+  env: Env,
+  username: Username,
+  date: string,
+): Promise<void> {
+  let meta = await readArchiveMeta(
+    env,
+    username,
+  );
+
+  if (meta.lastRequestDate === date) {
+    return;
+  }
+
+  if (
+    meta.pageCount > 0 &&
+    !meta.moreAvailable
+  ) {
+    return;
+  }
+
+  meta = await migrateLegacyDailyCache(
+    env,
+    username,
+    date,
+    meta,
+  );
+
+  if (meta.lastRequestDate === date) {
+    return;
+  }
+
+  if (
+    meta.pageCount > 0 &&
+    !meta.moreAvailable
+  ) {
+    return;
+  }
+
+  const profileCacheKey =
+    `instagram_toolzerhub_profile_v1_${username}`;
+
+  const cachedProfile = await readSetting(
+    env,
+    profileCacheKey,
+  );
+
+  // Record the daily attempt before any paid request.
+  // This prevents repeated attempts in the same day.
+  meta.lastRequestDate = date;
+
+  await writeSetting(
+    env,
+    archiveMetaKey(username),
+    meta,
+  );
+
+  let profileId: string;
+
+  if (
+    cachedProfile &&
+    typeof cachedProfile === "object" &&
+    typeof (cachedProfile as any).id === "string"
+  ) {
+    profileId = (cachedProfile as any).id;
+  } else {
+    // One paid profile lookup.
+    // The posts page will be fetched on a later day.
+    await getProfileId(
+      env,
+      username,
+      date,
+    );
+
+    return;
+  }
+
+  const params = new URLSearchParams({
+    user_id: profileId,
+    count: String(TOOLZERHUB_POST_COUNT),
+  });
+
+  if (meta.nextMaxId) {
+    params.set("next_max_id", meta.nextMaxId);
+  }
 
   const result = await toolzerGet(
     env,
-    `/v1/instagram/user/posts/by-id?user_id=${encodeURIComponent(profileId)}&count=${TOOLZERHUB_POST_COUNT}`,
+    `/v1/instagram/user/posts/by-id?${params.toString()}`,
+    date,
   );
 
-  const items = result?.data?.items;
+  const data = result?.data;
+  const items = data?.items;
 
   if (!Array.isArray(items)) {
     throw new Error(
@@ -641,17 +958,130 @@ async function fetchPosts(
 
   const posts = items
     .map((item: any) => parseToolzerPost(item))
-    .filter((post: Post | null): post is Post => post !== null)
-    .sort((a: Post, b: Post) => a.timestamp - b.timestamp);
+    .filter(
+      (post: Post | null): post is Post =>
+        post !== null,
+    )
+    .sort(
+      (a: Post, b: Post) =>
+        a.timestamp - b.timestamp,
+    );
 
-  await writeSetting(env, cacheKey, {
+  // Save the page before advancing the cursor.
+  // If metadata saving fails, the same page can be fetched again.
+  await writeSetting(
+    env,
+    archivePageKey(username, meta.pageCount),
+    {
+      username,
+      page: meta.pageCount,
+      posts,
+      savedAt: new Date().toISOString(),
+    },
+  );
+
+  const nextMaxId =
+    typeof data.next_max_id === "string" &&
+    data.next_max_id.length > 0
+      ? data.next_max_id
+      : null;
+
+  const moreAvailable =
+    data.more_available === true &&
+    nextMaxId !== null &&
+    nextMaxId !== meta.nextMaxId;
+
+  meta = {
+    version: 1,
     username,
-    date,
-    posts,
-    cachedAt: new Date().toISOString(),
-  });
+    pageCount: meta.pageCount + 1,
+    nextMaxId,
+    moreAvailable,
+    lastRequestDate: date,
+  };
 
-  return posts;
+  await writeSetting(
+    env,
+    archiveMetaKey(username),
+    meta,
+  );
+
+  console.info("[Instagram] Archive page saved", {
+    username,
+    page: meta.pageCount,
+    received: posts.length,
+    moreAvailable: meta.moreAvailable,
+  });
+}
+
+/**
+ * Reads every stored archive page, removes duplicate post IDs,
+ * and returns the posts from oldest to newest.
+ */
+async function readArchivedPosts(
+  env: Env,
+  username: Username,
+): Promise<Post[]> {
+  const prefix =
+    `${ARCHIVE_PAGE_PREFIX}${username}_`;
+
+  const response = await supabase(
+    env,
+    `settings?key=like.${encodeURIComponent(prefix)}%2A&select=value&order=key.asc`,
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Instagram archive read failed: HTTP ${response.status}`,
+    );
+  }
+
+  const rows = (await response.json()) as Array<{
+    value: unknown;
+  }>;
+
+  const unique = new Map<string, Post>();
+
+  for (const row of rows) {
+    let page: any = row.value;
+
+    if (typeof page === "string") {
+      try {
+        page = JSON.parse(page);
+      } catch {
+        continue;
+      }
+    }
+
+    if (
+      !page ||
+      !Array.isArray(page.posts)
+    ) {
+      continue;
+    }
+
+    for (const post of page.posts) {
+      if (
+        post &&
+        typeof post.id === "string" &&
+        typeof post.shortcode === "string" &&
+        typeof post.timestamp === "number" &&
+        post.timestamp > 0 &&
+        typeof post.mediaUrl === "string" &&
+        post.mediaUrl.length > 0 &&
+        (
+          post.mediaType === "photo" ||
+          post.mediaType === "video"
+        )
+      ) {
+        unique.set(post.id, post as Post);
+      }
+    }
+  }
+
+  return [...unique.values()].sort(
+    (a, b) => a.timestamp - b.timestamp,
+  );
 }
 
 async function sendToBale(
@@ -677,81 +1107,75 @@ async function sendToBale(
 
   const mediaField =
     post.mediaType === "video" ? "video" : "photo";
- 
-let cleanedCaption = post.caption
-  .replace(/\r\n?/g, "\n")
-  // حذف کاراکترهای نامرئی
-  .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff]/g, "")
-  .split("\n")
-  .map((line) => line.trim())
-  .filter((line) => {
-    if (!line) return true;
 
-    // حذف نام پایگاه جامع مدیریار
+  let cleanedCaption = post.caption
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff]/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line) return true;
+
+      if (
+        /^#?پایگاه[_\s]+جامع[_\s]+مدیریار$/u.test(line)
+      ) {
+        return false;
+      }
+
+      if (
+        /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(line)
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    .join("\n");
+
+  const hashtagOnlyLine =
+    /^(?:#[\p{L}\p{M}\p{N}_‌]+[ \t]*)+$/u;
+
+  let finalLines = cleanedCaption.split("\n");
+
+  while (finalLines.length > 0) {
+    const lastLine =
+      finalLines[finalLines.length - 1].trim();
+
     if (
-      /^#?پایگاه[_\s]+جامع[_\s]+مدیریار$/u.test(line)
+      !lastLine ||
+      hashtagOnlyLine.test(lastLine)
     ) {
-      return false;
+      finalLines.pop();
+    } else {
+      break;
     }
-
-    // حذف آیدی‌های مشخص‌شده
-    if (
-      /^@(?:ghare_tanhae|mahdi_yarahmadi|athir_360|modiryar_com)$/i.test(line)
-    ) {
-      return false;
-    }
-
-    return true;
-  })
-  .join("\n");
-
-// شناسایی خطوطی که فقط هشتگ دارند
-const hashtagOnlyLine =
-  /^(?:#[\p{L}\p{M}\p{N}_‌]+[ \t]*)+$/u;
-
-let finalLines = cleanedCaption.split("\n");
-
-// حذف تمام خطوط خالی و هشتگ‌دار از انتهای متن
-while (finalLines.length > 0) {
-  const lastLine = finalLines[finalLines.length - 1].trim();
-
-  if (!lastLine || hashtagOnlyLine.test(lastLine)) {
-    finalLines.pop();
-  } else {
-    break;
   }
-}
 
-cleanedCaption = finalLines.join("\n");
+  cleanedCaption = finalLines.join("\n");
 
-// حذف هشتگ‌های انتهایی در همان خط آخر
-cleanedCaption = cleanedCaption.replace(
-  /(?:[ \t]+#[\p{L}\p{M}\p{N}_‌]+)+[ \t]*$/gu,
-  ""
-);
+  cleanedCaption = cleanedCaption.replace(
+    /(?:[ \t]+#[\p{L}\p{M}\p{N}_‌]+)+[ \t]*$/gu,
+    "",
+  );
 
-// پاک‌سازی انتهای متن
-cleanedCaption = cleanedCaption
-  .replace(/[ \t]+$/gm, "")
-  .replace(/\n+$/g, "")
-  .replace(/[\p{S}\p{Z}\s_#]+$/gu, "")
-  .replace(/[،؛:!?؟]+$/gu, "")
-  .trim();
+  cleanedCaption = cleanedCaption
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n+$/g, "")
+    .replace(/[\p{S}\p{Z}\s_#]+$/gu, "")
+    .replace(/[،؛:!?؟]+$/gu, "")
+    .trim();
 
-  // عنوان همیشه فقط یک بار و با یک خط خالی بعد از آن قرار می‌گیرد.
   const completeText = cleanedCaption
     ? `${TITLE}\n\n${cleanedCaption}`
     : TITLE;
 
-  /**
-   * متن را در محدوده مجاز تقسیم می‌کند.
-   * اولویت با خط جدید و سپس فاصله است.
-   * هیچ کاراکتری از متن حذف نمی‌شود.
-   */
   function takeChunk(
     text: string,
     limit: number,
-  ): { chunk: string; remaining: string } {
+  ): {
+    chunk: string;
+    remaining: string;
+  } {
     const characters = Array.from(text);
 
     if (characters.length <= limit) {
@@ -783,23 +1207,23 @@ cleanedCaption = cleanedCaption
       splitAt = limit;
     }
 
-        let chunk = characters.slice(0, splitAt).join("");
-    let remaining = characters.slice(splitAt).join("");
+    let chunk = characters
+      .slice(0, splitAt)
+      .join("");
 
-    // جلوگیری از باقی ماندن فضای خالی در انتهای پیام اول
+    let remaining = characters
+      .slice(splitAt)
+      .join("");
+
     chunk = chunk.replace(/\n+$/g, "");
-
-    // حذف خط‌های خالی اضافی ابتدای پیام ادامه
     remaining = remaining.replace(/^\n+/g, "");
 
     return {
-  chunk,
-  remaining,
-};
+      chunk,
+      remaining,
+    };
   }
 
-  // کپشن رسانه شامل عنوان و در صورت وجود، متن پست است.
-  // کپشن به‌صورت پیش‌فرض زیر عکس یا فیلم نمایش داده می‌شود.
   const firstPart = takeChunk(
     completeText,
     MEDIA_CAPTION_LIMIT,
@@ -824,7 +1248,9 @@ cleanedCaption = cleanedCaption
     },
   );
 
-  const firstResult = await firstResponse.json().catch(() => null) as
+  const firstResult = await firstResponse
+    .json()
+    .catch(() => null) as
     | {
         ok?: boolean;
         description?: string;
@@ -834,7 +1260,10 @@ cleanedCaption = cleanedCaption
       }
     | null;
 
-  if (!firstResponse.ok || firstResult?.ok !== true) {
+  if (
+    !firstResponse.ok ||
+    firstResult?.ok !== true
+  ) {
     throw new Error(
       `Bale ${method} failed: ${
         firstResult?.description ??
@@ -854,12 +1283,10 @@ cleanedCaption = cleanedCaption
     mediaType: post.mediaType,
   });
 
-  // اگر ادامه‌ای وجود ندارد، کار تمام است.
   if (!remainingText) {
     return;
   }
 
-  // ادامه متن بدون تکرار عنوان ارسال می‌شود.
   const chunks: string[] = [];
 
   while (remainingText.length > 0) {
@@ -881,8 +1308,11 @@ cleanedCaption = cleanedCaption
     ),
   });
 
-  // ارسال تمام قطعات متن و بررسی پاسخ هر درخواست
-  for (let index = 0; index < chunks.length; index++) {
+  for (
+    let index = 0;
+    index < chunks.length;
+    index++
+  ) {
     const chunk = chunks[index];
 
     const textResponse = await fetch(
@@ -900,7 +1330,9 @@ cleanedCaption = cleanedCaption
       },
     );
 
-    const textResult = await textResponse.json().catch(() => null) as
+    const textResult = await textResponse
+      .json()
+      .catch(() => null) as
       | {
           ok?: boolean;
           description?: string;
@@ -910,7 +1342,10 @@ cleanedCaption = cleanedCaption
         }
       | null;
 
-    if (!textResponse.ok || textResult?.ok !== true) {
+    if (
+      !textResponse.ok ||
+      textResult?.ok !== true
+    ) {
       console.error("Instagram text message failed", {
         username,
         postId: post.id,
@@ -918,7 +1353,9 @@ cleanedCaption = cleanedCaption
         chunkCount: chunks.length,
         chunkLength: Array.from(chunk).length,
         httpStatus: textResponse.status,
-        error: textResult?.description ?? "Unknown Bale API error",
+        error:
+          textResult?.description ??
+          "Unknown Bale API error",
       });
 
       throw new Error(
@@ -938,14 +1375,16 @@ cleanedCaption = cleanedCaption
     });
   }
 
-    console.info("Instagram continuation completed", {
+  console.info("Instagram continuation completed", {
     username,
     postId: post.id,
     chunkCount: chunks.length,
   });
 }
 
-export async function GET(request: Request): Promise<Response> {
+export async function GET(
+  request: Request,
+): Promise<Response> {
   try {
     const { env } = await getCloudflareContext();
     const runtimeEnv = env as Env;
@@ -953,7 +1392,9 @@ export async function GET(request: Request): Promise<Response> {
 
     // Manual force mode keeps using the existing project secret.
     // Scheduled executions do not require this secret.
-    const forceRequested = url.searchParams.get("force") === "1";
+    const forceRequested =
+      url.searchParams.get("force") === "1";
+
     const secret = runtimeEnv.INSTAGRAM_TEST_SECRET;
 
     const force =
@@ -961,15 +1402,16 @@ export async function GET(request: Request): Promise<Response> {
       Boolean(secret) &&
       request.headers.get("x-instagram-test-secret") === secret;
 
-        if (forceRequested && !force) {
+    if (forceRequested && !force) {
       return Response.json(
-        { ok: false, error: "Invalid test authorization." },
+        {
+          ok: false,
+          error: "Invalid test authorization.",
+        },
         { status: 403 },
       );
     }
 
-    // Check the persistent Instagram repost switch.
-    // Missing setting means enabled, preserving the previous behavior.
     const instagramEnabled = await readSetting(
       runtimeEnv,
       "instagram_bale_repost_enabled_v1",
@@ -986,7 +1428,13 @@ export async function GET(request: Request): Promise<Response> {
     const now = tehranTime();
     const scheduledSource = sourceForHour(now.hour);
 
-    if (!force && (now.minute !== 15 || !scheduledSource)) {
+    if (
+      !force &&
+      (
+        now.minute !== 15 ||
+        !scheduledSource
+      )
+    ) {
       return Response.json({
         ok: true,
         skipped: true,
@@ -996,16 +1444,24 @@ export async function GET(request: Request): Promise<Response> {
       });
     }
 
-    const requestedSource = url.searchParams.get("source");
+    const requestedSource =
+      url.searchParams.get("source");
 
     const username: Username = force
-      ? requestedSource === "hr.garden"
-        ? "hr.garden"
-        : "modiryar_com"
+      ? (
+          requestedSource &&
+          Object.prototype.hasOwnProperty.call(
+            SOURCES,
+            requestedSource,
+          )
+            ? requestedSource as Username
+            : "modiryar_com"
+        )
       : scheduledSource!;
 
-    // Acquire the global lock before reading or changing Instagram state.
-    const lock = await acquireInstagramLock(runtimeEnv);
+    const lock = await acquireInstagramLock(
+      runtimeEnv,
+    );
 
     if (!lock) {
       return Response.json(
@@ -1020,10 +1476,17 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     try {
-      const state = await readState(runtimeEnv, now.date);
+      const state = await readState(
+        runtimeEnv,
+        now.date,
+      );
+
       const sourceState = state.sources[username];
 
-      if (sourceState.sentToday >= SOURCES[username].limit) {
+      if (
+        sourceState.sentToday >=
+        SOURCES[username].limit
+      ) {
         return Response.json({
           ok: true,
           skipped: true,
@@ -1034,90 +1497,123 @@ export async function GET(request: Request): Promise<Response> {
         });
       }
 
-      const posts = await fetchPosts(
+      // Fetch at most one new archive page per account per day.
+      await ensureDailyArchivePage(
         runtimeEnv,
         username,
         now.date,
       );
 
-const sent = new Set(sourceState.sentIds);
-const pending = new Set(sourceState.pendingIds ?? []);
+      // Read all stored pages, including older days.
+      const posts = await readArchivedPosts(
+        runtimeEnv,
+        username,
+      );
 
-const candidate = posts.find(
-  (post) =>
-    !sent.has(post.id) &&
-    !pending.has(post.id) &&
-    !looksLikeAd(post),
-);
+      const sent = new Set(
+        sourceState.sentIds,
+      );
 
-if (!candidate) {
-  let sentExcluded = 0;
-  let pendingExcluded = 0;
-  let adExcluded = 0;
-  let eligibleCount = 0;
+      const pending = new Set(
+        sourceState.pendingIds ?? [],
+      );
 
-  for (const post of posts) {
-    if (sent.has(post.id)) {
-      sentExcluded++;
-    } else if (pending.has(post.id)) {
-      pendingExcluded++;
-    } else if (looksLikeAd(post)) {
-      adExcluded++;
-    } else {
-      eligibleCount++;
-    }
-  }
+      // Posts are sorted from oldest to newest.
+      const candidate = posts.find(
+        (post) =>
+          !sent.has(post.id) &&
+          !pending.has(post.id) &&
+          !looksLikeAd(post),
+      );
 
-  const diagnostics = {
-    sentExcluded,
-    pendingExcluded,
-    adExcluded,
-    eligibleCount,
-    savedSentIds: sourceState.sentIds.length,
-    savedPendingIds: sourceState.pendingIds?.length ?? 0,
-  };
+      if (!candidate) {
+        let sentExcluded = 0;
+        let pendingExcluded = 0;
+        let adExcluded = 0;
+        let eligibleCount = 0;
 
-  console.info("[Instagram] Candidate diagnostics:", {
-    username,
-    scanned: posts.length,
-    ...diagnostics,
-  });
+        for (const post of posts) {
+          if (sent.has(post.id)) {
+            sentExcluded++;
+          } else if (pending.has(post.id)) {
+            pendingExcluded++;
+          } else if (looksLikeAd(post)) {
+            adExcluded++;
+          } else {
+            eligibleCount++;
+          }
+        }
 
-  return Response.json({
-    ok: true,
-    skipped: true,
-    reason: "No eligible unsent post was found.",
-    username,
-    scanned: posts.length,
-    diagnostics,
-  });
-}
+        const diagnostics = {
+          sentExcluded,
+          pendingExcluded,
+          adExcluded,
+          eligibleCount,
+          savedSentIds: sourceState.sentIds.length,
+          savedPendingIds:
+            sourceState.pendingIds?.length ?? 0,
+        };
 
-      // Save a pending marker before sending. If the request times out
-      // or the result becomes ambiguous, this post will not be retried
-      // automatically and risk being sent twice.
+        console.info(
+          "[Instagram] Candidate diagnostics:",
+          {
+            username,
+            scanned: posts.length,
+            ...diagnostics,
+          },
+        );
+
+        return Response.json({
+          ok: true,
+          skipped: true,
+          reason: "No eligible unsent post was found in the archive.",
+          username,
+          scanned: posts.length,
+          diagnostics,
+        });
+      }
+
+      // Save a pending marker before sending.
+      // Ambiguous send results are not retried automatically.
       sourceState.pendingIds = [
-        ...(sourceState.pendingIds ?? []),
-        candidate.id,
-      ].slice(-3000);
+        ...new Set([
+          ...(sourceState.pendingIds ?? []),
+          candidate.id,
+        ]),
+      ];
 
       state.tehranDate = now.date;
-      await writeState(runtimeEnv, state);
 
-      await sendToBale(runtimeEnv, username, candidate);
+      await writeState(
+        runtimeEnv,
+        state,
+      );
+
+      await sendToBale(
+        runtimeEnv,
+        username,
+        candidate,
+      );
 
       sourceState.pendingIds = (
         sourceState.pendingIds ?? []
-      ).filter((id) => id !== candidate.id);
+      ).filter(
+        (id) => id !== candidate.id,
+      );
 
       sourceState.sentIds = [
-        ...sourceState.sentIds,
-        candidate.id,
-      ].slice(-3000);
+        ...new Set([
+          ...sourceState.sentIds,
+          candidate.id,
+        ]),
+      ];
 
       sourceState.sentToday += 1;
 
-      await writeState(runtimeEnv, state);
+      await writeState(
+        runtimeEnv,
+        state,
+      );
 
       return Response.json({
         ok: true,
@@ -1127,17 +1623,24 @@ if (!candidate) {
         mediaType: candidate.mediaType,
         sentToday: sourceState.sentToday,
         dailyLimit: SOURCES[username].limit,
+        scannedArchivePosts: posts.length,
         tehranTime:
           `${now.date} ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")}`,
       });
     } finally {
-      await releaseInstagramLock(runtimeEnv, lock);
+      await releaseInstagramLock(
+        runtimeEnv,
+        lock,
+      );
     }
   } catch (error) {
     return Response.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 },
     );
