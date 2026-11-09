@@ -84,6 +84,10 @@ const RSS_SOURCES: SourceConfig[] = [
   { name: "ایکنا", url: "https://iqna.ir/fa/rss" },
   { name: "انتخاب", url: "https://www.entekhab.ir/fa/rss/allnews" },
   { name: "تسنیم", url: "https://www.tasnimnews.ir/fa/rss" },
+  { name: "خبرگزاری دانشجو", url: "https://snn.ir/fa/rss/allnews" },
+  { name: "ایمنا", url: "https://www.imna.ir/rss" },
+  { name: "خبرگزاری آنا", url: "https://ana.ir/fa/rss/allnews" },
+  { name: "ایسکانیوز", url: "https://www.iscanews.ir/rss" },
 ];
 
 const BLOCKED_DOMAINS = [
