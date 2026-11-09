@@ -10,7 +10,7 @@ const REQUEST_TIMEOUT_MS = 7000;
 const IRAN_OFFSET_MS = 3.5 * 60 * 60 * 1000;
 
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; SedayeSmart/1.0; +https://sedaye-smart.mehdimontakhab6.workers.dev)";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 type CloudflareEnv = {
   BALE_SMART_TOKEN?: string;
@@ -35,6 +35,7 @@ type Candidate = {
 type SourceConfig = {
   name: string;
   url: string;
+  fallbackUrls?: string[];
 };
 
 type SourceResult = {
@@ -47,6 +48,24 @@ type SourceResult = {
   missingDate: number;
   outsideWindow: number;
   error?: string;
+
+  // اطلاعات تکمیلی برای عیب‌یابی پاسخ RSS
+  contentType?: string;
+  finalUrl?: string;
+  redirected?: boolean;
+  responseType?: "rss" | "html" | "unknown";
+  responsePreview?: string;
+  attempts?: Array<{
+    url: string;
+    status: number | null;
+    contentType: string;
+    finalUrl: string;
+    redirected: boolean;
+    responseType: "rss" | "html" | "unknown";
+    preview: string;
+    error?: string;
+  }>;
+
   samples: Array<{ title: string; publishedAt: string }>;
   keywordSamples: Array<{
     title: string;
@@ -75,6 +94,9 @@ type FetchTextResult = {
   status: number;
   ok: boolean;
   body: string;
+  contentType: string;
+  finalUrl: string;
+  redirected: boolean;
 };
 
 // همه منابع RSS برای بررسی خبرهای ثبت احوال
@@ -94,7 +116,13 @@ const RSS_SOURCES: SourceConfig[] = [
   { name: "شانا", url: "https://www.shana.ir/rss" },
   { name: "ایکنا", url: "https://iqna.ir/fa/rss" },
   { name: "انتخاب", url: "https://www.entekhab.ir/fa/rss/allnews" },
-  { name: "تسنیم", url: "https://www.tasnimnews.ir/fa/rss" },
+  {
+    name: "تسنیم",
+    url: "https://www.tasnimnews.ir/fa/rss",
+    fallbackUrls: [
+      "https://www.tasnimnews.com/fa/rss/feed/0/8/0/%D9%85%D9%87%D9%85%D8%AA%D8%B1%DB%8C%D9%86-%D8%A7%D8%AE%D8%A8%D8%A7%D8%B1-%D8%AA%D8%B3%D9%86%DB%8C%D9%85",
+    ],
+  },
   { name: "خبرگزاری دانشجو", url: "https://snn.ir/fa/rss/allnews" },
   { name: "ایمنا", url: "https://www.imna.ir/rss" },
   { name: "خبرگزاری آنا", url: "https://ana.ir/fa/rss/allnews" },
@@ -776,7 +804,62 @@ function isRelevantNews(
   return evaluateRegistrationNews(title, description).relevant;
 }
 
-// دریافت پاسخ همراه با متن، در محدوده زمانی تعیین‌شده
+/**
+ * تشخیص نوع پاسخ دریافتی از منبع.
+ *
+ * تشخیص صرفاً بر اساس Content-Type نیست؛
+ * ساختار واقعی بدنه هم بررسی می‌شود.
+ */
+function detectResponseType(
+  body: string,
+  contentType = ""
+): "rss" | "html" | "unknown" {
+  const sample = body.replace(/^\uFEFF/, "").trimStart();
+  const normalizedContentType = contentType.toLowerCase();
+
+  if (!sample) {
+    return "unknown";
+  }
+
+  // وجود ساختار HTML نشانه دریافت صفحه وب است.
+  if (
+    /^\s*(?:<!doctype\s+html\b|<html\b)/i.test(sample) ||
+    /<\s*(?:head|body)\b[^>]*>/i.test(sample)
+  ) {
+    return "html";
+  }
+
+  // ساختارهای شناخته‌شده RSS، Atom و RDF
+  if (
+    /<\?xml\b/i.test(sample) ||
+    /<rss\b/i.test(sample) ||
+    /<feed\b/i.test(sample) ||
+    /<rdf:RDF\b/i.test(sample) ||
+    /<(?:item|entry)\b/i.test(sample)
+  ) {
+    return "rss";
+  }
+
+  // اگر Content-Type صریحاً HTML باشد و XML نبود، HTML محسوب می‌شود.
+  if (
+    normalizedContentType.includes("text/html") ||
+    normalizedContentType.includes("application/xhtml")
+  ) {
+    return "html";
+  }
+
+  return "unknown";
+}
+
+function getResponsePreview(body: string): string {
+  return body
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 350);
+}
+
+// دریافت پاسخ همراه با اطلاعات HTTP، در محدوده زمانی تعیین‌شده
 async function fetchText(
   url: string,
   init: RequestInit = {},
@@ -789,10 +872,12 @@ async function fetchText(
     const response = await fetch(url, {
       ...init,
       signal: controller.signal,
+      redirect: "follow",
       headers: {
         "User-Agent": USER_AGENT,
         Accept:
-          "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+          "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
         ...(init.headers || {}),
       },
     });
@@ -803,6 +888,9 @@ async function fetchText(
       status: response.status,
       ok: response.ok,
       body,
+      contentType: response.headers.get("content-type") || "",
+      finalUrl: response.url || url,
+      redirected: response.redirected,
     };
   } finally {
     clearTimeout(timeout);
@@ -1180,6 +1268,65 @@ function getNearMatchSamples(
   return result;
 }
 
+/**
+ * دریافت یک آدرس RSS و ثبت جزئیات پاسخ.
+ * پاسخ فقط زمانی قابل استفاده است که ساختار آن RSS/XML باشد.
+ */
+async function fetchFeedAttempt(
+  url: string
+): Promise<{
+  response: FetchTextResult | null;
+  responseType: "rss" | "html" | "unknown";
+  attempt: NonNullable<SourceResult["attempts"]>[number];
+}> {
+  try {
+    const response = await fetchText(url);
+    const responseType = detectResponseType(
+      response.body,
+      response.contentType
+    );
+
+    const attempt = {
+      url,
+      status: response.status,
+      contentType: response.contentType,
+      finalUrl: response.finalUrl,
+      redirected: response.redirected,
+      responseType,
+      preview: getResponsePreview(response.body),
+      ...(!response.ok
+        ? { error: `HTTP ${response.status}` }
+        : {}),
+    };
+
+    return {
+      response,
+      responseType,
+      attempt,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown fetch error";
+
+    return {
+      response: null,
+      responseType: "unknown",
+      attempt: {
+        url,
+        status: null,
+        contentType: "",
+        finalUrl: url,
+        redirected: false,
+        responseType: "unknown",
+        preview: "",
+        error: message,
+      },
+    };
+  }
+}
+
 async function fetchSource(
   source: SourceConfig,
   window: ReportWindow
@@ -1200,24 +1347,75 @@ async function fetchSource(
     keywordSamples: [],
     matchedSamples: [],
     nearMatchSamples: [],
+    attempts: [],
   };
 
   try {
-    const response = await fetchText(source.url);
+    const urlsToTry = [
+      source.url,
+      ...(source.fallbackUrls || []),
+    ];
 
-    diagnostics.status = response.status;
+    let selectedResponse: FetchTextResult | null = null;
+    let selectedResponseType: "rss" | "html" | "unknown" = "unknown";
 
-    if (!response.ok) {
-      diagnostics.error = `HTTP ${response.status}`;
+    // ابتدا آدرس اصلی و سپس آدرس‌های جایگزین بررسی می‌شوند.
+    for (const attemptUrl of urlsToTry) {
+      const result = await fetchFeedAttempt(attemptUrl);
+
+      diagnostics.attempts!.push(result.attempt);
+
+      // آخرین پاسخ برای نمایش دقیق وضعیت منبع ثبت می‌شود.
+      diagnostics.status = result.response?.status ?? null;
+      diagnostics.contentType =
+        result.response?.contentType || "";
+      diagnostics.finalUrl =
+        result.response?.finalUrl || attemptUrl;
+      diagnostics.redirected =
+        result.response?.redirected || false;
+      diagnostics.responseType = result.responseType;
+      diagnostics.responsePreview =
+        result.attempt.preview;
+
+      if (
+        result.response &&
+        result.response.ok &&
+        result.responseType === "rss"
+      ) {
+        selectedResponse = result.response;
+        selectedResponseType = result.responseType;
+        break;
+      }
+    }
+
+    if (!selectedResponse) {
+      const attempts = diagnostics.attempts || [];
+      const lastAttempt = attempts[attempts.length - 1];
+
+      if (lastAttempt?.error) {
+        diagnostics.error = lastAttempt.error;
+      } else if (lastAttempt?.responseType === "html") {
+        diagnostics.error =
+          "Expected RSS/XML but received HTML from all attempted URLs";
+      } else if (lastAttempt?.status && lastAttempt.status >= 400) {
+        diagnostics.error = `HTTP ${lastAttempt.status} from all attempted URLs`;
+      } else {
+        diagnostics.error =
+          "No valid RSS/XML response received from source";
+      }
+
       return { items: [], diagnostics };
     }
 
-    const body = response.body;
+    const body = selectedResponse.body;
 
-    if (/^\s*(?:<!doctype\s+html\b|<html\b)/i.test(body)) {
-      diagnostics.error = "Expected RSS/XML but received HTML";
-      return { items: [], diagnostics };
-    }
+    // اطلاعات پاسخ موفق نهایی
+    diagnostics.status = selectedResponse.status;
+    diagnostics.contentType = selectedResponse.contentType;
+    diagnostics.finalUrl = selectedResponse.finalUrl;
+    diagnostics.redirected = selectedResponse.redirected;
+    diagnostics.responseType = selectedResponseType;
+    diagnostics.responsePreview = getResponsePreview(body);
 
     diagnostics.rawItems =
       (body.match(/<(?:item|entry)\b/gi) || []).length;
