@@ -53,6 +53,17 @@ type SourceResult = {
     publishedAt: string;
     description: string;
   }>;
+  matchedSamples: Array<{
+    title: string;
+    publishedAt: string;
+    reason: string;
+    matchedTerms: string[];
+  }>;
+  nearMatchSamples: Array<{
+    title: string;
+    publishedAt: string;
+    matchedTerms: string[];
+  }>;
 };
 
 type ReportWindow = {
@@ -159,6 +170,9 @@ const SECONDARY_TERMS = [
  * وجود این عبارات در عنوان خبر برای مرتبط دانستن خبر کافی است.
  * عبارت‌های عمومی‌تر مانند «تغییر نام» در این فهرست قرار ندارند
  * تا باعث ورود خبرهای نامرتبط نشوند.
+ *
+ * عبارت‌های عمومی کارت ملی در این فهرست نیستند؛
+ * برای پذیرش آن‌ها باید اقدام مشخصی نیز در عنوان وجود داشته باشد.
  */
 const DIRECT_SERVICE_TERMS = [
   "صدور شناسنامه",
@@ -167,8 +181,6 @@ const DIRECT_SERVICE_TERMS = [
   "شناسنامه نوزاد",
   "گواهی ولادت",
   "گواهی فوت",
-  "کارت هوشمند ملی",
-  "کارت ملی هوشمند",
   "پایگاه اطلاعات جمعیت",
   "درگاه خدمات الکترونیک ثبت احوال",
   "خدمات الکترونیک ثبت احوال",
@@ -237,6 +249,87 @@ const NON_REGISTRATION_CONTEXT_TERMS = [
   "درگاه ملی خدمات مالیاتی",
   "بانک مرکزی",
   "صرافی",
+];
+
+// موضوع کارت ملی؛ به‌تنهایی برای پذیرش کافی نیست.
+const CARD_ID_TERMS = [
+  "کارت ملی",
+  "کارت هوشمند ملی",
+  "کارت ملی هوشمند",
+];
+
+// اقدام‌های مشخص مربوط به کارت ملی
+const CARD_ACTION_TERMS = [
+  "صدور",
+  "تمدید",
+  "تعویض",
+  "اعتبار",
+  "تمدید اعتبار",
+  "هوشمندسازی",
+  "هوشمند سازی",
+  "تحویل",
+  "درخواست",
+  "ثبت نام",
+  "ثبت‌نام",
+];
+
+// اقدام‌های مشخص مربوط به شناسنامه
+const SHENASNAMEH_ACTION_TERMS = [
+  "صدور",
+  "تعویض",
+  "اصلاح",
+  "المثنی",
+  "نوزاد",
+  "هوشمند",
+  "خدمات",
+  "درخواست",
+  "ثبت نام",
+  "ثبت‌نام",
+];
+
+// موضوع‌های ولادت و وفات
+const BIRTH_DEATH_TERMS = [
+  "ولادت",
+  "تولد",
+  "وفات",
+  "فوت",
+];
+
+// اقدام‌های مرتبط با ثبت وقایع
+const EVENT_ACTION_TERMS = [
+  "ثبت",
+  "آمار",
+  "گواهی",
+  "صدور",
+  "خدمات",
+  "وقایع حیاتی",
+  "ثبت احوال",
+];
+
+// موضوع‌های ازدواج و طلاق
+const MARRIAGE_DIVORCE_TERMS = [
+  "ازدواج",
+  "طلاق",
+];
+
+// تغییر نام فقط با قرینه صریح ثبت احوال پذیرفته می‌شود.
+const NAME_CHANGE_TERMS = [
+  "تغییر نام",
+  "تغییر نام خانوادگی",
+  "اصلاح نام",
+  "اصلاح نام خانوادگی",
+];
+
+// عبارت‌های مورد استفاده برای شناسایی خبرهای نزدیک به موضوع
+const NEAR_MATCH_TERMS = [
+  ...SECONDARY_TERMS,
+  ...CARD_ACTION_TERMS,
+  ...SHENASNAMEH_ACTION_TERMS,
+  ...BIRTH_DEATH_TERMS,
+  ...MARRIAGE_DIVORCE_TERMS,
+  ...NAME_CHANGE_TERMS,
+  "جمعیت",
+  "ثبت",
 ];
 
 function normalizeText(value: unknown): string {
@@ -368,35 +461,69 @@ function includesAny(text: string, terms: string[]): boolean {
   );
 }
 
+function findMatchedTerms(
+  text: string,
+  terms: string[]
+): string[] {
+  const normalized = normalizeText(text);
+
+  return terms.filter((term) =>
+    normalized.includes(normalizeText(term))
+  );
+}
+
+function uniqueTerms(terms: string[]): string[] {
+  return [...new Set(terms)];
+}
+
+type RelevanceAnalysis = {
+  relevant: boolean;
+  reason: string;
+  matchedTerms: string[];
+};
+
 /**
- * تشخیص خبر مرتبط با ثبت احوال:
+ * تحلیل ارتباط خبر با وظایف سازمان ثبت احوال.
  *
- * ۱. وجود عبارت صریح ثبت احوال در عنوان کافی است.
- *
- * ۲. وجود خدمات کاملاً مشخص ثبت احوال در عنوان نیز کافی است؛
- *    حتی اگر نام سازمان در عنوان ذکر نشده باشد.
- *
- * ۳. عبارت‌های عمومی مانند «کارت ملی»، «شناسنامه» و «تغییر نام»
- *    به‌تنهایی پذیرفته نمی‌شوند.
- *
- * ۴. اگر عبارت صریح ثبت احوال در عنوان یا توضیحات باشد،
- *    وجود یک موضوع مرتبط با خدمات ثبت احوال نیز الزامی است.
- *
- * ۵. عنوان‌های نامرتبط و زمینه‌های غیرمرتبط حذف می‌شوند.
+ * ۱. عبارت صریح ثبت احوال در عنوان کافی است.
+ * ۲. خدمات مشخص ثبت احوال در عنوان قابل پذیرش هستند.
+ * ۳. کارت ملی و شناسنامه باید همراه با اقدام مشخص باشند.
+ * ۴. ولادت و وفات باید همراه با ثبت، آمار یا خدمت مشخص باشند.
+ * ۵. آمار ازدواج و طلاق با تصریح آمار در عنوان پذیرفته می‌شود.
+ * ۶. تغییر نام فقط با اشاره صریح به ثبت احوال پذیرفته می‌شود.
+ * ۷. واژه‌های عمومی به‌تنهایی برای پذیرش کافی نیستند.
  */
-function isRelevantNews(title: string, description = ""): boolean {
+function analyzeNewsRelevance(
+  title: string,
+  description = ""
+): RelevanceAnalysis {
   const normalizedTitle = normalizeText(title);
   const normalizedDescription = normalizeText(description);
+  const combined = `${normalizedTitle} ${normalizedDescription}`;
+
+  const rejected: RelevanceAnalysis = {
+    relevant: false,
+    reason: "شواهد کافی برای ارتباط با ثبت احوال وجود ندارد",
+    matchedTerms: [],
+  };
 
   if (!normalizedTitle) {
-    return false;
+    return {
+      ...rejected,
+      reason: "عنوان خبر خالی است",
+    };
   }
-
-  const combined = `${normalizedTitle} ${normalizedDescription}`;
 
   // حذف موضوعات نامرتبط مشخص
   if (includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)) {
-    return false;
+    return {
+      ...rejected,
+      reason: "عنوان شامل موضوع صریحاً نامرتبط است",
+      matchedTerms: findMatchedTerms(
+        normalizedTitle,
+        BLOCKED_TITLE_TERMS
+      ),
+    };
   }
 
   // جلوگیری از پذیرش خبرهای مربوط به هویت و کارت شناسایی غیرمرتبط
@@ -406,35 +533,205 @@ function isRelevantNews(title: string, description = ""): boolean {
       NON_REGISTRATION_CONTEXT_TERMS
     )
   ) {
-    return false;
+    return {
+      ...rejected,
+      reason: "عنوان در زمینه هویتی غیرمرتبط قرار دارد",
+      matchedTerms: findMatchedTerms(
+        normalizedTitle,
+        NON_REGISTRATION_CONTEXT_TERMS
+      ),
+    };
   }
 
   // وجود نام صریح سازمان در عنوان کافی است.
-  if (includesAny(normalizedTitle, STRONG_TERMS)) {
-    return true;
+  const strongTitleMatches = findMatchedTerms(
+    normalizedTitle,
+    STRONG_TERMS
+  );
+
+  if (strongTitleMatches.length > 0) {
+    return {
+      relevant: true,
+      reason: "وجود عبارت صریح ثبت احوال در عنوان",
+      matchedTerms: strongTitleMatches,
+    };
   }
 
   // خدمات مشخص ثبت احوال در عنوان به‌تنهایی قابل پذیرش هستند.
-  if (includesAny(normalizedTitle, DIRECT_SERVICE_TERMS)) {
-    return true;
+  const directTitleMatches = findMatchedTerms(
+    normalizedTitle,
+    DIRECT_SERVICE_TERMS
+  );
+
+  if (directTitleMatches.length > 0) {
+    return {
+      relevant: true,
+      reason: "وجود خدمت مشخص ثبت احوال در عنوان",
+      matchedTerms: directTitleMatches,
+    };
   }
 
-  // در غیر این صورت باید نام ثبت احوال در متن خبر وجود داشته باشد.
-  const hasExplicitRegistration = includesAny(
+  // کارت ملی فقط همراه با یک اقدام مشخص پذیرفته می‌شود.
+  const cardMatches = findMatchedTerms(
+    normalizedTitle,
+    CARD_ID_TERMS
+  );
+
+  const cardActions = findMatchedTerms(
+    normalizedTitle,
+    CARD_ACTION_TERMS
+  );
+
+  if (cardMatches.length > 0 && cardActions.length > 0) {
+    return {
+      relevant: true,
+      reason: "موضوع کارت ملی همراه با اقدام مشخص",
+      matchedTerms: uniqueTerms([
+        ...cardMatches,
+        ...cardActions,
+      ]),
+    };
+  }
+
+  // شناسنامه باید همراه با اقدام یا خدمت مشخص باشد.
+  const shenasnamehMatches = findMatchedTerms(
+    normalizedTitle,
+    ["شناسنامه"]
+  );
+
+  const shenasnamehActions = findMatchedTerms(
+    normalizedTitle,
+    SHENASNAMEH_ACTION_TERMS
+  );
+
+  if (
+    shenasnamehMatches.length > 0 &&
+    shenasnamehActions.length > 0
+  ) {
+    return {
+      relevant: true,
+      reason: "موضوع شناسنامه همراه با اقدام یا خدمت مشخص",
+      matchedTerms: uniqueTerms([
+        ...shenasnamehMatches,
+        ...shenasnamehActions,
+      ]),
+    };
+  }
+
+  // آمار ولادت و وفات یا ثبت و صدور گواهی مربوط به آن‌ها.
+  const birthDeathMatches = findMatchedTerms(
+    normalizedTitle,
+    BIRTH_DEATH_TERMS
+  );
+
+  const eventActions = findMatchedTerms(
+    normalizedTitle,
+    EVENT_ACTION_TERMS
+  );
+
+  if (
+    birthDeathMatches.length > 0 &&
+    eventActions.length > 0
+  ) {
+    return {
+      relevant: true,
+      reason: "موضوع ولادت یا وفات همراه با ثبت، آمار یا خدمت",
+      matchedTerms: uniqueTerms([
+        ...birthDeathMatches,
+        ...eventActions,
+      ]),
+    };
+  }
+
+  // آمار ازدواج و طلاق، به شرط تصریح آمار در عنوان.
+  const marriageDivorceMatches = findMatchedTerms(
+    normalizedTitle,
+    MARRIAGE_DIVORCE_TERMS
+  );
+
+  const statisticsMatches = findMatchedTerms(
+    normalizedTitle,
+    ["آمار", "آمارهای", "آمار جدید"]
+  );
+
+  if (
+    marriageDivorceMatches.length > 0 &&
+    statisticsMatches.length > 0
+  ) {
+    return {
+      relevant: true,
+      reason: "عنوان شامل آمار ازدواج یا طلاق است",
+      matchedTerms: uniqueTerms([
+        ...marriageDivorceMatches,
+        ...statisticsMatches,
+      ]),
+    };
+  }
+
+  // تغییر نام فقط با وجود قرینه صریح ثبت احوال پذیرفته می‌شود.
+  const explicitRegistration = findMatchedTerms(
     combined,
     STRONG_TERMS
   );
 
-  if (!hasExplicitRegistration) {
-    return false;
+  const nameChangeMatches = findMatchedTerms(
+    combined,
+    NAME_CHANGE_TERMS
+  );
+
+  if (
+    explicitRegistration.length > 0 &&
+    nameChangeMatches.length > 0
+  ) {
+    return {
+      relevant: true,
+      reason: "تغییر نام همراه با اشاره صریح به ثبت احوال",
+      matchedTerms: uniqueTerms([
+        ...explicitRegistration,
+        ...nameChangeMatches,
+      ]),
+    };
   }
 
-  // وجود موضوع مرتبط با خدمات ثبت احوال نیز الزامی است.
-  const hasSpecificServiceTerm =
-    includesAny(combined, SECONDARY_TERMS) ||
-    includesAny(combined, DIRECT_SERVICE_TERMS);
+  // اگر نام سازمان در متن خبر آمده باشد،
+  // باید موضوع مشخصی هم وجود داشته باشد.
+  if (explicitRegistration.length > 0) {
+    const serviceMatches = findMatchedTerms(
+      combined,
+      [
+        ...SECONDARY_TERMS,
+        ...DIRECT_SERVICE_TERMS,
+        ...CARD_ID_TERMS,
+        ...NAME_CHANGE_TERMS,
+      ]
+    );
 
-  return hasSpecificServiceTerm;
+    if (serviceMatches.length > 0) {
+      return {
+        relevant: true,
+        reason: "اشاره به ثبت احوال و یک خدمت یا موضوع مرتبط در متن",
+        matchedTerms: uniqueTerms([
+          ...explicitRegistration,
+          ...serviceMatches,
+        ]),
+      };
+    }
+  }
+
+  // خبر رد شده؛ عبارت‌های نزدیک به موضوع برای Diagnostics ثبت می‌شوند.
+  return {
+    ...rejected,
+    matchedTerms: uniqueTerms(
+      findMatchedTerms(combined, NEAR_MATCH_TERMS)
+    ),
+  };
+}
+
+function isRelevantNews(
+  title: string,
+  description = ""
+): boolean {
+  return analyzeNewsRelevance(title, description).relevant;
 }
 
 // دریافت پاسخ همراه با متن، در محدوده زمانی تعیین‌شده
@@ -809,6 +1106,39 @@ function getKeywordSamples(
     }));
 }
 
+// نمونه خبرهایی که به موضوع نزدیک هستند اما فیلتر آن‌ها را نپذیرفته است.
+function getNearMatchSamples(
+  candidates: Candidate[]
+): SourceResult["nearMatchSamples"] {
+  const result: SourceResult["nearMatchSamples"] = [];
+
+  for (const item of candidates) {
+    const analysis = analyzeNewsRelevance(
+      item.title,
+      item.description
+    );
+
+    if (
+      analysis.relevant ||
+      analysis.matchedTerms.length === 0
+    ) {
+      continue;
+    }
+
+    result.push({
+      title: item.title,
+      publishedAt: item.publishedAt,
+      matchedTerms: analysis.matchedTerms,
+    });
+
+    if (result.length >= 10) {
+      break;
+    }
+  }
+
+  return result;
+}
+
 async function fetchSource(
   source: SourceConfig,
   window: ReportWindow
@@ -827,6 +1157,8 @@ async function fetchSource(
     outsideWindow: 0,
     samples: [],
     keywordSamples: [],
+    matchedSamples: [],
+    nearMatchSamples: [],
   };
 
   try {
@@ -853,20 +1185,31 @@ async function fetchSource(
 
     diagnostics.parsedItems = candidates.length;
     diagnostics.keywordSamples = getKeywordSamples(candidates);
+    diagnostics.nearMatchSamples = getNearMatchSamples(candidates);
 
     const items: NewsItem[] = [];
 
     for (const candidate of candidates) {
-      if (
-        !isRelevantNews(
-          candidate.title,
-          candidate.description
-        )
-      ) {
+      const analysis = analyzeNewsRelevance(
+        candidate.title,
+        candidate.description
+      );
+
+      if (!analysis.relevant) {
         continue;
       }
 
       diagnostics.relevantItems++;
+
+      // ثبت دلیل پذیرش خبر برای بررسی دقیق‌تر در Diagnostics
+      if (diagnostics.matchedSamples.length < 10) {
+        diagnostics.matchedSamples.push({
+          title: candidate.title,
+          publishedAt: candidate.publishedAt,
+          reason: analysis.reason,
+          matchedTerms: analysis.matchedTerms,
+        });
+      }
 
       const publishedDate = parseDate(candidate.publishedAt);
 
