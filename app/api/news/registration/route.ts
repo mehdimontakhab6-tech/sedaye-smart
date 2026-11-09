@@ -153,6 +153,34 @@ const SECONDARY_TERMS = [
   "خدمات هویتی",
 ];
 
+/**
+ * خدماتی که به‌صورت مشخص در حوزه وظایف ثبت احوال هستند.
+ *
+ * وجود این عبارات در عنوان خبر برای مرتبط دانستن خبر کافی است.
+ * عبارت‌های عمومی‌تر مانند «تغییر نام» در این فهرست قرار ندارند
+ * تا باعث ورود خبرهای نامرتبط نشوند.
+ */
+const DIRECT_SERVICE_TERMS = [
+  "صدور شناسنامه",
+  "تعویض شناسنامه",
+  "شناسنامه المثنی",
+  "شناسنامه نوزاد",
+  "گواهی ولادت",
+  "گواهی فوت",
+  "کارت هوشمند ملی",
+  "کارت ملی هوشمند",
+  "پایگاه اطلاعات جمعیت",
+  "درگاه خدمات الکترونیک ثبت احوال",
+  "خدمات الکترونیک ثبت احوال",
+  "اصلاح مشخصات شناسنامه",
+  "اصلاح مشخصات هویتی",
+  "ثبت ولادت",
+  "ثبت وفات",
+  "ثبت ازدواج",
+  "ثبت طلاق",
+  "ثبت وقایع حیاتی",
+];
+
 const BLOCKED_TITLE_TERMS = [
   "قیمت خودرو",
   "قیمت دلار",
@@ -341,35 +369,72 @@ function includesAny(text: string, terms: string[]): boolean {
 }
 
 /**
- * تشخیص خبر مرتبط:
+ * تشخیص خبر مرتبط با ثبت احوال:
+ *
  * ۱. وجود عبارت صریح ثبت احوال در عنوان کافی است.
- * ۲. اگر عبارت صریح در توضیحات باشد، باید موضوع خبر نیز
- *    با خدمات یا وظایف ثبت احوال ارتباط داشته باشد.
- * ۳. عبارت‌های عمومی مثل کارت ملی به‌تنهایی پذیرفته نمی‌شوند.
+ *
+ * ۲. وجود خدمات کاملاً مشخص ثبت احوال در عنوان نیز کافی است؛
+ *    حتی اگر نام سازمان در عنوان ذکر نشده باشد.
+ *
+ * ۳. عبارت‌های عمومی مانند «کارت ملی»، «شناسنامه» و «تغییر نام»
+ *    به‌تنهایی پذیرفته نمی‌شوند.
+ *
+ * ۴. اگر عبارت صریح ثبت احوال در عنوان یا توضیحات باشد،
+ *    وجود یک موضوع مرتبط با خدمات ثبت احوال نیز الزامی است.
+ *
+ * ۵. عنوان‌های نامرتبط و زمینه‌های غیرمرتبط حذف می‌شوند.
  */
 function isRelevantNews(title: string, description = ""): boolean {
   const normalizedTitle = normalizeText(title);
   const normalizedDescription = normalizeText(description);
+
+  if (!normalizedTitle) {
+    return false;
+  }
+
   const combined = `${normalizedTitle} ${normalizedDescription}`;
 
-  if (!normalizedTitle) return false;
-
+  // حذف موضوعات نامرتبط مشخص
   if (includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)) {
     return false;
   }
 
-  if (includesAny(normalizedTitle, NON_REGISTRATION_CONTEXT_TERMS)) {
+  // جلوگیری از پذیرش خبرهای مربوط به هویت و کارت شناسایی غیرمرتبط
+  if (
+    includesAny(
+      normalizedTitle,
+      NON_REGISTRATION_CONTEXT_TERMS
+    )
+  ) {
     return false;
   }
 
+  // وجود نام صریح سازمان در عنوان کافی است.
   if (includesAny(normalizedTitle, STRONG_TERMS)) {
     return true;
   }
 
-  const hasExplicitRegistration = includesAny(combined, STRONG_TERMS);
-  const hasSpecificServiceTerm = includesAny(combined, SECONDARY_TERMS);
+  // خدمات مشخص ثبت احوال در عنوان به‌تنهایی قابل پذیرش هستند.
+  if (includesAny(normalizedTitle, DIRECT_SERVICE_TERMS)) {
+    return true;
+  }
 
-  return hasExplicitRegistration && hasSpecificServiceTerm;
+  // در غیر این صورت باید نام ثبت احوال در متن خبر وجود داشته باشد.
+  const hasExplicitRegistration = includesAny(
+    combined,
+    STRONG_TERMS
+  );
+
+  if (!hasExplicitRegistration) {
+    return false;
+  }
+
+  // وجود موضوع مرتبط با خدمات ثبت احوال نیز الزامی است.
+  const hasSpecificServiceTerm =
+    includesAny(combined, SECONDARY_TERMS) ||
+    includesAny(combined, DIRECT_SERVICE_TERMS);
+
+  return hasSpecificServiceTerm;
 }
 
 // دریافت پاسخ همراه با متن، در محدوده زمانی تعیین‌شده
@@ -719,6 +784,7 @@ function getKeywordSamples(
   const keywords = [
     ...STRONG_TERMS,
     ...SECONDARY_TERMS,
+    ...DIRECT_SERVICE_TERMS,
     "جمعیت",
     "ولادت",
     "تولد",
