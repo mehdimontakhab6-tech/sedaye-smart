@@ -101,14 +101,14 @@ export default {
       );
 
       const request = new Request(
-        `${BASE_URL}/api/news/registration/daily-summary`,
-        {
-          method: "GET",
-          headers: {
-            "User-Agent": "sedaye-smart-cron"
-          }
-        }
-      );
+  `${BASE_URL}/api/news/registration`,
+  {
+    method: "GET",
+    headers: {
+      "User-Agent": "sedaye-smart-cron"
+    }
+  }
+);
 
       const response = await handler.fetch(
         request,
