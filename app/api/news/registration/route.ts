@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 const MAX_NEWS = 20;
 const MIN_MEDIA_TO_SEND = 1;
 const MAX_MEDIA_TO_SEND = 20;
+const MAX_RESPONSE_BYTES = 256 * 1024;
+const MAX_ITEMS_PER_FEED = 30;
 const REQUEST_TIMEOUT_MS = 7000;
 const IRAN_OFFSET_MS = 3.5 * 60 * 60 * 1000;
 
@@ -48,8 +50,6 @@ type SourceResult = {
   missingDate: number;
   outsideWindow: number;
   error?: string;
-
-  // اطلاعات تکمیلی برای عیب‌یابی پاسخ RSS
   contentType?: string;
   finalUrl?: string;
   redirected?: boolean;
@@ -65,7 +65,6 @@ type SourceResult = {
     preview: string;
     error?: string;
   }>;
-
   samples: Array<{ title: string; publishedAt: string }>;
   keywordSamples: Array<{
     title: string;
@@ -192,10 +191,6 @@ const SECONDARY_TERMS = [
   "خدمات هویتی",
 ];
 
-/**
- * خدمات مشخص حوزه ثبت احوال.
- * وجود این عبارت‌ها در عنوان برای پذیرش خبر کافی است.
- */
 const DIRECT_SERVICE_TERMS = [
   "صدور شناسنامه",
   "تعویض شناسنامه",
@@ -356,11 +351,6 @@ const NAME_CHANGE_TERMS = [
   "اصلاح نام خانوادگی",
 ];
 
-/**
- * فقط موضوعات واقعی مرتبط برای نمونه‌های near match.
- * واژه‌های عمومی مانند «ثبت»، «صدور»، «خدمات» و «جمعیت»
- * به‌تنهایی نباید باعث ساخته‌شدن نمونه شوند.
- */
 const NEAR_MATCH_TERMS = [
   "ثبت احوال",
   "سازمان ثبت احوال",
@@ -410,6 +400,7 @@ function decodeXml(value: string): string {
     .replace(/&gt;/gi, ">")
     .replace(/&#(\d+);/g, (_, digits: string) => {
       const code = Number(digits);
+
       if (
         !Number.isInteger(code) ||
         code < 0 ||
@@ -418,10 +409,12 @@ function decodeXml(value: string): string {
       ) {
         return "";
       }
+
       return String.fromCodePoint(code);
     })
     .replace(/&#x([0-9a-f]+);/gi, (_, digits: string) => {
       const code = parseInt(digits, 16);
+
       if (
         !Number.isInteger(code) ||
         code < 0 ||
@@ -430,6 +423,7 @@ function decodeXml(value: string): string {
       ) {
         return "";
       }
+
       return String.fromCodePoint(code);
     });
 }
@@ -461,11 +455,14 @@ function escapeRegExp(value: string): string {
 
 function extractTag(block: string, tag: string): string {
   const escaped = escapeRegExp(tag);
+
   const expression = new RegExp(
     `<${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escaped}\\s*>`,
     "i"
   );
+
   const match = block.match(expression);
+
   return match ? cleanText(match[1]) : "";
 }
 
@@ -476,8 +473,11 @@ function normalizeDomain(host: string): string {
 function isBlockedDomain(url: string): boolean {
   try {
     const hostname = normalizeDomain(new URL(url).hostname);
+
     return BLOCKED_DOMAINS.some(
-      (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+      (domain) =>
+        hostname === domain ||
+        hostname.endsWith(`.${domain}`)
     );
   } catch {
     return true;
@@ -508,13 +508,6 @@ function isIranianNewsLink(url: string): boolean {
   }
 }
 
-/**
- * تطبیق عبارت با مرز واژه.
- *
- * برای مثال:
- * «فوت» در «فوتبال» پیدا نمی‌شود.
- * اما «فوت» در «گواهی فوت» یا «ثبت فوت» پیدا می‌شود.
- */
 function containsTerm(text: string, term: string): boolean {
   const normalizedText = normalizeText(text);
   const normalizedTerm = normalizeText(term);
@@ -552,19 +545,6 @@ type RelevanceDecision = {
   matchedTerms: string[];
 };
 
-/**
- * ارزیابی ارتباط خبر با وظایف سازمان ثبت احوال.
- *
- * اولویت تصمیم‌گیری:
- * ۱. حذف موضوعات صریحاً نامرتبط
- * ۲. پذیرش نام صریح سازمان در عنوان
- * ۳. پذیرش خدمات مشخص در عنوان
- * ۴. پذیرش کارت ملی و شناسنامه فقط همراه با اقدام مشخص
- * ۵. پذیرش ولادت و وفات فقط همراه با اقدام مرتبط
- * ۶. پذیرش آمار ازدواج و طلاق
- * ۷. پذیرش تغییر نام فقط با قرینه صریح ثبت احوال
- * ۸. پذیرش اشاره به سازمان در متن همراه با موضوع مرتبط
- */
 function evaluateRegistrationNews(
   title: string,
   description = ""
@@ -586,7 +566,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // اولویت حذف موضوعات صریحاً نامرتبط
   if (includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)) {
     return {
       ...rejected,
@@ -614,7 +593,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // نام صریح ثبت احوال در عنوان
   const strongTitleMatches = findMatchedTerms(
     normalizedTitle,
     STRONG_TERMS
@@ -628,7 +606,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // خدمات مشخص ثبت احوال در عنوان
   const directTitleMatches = findMatchedTerms(
     normalizedTitle,
     DIRECT_SERVICE_TERMS
@@ -642,7 +619,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // کارت ملی فقط همراه با اقدام مشخص
   const cardMatches = findMatchedTerms(
     normalizedTitle,
     CARD_ID_TERMS
@@ -664,7 +640,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // شناسنامه فقط همراه با اقدام یا خدمت مشخص
   const shenasnamehMatches = findMatchedTerms(
     normalizedTitle,
     ["شناسنامه"]
@@ -689,7 +664,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // ولادت و وفات فقط همراه با ثبت، آمار یا خدمت مشخص
   const birthDeathMatches = findMatchedTerms(
     normalizedTitle,
     BIRTH_DEATH_TERMS
@@ -714,7 +688,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // آمار ازدواج و طلاق
   const marriageDivorceMatches = findMatchedTerms(
     normalizedTitle,
     MARRIAGE_DIVORCE_TERMS
@@ -739,7 +712,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // تغییر نام فقط با قرینه صریح ثبت احوال
   const explicitRegistration = findMatchedTerms(
     combined,
     STRONG_TERMS
@@ -764,7 +736,6 @@ function evaluateRegistrationNews(
     };
   }
 
-  // نام سازمان در متن همراه با موضوع یا خدمت مرتبط
   if (explicitRegistration.length > 0) {
     const serviceMatches = findMatchedTerms(
       combined,
@@ -788,7 +759,6 @@ function evaluateRegistrationNews(
     }
   }
 
-  // خبر رد شده؛ فقط موضوعات واقعی برای Diagnostics ثبت می‌شوند.
   return {
     ...rejected,
     matchedTerms: uniqueTerms(
@@ -804,12 +774,6 @@ function isRelevantNews(
   return evaluateRegistrationNews(title, description).relevant;
 }
 
-/**
- * تشخیص نوع پاسخ دریافتی از منبع.
- *
- * تشخیص صرفاً بر اساس Content-Type نیست؛
- * ساختار واقعی بدنه هم بررسی می‌شود.
- */
 function detectResponseType(
   body: string,
   contentType = ""
@@ -821,7 +785,6 @@ function detectResponseType(
     return "unknown";
   }
 
-  // وجود ساختار HTML نشانه دریافت صفحه وب است.
   if (
     /^\s*(?:<!doctype\s+html\b|<html\b)/i.test(sample) ||
     /<\s*(?:head|body)\b[^>]*>/i.test(sample)
@@ -829,7 +792,6 @@ function detectResponseType(
     return "html";
   }
 
-  // ساختارهای شناخته‌شده RSS، Atom و RDF
   if (
     /<\?xml\b/i.test(sample) ||
     /<rss\b/i.test(sample) ||
@@ -840,7 +802,6 @@ function detectResponseType(
     return "rss";
   }
 
-  // اگر Content-Type صریحاً HTML باشد و XML نبود، HTML محسوب می‌شود.
   if (
     normalizedContentType.includes("text/html") ||
     normalizedContentType.includes("application/xhtml")
@@ -859,14 +820,25 @@ function getResponsePreview(body: string): string {
     .slice(0, 350);
 }
 
-// دریافت پاسخ همراه با اطلاعات HTTP، در محدوده زمانی تعیین‌شده
+/**
+ * دریافت تدریجی پاسخ با سقف حجم مشخص.
+ *
+ * این محدودیت هم برای RSS و هم برای پاسخ API بله اعمال می‌شود.
+ * در صورت عبور از سقف، خواندن پاسخ متوقف می‌شود تا حافظه Worker
+ * با پاسخ‌های غیرعادی و حجیم اشغال نشود.
+ */
 async function fetchText(
   url: string,
   init: RequestInit = {},
   timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<FetchTextResult> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    timeoutMs
+  );
+
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   try {
     const response = await fetch(url, {
@@ -882,23 +854,99 @@ async function fetchText(
       },
     });
 
-    const body = await response.text();
+    const contentType =
+      response.headers.get("content-type") || "";
+
+    const contentLength = Number(
+      response.headers.get("content-length") || 0
+    );
+
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > MAX_RESPONSE_BYTES
+    ) {
+      try {
+        await response.body?.cancel();
+      } catch {
+        // لغو پاسخ در صورت بسته‌شدن stream ممکن است خطا بدهد.
+      }
+
+      throw new Error(
+        `Response exceeded ${MAX_RESPONSE_BYTES} byte limit`
+      );
+    }
+
+    if (!response.body) {
+      return {
+        status: response.status,
+        ok: response.ok,
+        body: "",
+        contentType,
+        finalUrl: response.url || url,
+        redirected: response.redirected,
+      };
+    }
+
+    reader = response.body.getReader();
+
+    const decoder = new TextDecoder("utf-8");
+    let body = "";
+    let totalBytes = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      if (!value) {
+        continue;
+      }
+
+      totalBytes += value.byteLength;
+
+      if (totalBytes > MAX_RESPONSE_BYTES) {
+        try {
+          await reader.cancel();
+        } catch {
+          // خطای احتمالی لغو stream نادیده گرفته می‌شود.
+        }
+
+        throw new Error(
+          `Response exceeded ${MAX_RESPONSE_BYTES} byte limit`
+        );
+      }
+
+      body += decoder.decode(value, { stream: true });
+    }
+
+    body += decoder.decode();
 
     return {
       status: response.status,
       ok: response.ok,
       body,
-      contentType: response.headers.get("content-type") || "",
+      contentType,
       finalUrl: response.url || url,
       redirected: response.redirected,
     };
   } finally {
+    if (reader) {
+      try {
+        reader.releaseLock();
+      } catch {
+        // ممکن است stream قبلاً لغو شده باشد.
+      }
+    }
+
     clearTimeout(timeout);
   }
 }
 
 function parseGregorianDate(value: string): Date | null {
   const input = value.trim();
+
   if (!input) return null;
 
   const direct = new Date(input);
@@ -1078,13 +1126,6 @@ function parseDate(value: string): Date | null {
   return parseGregorianDate(input);
 }
 
-/**
- * بازه گزارش روزانه:
- * اجرای عادی در ساعت ۲۲:۳۰، بازه ۲۴ ساعت منتهی به همان لحظه را می‌گیرد.
- *
- * حالت preview:
- * نزدیک‌ترین بازه آینده تا ساعت ۲۲:۳۰ را برای Diagnostics انتخاب می‌کند.
- */
 function getReportWindow(
   now = new Date(),
   preview = false
@@ -1098,8 +1139,17 @@ function getReportWindow(
   const hour = iranNow.getUTCHours();
   const minute = iranNow.getUTCMinutes();
 
-  const todayBoundary = Date.UTC(year, month, day, 22, 30, 0);
-  const beforeBoundary = hour < 22 || (hour === 22 && minute < 30);
+  const todayBoundary = Date.UTC(
+    year,
+    month,
+    day,
+    22,
+    30,
+    0
+  );
+
+  const beforeBoundary =
+    hour < 22 || (hour === 22 && minute < 30);
 
   let endLocal: number;
 
@@ -1170,7 +1220,8 @@ function parseFeed(xml: string): Candidate[] {
 
   const result: Candidate[] = [];
 
-  for (const block of blocks) {
+  // جلوگیری از پردازش تعداد زیادی آیتم در یک RSS حجیم
+  for (const block of blocks.slice(0, MAX_ITEMS_PER_FEED)) {
     const title =
       extractTag(block, "title") ||
       extractTag(block, "media:title");
@@ -1235,7 +1286,6 @@ function getKeywordSamples(
     }));
 }
 
-// نمونه خبرهایی که به موضوع نزدیک هستند اما فیلتر آن‌ها را نپذیرفته است.
 function getNearMatchSamples(
   candidates: Candidate[]
 ): SourceResult["nearMatchSamples"] {
@@ -1268,10 +1318,6 @@ function getNearMatchSamples(
   return result;
 }
 
-/**
- * دریافت یک آدرس RSS و ثبت جزئیات پاسخ.
- * پاسخ فقط زمانی قابل استفاده است که ساختار آن RSS/XML باشد.
- */
 async function fetchFeedAttempt(
   url: string
 ): Promise<{
@@ -1281,6 +1327,7 @@ async function fetchFeedAttempt(
 }> {
   try {
     const response = await fetchText(url);
+
     const responseType = detectResponseType(
       response.body,
       response.contentType
@@ -1327,9 +1374,15 @@ async function fetchFeedAttempt(
   }
 }
 
+/**
+ * diagnosticsMode:
+ * در اجرای عادی false است تا محاسبات تشخیصی غیرضروری انجام نشود.
+ * در درخواست Diagnostics فقط برای منبع انتخاب‌شده true می‌شود.
+ */
 async function fetchSource(
   source: SourceConfig,
-  window: ReportWindow
+  window: ReportWindow,
+  diagnosticsMode = false
 ): Promise<{
   items: NewsItem[];
   diagnostics: SourceResult;
@@ -1357,15 +1410,14 @@ async function fetchSource(
     ];
 
     let selectedResponse: FetchTextResult | null = null;
-    let selectedResponseType: "rss" | "html" | "unknown" = "unknown";
+    let selectedResponseType: "rss" | "html" | "unknown" =
+      "unknown";
 
-    // ابتدا آدرس اصلی و سپس آدرس‌های جایگزین بررسی می‌شوند.
     for (const attemptUrl of urlsToTry) {
       const result = await fetchFeedAttempt(attemptUrl);
 
       diagnostics.attempts!.push(result.attempt);
 
-      // آخرین پاسخ برای نمایش دقیق وضعیت منبع ثبت می‌شود.
       diagnostics.status = result.response?.status ?? null;
       diagnostics.contentType =
         result.response?.contentType || "";
@@ -1374,8 +1426,7 @@ async function fetchSource(
       diagnostics.redirected =
         result.response?.redirected || false;
       diagnostics.responseType = result.responseType;
-      diagnostics.responsePreview =
-        result.attempt.preview;
+      diagnostics.responsePreview = result.attempt.preview;
 
       if (
         result.response &&
@@ -1397,8 +1448,12 @@ async function fetchSource(
       } else if (lastAttempt?.responseType === "html") {
         diagnostics.error =
           "Expected RSS/XML but received HTML from all attempted URLs";
-      } else if (lastAttempt?.status && lastAttempt.status >= 400) {
-        diagnostics.error = `HTTP ${lastAttempt.status} from all attempted URLs`;
+      } else if (
+        lastAttempt?.status &&
+        lastAttempt.status >= 400
+      ) {
+        diagnostics.error =
+          `HTTP ${lastAttempt.status} from all attempted URLs`;
       } else {
         diagnostics.error =
           "No valid RSS/XML response received from source";
@@ -1409,7 +1464,6 @@ async function fetchSource(
 
     const body = selectedResponse.body;
 
-    // اطلاعات پاسخ موفق نهایی
     diagnostics.status = selectedResponse.status;
     diagnostics.contentType = selectedResponse.contentType;
     diagnostics.finalUrl = selectedResponse.finalUrl;
@@ -1423,12 +1477,27 @@ async function fetchSource(
     const candidates = parseFeed(body);
 
     diagnostics.parsedItems = candidates.length;
-    diagnostics.keywordSamples = getKeywordSamples(candidates);
-    diagnostics.nearMatchSamples = getNearMatchSamples(candidates);
+
+    // فقط در Diagnostics نمونه‌های اضافی محاسبه می‌شوند.
+    if (diagnosticsMode) {
+      diagnostics.keywordSamples =
+        getKeywordSamples(candidates);
+
+      diagnostics.nearMatchSamples =
+        getNearMatchSamples(candidates);
+
+      diagnostics.samples = candidates
+        .slice(0, 5)
+        .map((item) => ({
+          title: item.title,
+          publishedAt: item.publishedAt,
+        }));
+    }
 
     const items: NewsItem[] = [];
 
     for (const candidate of candidates) {
+      // هر خبر در اجرای عادی فقط یک بار ارزیابی می‌شود.
       const analysis = evaluateRegistrationNews(
         candidate.title,
         candidate.description
@@ -1440,8 +1509,10 @@ async function fetchSource(
 
       diagnostics.relevantItems++;
 
-      // ثبت دلیل پذیرش خبر برای بررسی دقیق‌تر در Diagnostics
-      if (diagnostics.matchedSamples.length < 10) {
+      if (
+        diagnosticsMode &&
+        diagnostics.matchedSamples.length < 10
+      ) {
         diagnostics.matchedSamples.push({
           title: candidate.title,
           publishedAt: candidate.publishedAt,
@@ -1450,7 +1521,9 @@ async function fetchSource(
         });
       }
 
-      const publishedDate = parseDate(candidate.publishedAt);
+      const publishedDate = parseDate(
+        candidate.publishedAt
+      );
 
       if (!publishedDate) {
         diagnostics.missingDate++;
@@ -1474,11 +1547,6 @@ async function fetchSource(
       });
     }
 
-    diagnostics.samples = candidates.slice(0, 5).map((item) => ({
-      title: item.title,
-      publishedAt: item.publishedAt,
-    }));
-
     return { items, diagnostics };
   } catch (error) {
     diagnostics.error =
@@ -1491,9 +1559,8 @@ async function fetchSource(
 }
 
 /**
- * خبرهای تکراری یک رسانه حذف می‌شوند.
- * اما اگر چند رسانه مستقل یک خبر را منتشر کرده باشند،
- * خبر هر رسانه حفظ می‌شود تا تعداد رسانه‌ها درست محاسبه شود.
+ * حذف خبرهای تکراری یک رسانه.
+ * انتشار همان خبر در رسانه‌های مستقل حفظ می‌شود.
  */
 function deduplicate(items: NewsItem[]): NewsItem[] {
   const seen = new Set<string>();
@@ -1519,13 +1586,17 @@ function deduplicate(items: NewsItem[]): NewsItem[] {
 }
 
 async function getNews(
-  window: ReportWindow
+  window: ReportWindow,
+  sources: SourceConfig[] = RSS_SOURCES,
+  diagnosticsMode = false
 ): Promise<{
   items: NewsItem[];
   diagnostics: SourceResult[];
 }> {
   const results = await Promise.all(
-    RSS_SOURCES.map((source) => fetchSource(source, window))
+    sources.map((source) =>
+      fetchSource(source, window, diagnosticsMode)
+    )
   );
 
   const diagnostics = results.map(
@@ -1536,14 +1607,12 @@ async function getNews(
     (result) => result.items
   );
 
-  // ابتدا خبرها از جدیدترین به قدیمی‌ترین مرتب می‌شوند.
   const sortedItems = deduplicate(allItems).sort(
     (a, b) =>
       new Date(b.publishedAt).getTime() -
       new Date(a.publishedAt).getTime()
   );
 
-  // انتخاب حداکثر ۲۰ رسانه مستقل و حداکثر ۲۰ خبر.
   const selectedSources = new Set<string>();
   const items: NewsItem[] = [];
 
@@ -1564,6 +1633,77 @@ async function getNews(
   }
 
   return { items, diagnostics };
+}
+
+/**
+ * تطبیق پارامتر source با نام فارسی، دامنه یا شناسه کوتاه رسانه.
+ *
+ * نمونه‌ها:
+ * source=ایرنا
+ * source=irna
+ * source=tasnim
+ * source=tasnimnews
+ * source=isna
+ */
+function normalizeSourceKey(value: string): string {
+  return normalizeText(value)
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "")
+    .replace(/\.(ir|com|org|net)$/, "")
+    .replace(/[^a-z0-9\u0600-\u06ff]/g, "");
+}
+
+function getSourceAliases(source: SourceConfig): string[] {
+  const aliases = new Set<string>();
+
+  aliases.add(normalizeSourceKey(source.name));
+
+  const urls = [
+    source.url,
+    ...(source.fallbackUrls || []),
+  ];
+
+  for (const value of urls) {
+    try {
+      const hostname = new URL(value).hostname
+        .toLowerCase()
+        .replace(/^www\./, "");
+
+      const withoutTld = hostname.replace(
+        /\.(ir|com|org|net)$/,
+        ""
+      );
+
+      aliases.add(normalizeSourceKey(hostname));
+      aliases.add(normalizeSourceKey(withoutTld));
+
+      // مثال: tasnimnews -> tasnim
+      aliases.add(
+        normalizeSourceKey(
+          withoutTld.replace(/news$/, "")
+        )
+      );
+    } catch {
+      // URL نامعتبر به فهرست نام‌های جایگزین اضافه نمی‌شود.
+    }
+  }
+
+  return [...aliases].filter(Boolean);
+}
+
+function findSource(value: string): SourceConfig | null {
+  const requested = normalizeSourceKey(value);
+
+  if (!requested) {
+    return null;
+  }
+
+  return (
+    RSS_SOURCES.find((source) =>
+      getSourceAliases(source).includes(requested)
+    ) || null
+  );
 }
 
 async function sendBaleMessage(
@@ -1675,21 +1815,88 @@ export async function GET(request: Request) {
     const diagnosticsOnly =
       url.searchParams.get("diagnostics") === "1";
 
-    // window=next فقط برای پیش‌نمایش Diagnostics است.
-    // این گزینه هیچ پیام بله‌ای ارسال نمی‌کند.
     const previewNextWindow =
       diagnosticsOnly &&
       url.searchParams.get("window") === "next";
 
-    const { env } = await getCloudflareContext();
-    const cloudflareEnv = env as CloudflareEnv;
+    const requestedSource =
+      url.searchParams.get("source")?.trim() || "";
 
     const window = getReportWindow(
       new Date(),
       previewNextWindow
     );
 
-    const { items, diagnostics } = await getNews(window);
+    // Diagnostics بدون source فقط فهرست منابع را برمی‌گرداند.
+    // در این حالت هیچ RSSای دریافت نمی‌شود.
+    if (diagnosticsOnly && !requestedSource) {
+      return NextResponse.json(
+        {
+          ok: true,
+          diagnosticsOnly: true,
+          fetched: false,
+          message:
+            "برای بررسی یک منبع، پارامتر source را مشخص کنید.",
+          usage: [
+            "?diagnostics=1&source=ایرنا",
+            "?diagnostics=1&source=irna",
+            "?diagnostics=1&source=tasnim",
+            "?diagnostics=1&source=isna",
+            "?diagnostics=1&source=mehr",
+            "?diagnostics=1&source=ilna",
+          ],
+          stats: {
+            totalSources: RSS_SOURCES.length,
+            checkedSources: 0,
+            previewNextWindow,
+            windowStart: window.start.toISOString(),
+            windowEnd: window.end.toISOString(),
+            maximumResponseBytes: MAX_RESPONSE_BYTES,
+            maximumItemsPerFeed: MAX_ITEMS_PER_FEED,
+          },
+          availableSources: RSS_SOURCES.map((source) => ({
+            name: source.name,
+            url: source.url,
+            fallbackUrls: source.fallbackUrls || [],
+          })),
+        },
+        { headers: noCacheHeaders() }
+      );
+    }
+
+    // Diagnostics با source فقط همان رسانه را بررسی می‌کند.
+    let sourcesToCheck = RSS_SOURCES;
+    let diagnosticsMode = false;
+
+    if (diagnosticsOnly && requestedSource) {
+      const selectedSource = findSource(requestedSource);
+
+      if (!selectedSource) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "منبع در فهرست RSS تعریف نشده است.",
+            requestedSource,
+            availableSources: RSS_SOURCES.map(
+              (source) => source.name
+            ),
+          },
+          {
+            status: 400,
+            headers: noCacheHeaders(),
+          }
+        );
+      }
+
+      sourcesToCheck = [selectedSource];
+      diagnosticsMode = true;
+    }
+
+    const { items, diagnostics } = await getNews(
+      window,
+      sourcesToCheck,
+      diagnosticsMode
+    );
 
     const mediaCount = new Set(
       items.map((item) => item.source)
@@ -1697,6 +1904,7 @@ export async function GET(request: Request) {
 
     const stats = {
       totalSources: RSS_SOURCES.length,
+      checkedSources: sourcesToCheck.length,
       totalFetched: diagnostics.reduce(
         (sum, item) => sum + item.rawItems,
         0
@@ -1714,6 +1922,8 @@ export async function GET(request: Request) {
       minimumMedia: MIN_MEDIA_TO_SEND,
       maximumMedia: MAX_MEDIA_TO_SEND,
       maximumNews: MAX_NEWS,
+      maximumResponseBytes: MAX_RESPONSE_BYTES,
+      maximumItemsPerFeed: MAX_ITEMS_PER_FEED,
       previewNextWindow,
       windowStart: window.start.toISOString(),
       windowEnd: window.end.toISOString(),
@@ -1728,12 +1938,13 @@ export async function GET(request: Request) {
       windowItems: items.length,
     };
 
-    // Diagnostics فقط خروجی بررسی می‌دهد و ارسال انجام نمی‌دهد.
+    // Diagnostics هیچ‌وقت پیام بله ارسال نمی‌کند.
     if (diagnosticsOnly) {
       return NextResponse.json(
         {
           ok: true,
           diagnosticsOnly: true,
+          fetched: true,
           stats,
           sources: diagnostics,
         },
@@ -1768,6 +1979,10 @@ export async function GET(request: Request) {
         { headers: noCacheHeaders() }
       );
     }
+
+    // دریافت تنظیمات Cloudflare فقط در اجرای واقعی ارسال لازم است.
+    const { env } = await getCloudflareContext();
+    const cloudflareEnv = env as CloudflareEnv;
 
     await sendBaleMessage(
       cloudflareEnv,
