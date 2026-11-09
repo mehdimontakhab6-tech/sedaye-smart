@@ -165,14 +165,8 @@ const SECONDARY_TERMS = [
 ];
 
 /**
- * خدماتی که به‌صورت مشخص در حوزه وظایف ثبت احوال هستند.
- *
- * وجود این عبارات در عنوان خبر برای مرتبط دانستن خبر کافی است.
- * عبارت‌های عمومی‌تر مانند «تغییر نام» در این فهرست قرار ندارند
- * تا باعث ورود خبرهای نامرتبط نشوند.
- *
- * عبارت‌های عمومی کارت ملی در این فهرست نیستند؛
- * برای پذیرش آن‌ها باید اقدام مشخصی نیز در عنوان وجود داشته باشد.
+ * خدمات مشخص حوزه ثبت احوال.
+ * وجود این عبارت‌ها در عنوان برای پذیرش خبر کافی است.
  */
 const DIRECT_SERVICE_TERMS = [
   "صدور شناسنامه",
@@ -251,14 +245,12 @@ const NON_REGISTRATION_CONTEXT_TERMS = [
   "صرافی",
 ];
 
-// موضوع کارت ملی؛ به‌تنهایی برای پذیرش کافی نیست.
 const CARD_ID_TERMS = [
   "کارت ملی",
   "کارت هوشمند ملی",
   "کارت ملی هوشمند",
 ];
 
-// اقدام‌های مشخص مربوط به کارت ملی
 const CARD_ACTION_TERMS = [
   "صدور",
   "تمدید",
@@ -267,13 +259,25 @@ const CARD_ACTION_TERMS = [
   "تمدید اعتبار",
   "هوشمندسازی",
   "هوشمند سازی",
-  "تحویل",
-  "درخواست",
   "ثبت نام",
   "ثبت‌نام",
+  "دریافت",
+  "تحویل",
+  "ارائه",
+  "فعال سازی",
+  "فعال‌سازی",
+  "غیرفعال سازی",
+  "غیرفعال‌سازی",
+  "پیگیری",
+  "نوبت دهی",
+  "نوبت‌دهی",
+  "درخواست",
+  "مهلت",
+  "خدمات",
+  "سامانه",
+  "انقضا",
 ];
 
-// اقدام‌های مشخص مربوط به شناسنامه
 const SHENASNAMEH_ACTION_TERMS = [
   "صدور",
   "تعویض",
@@ -285,9 +289,15 @@ const SHENASNAMEH_ACTION_TERMS = [
   "درخواست",
   "ثبت نام",
   "ثبت‌نام",
+  "دریافت",
+  "تحویل",
+  "استعلام",
+  "سامانه",
+  "مهلت",
+  "اعتبار",
+  "تغییر مشخصات",
 ];
 
-// موضوع‌های ولادت و وفات
 const BIRTH_DEATH_TERMS = [
   "ولادت",
   "تولد",
@@ -295,7 +305,6 @@ const BIRTH_DEATH_TERMS = [
   "فوت",
 ];
 
-// اقدام‌های مرتبط با ثبت وقایع
 const EVENT_ACTION_TERMS = [
   "ثبت",
   "آمار",
@@ -304,15 +313,14 @@ const EVENT_ACTION_TERMS = [
   "خدمات",
   "وقایع حیاتی",
   "ثبت احوال",
+  "اطلاعات جمعیت",
 ];
 
-// موضوع‌های ازدواج و طلاق
 const MARRIAGE_DIVORCE_TERMS = [
   "ازدواج",
   "طلاق",
 ];
 
-// تغییر نام فقط با قرینه صریح ثبت احوال پذیرفته می‌شود.
 const NAME_CHANGE_TERMS = [
   "تغییر نام",
   "تغییر نام خانوادگی",
@@ -320,16 +328,34 @@ const NAME_CHANGE_TERMS = [
   "اصلاح نام خانوادگی",
 ];
 
-// عبارت‌های مورد استفاده برای شناسایی خبرهای نزدیک به موضوع
+/**
+ * فقط موضوعات واقعی مرتبط برای نمونه‌های near match.
+ * واژه‌های عمومی مانند «ثبت»، «صدور»، «خدمات» و «جمعیت»
+ * به‌تنهایی نباید باعث ساخته‌شدن نمونه شوند.
+ */
 const NEAR_MATCH_TERMS = [
-  ...SECONDARY_TERMS,
-  ...CARD_ACTION_TERMS,
-  ...SHENASNAMEH_ACTION_TERMS,
-  ...BIRTH_DEATH_TERMS,
-  ...MARRIAGE_DIVORCE_TERMS,
-  ...NAME_CHANGE_TERMS,
-  "جمعیت",
-  "ثبت",
+  "ثبت احوال",
+  "سازمان ثبت احوال",
+  "کارت ملی",
+  "کارت هوشمند ملی",
+  "کارت ملی هوشمند",
+  "کد ملی",
+  "شماره ملی",
+  "شناسنامه",
+  "ولادت",
+  "تولد",
+  "وفات",
+  "فوت",
+  "ازدواج",
+  "طلاق",
+  "گواهی ولادت",
+  "گواهی فوت",
+  "ثبت وقایع حیاتی",
+  "پایگاه اطلاعات جمعیت",
+  "تغییر نام",
+  "تغییر نام خانوادگی",
+  "اصلاح نام",
+  "اصلاح نام خانوادگی",
 ];
 
 function normalizeText(value: unknown): string {
@@ -454,54 +480,72 @@ function isIranianNewsLink(url: string): boolean {
   }
 }
 
-function includesAny(text: string, terms: string[]): boolean {
-  const normalized = normalizeText(text);
-  return terms.some((term) =>
-    normalized.includes(normalizeText(term))
+/**
+ * تطبیق عبارت با مرز واژه.
+ *
+ * برای مثال:
+ * «فوت» در «فوتبال» پیدا نمی‌شود.
+ * اما «فوت» در «گواهی فوت» یا «ثبت فوت» پیدا می‌شود.
+ */
+function containsTerm(text: string, term: string): boolean {
+  const normalizedText = normalizeText(text);
+  const normalizedTerm = normalizeText(term);
+
+  if (!normalizedText || !normalizedTerm) {
+    return false;
+  }
+
+  const expression = new RegExp(
+    `(^|[^\\p{L}\\p{N}])${escapeRegExp(normalizedTerm)}(?=$|[^\\p{L}\\p{N}])`,
+    "u"
   );
+
+  return expression.test(normalizedText);
+}
+
+function includesAny(text: string, terms: string[]): boolean {
+  return terms.some((term) => containsTerm(text, term));
 }
 
 function findMatchedTerms(
   text: string,
   terms: string[]
 ): string[] {
-  const normalized = normalizeText(text);
-
-  return terms.filter((term) =>
-    normalized.includes(normalizeText(term))
-  );
+  return terms.filter((term) => containsTerm(text, term));
 }
 
 function uniqueTerms(terms: string[]): string[] {
   return [...new Set(terms)];
 }
 
-type RelevanceAnalysis = {
+type RelevanceDecision = {
   relevant: boolean;
   reason: string;
   matchedTerms: string[];
 };
 
 /**
- * تحلیل ارتباط خبر با وظایف سازمان ثبت احوال.
+ * ارزیابی ارتباط خبر با وظایف سازمان ثبت احوال.
  *
- * ۱. عبارت صریح ثبت احوال در عنوان کافی است.
- * ۲. خدمات مشخص ثبت احوال در عنوان قابل پذیرش هستند.
- * ۳. کارت ملی و شناسنامه باید همراه با اقدام مشخص باشند.
- * ۴. ولادت و وفات باید همراه با ثبت، آمار یا خدمت مشخص باشند.
- * ۵. آمار ازدواج و طلاق با تصریح آمار در عنوان پذیرفته می‌شود.
- * ۶. تغییر نام فقط با اشاره صریح به ثبت احوال پذیرفته می‌شود.
- * ۷. واژه‌های عمومی به‌تنهایی برای پذیرش کافی نیستند.
+ * اولویت تصمیم‌گیری:
+ * ۱. حذف موضوعات صریحاً نامرتبط
+ * ۲. پذیرش نام صریح سازمان در عنوان
+ * ۳. پذیرش خدمات مشخص در عنوان
+ * ۴. پذیرش کارت ملی و شناسنامه فقط همراه با اقدام مشخص
+ * ۵. پذیرش ولادت و وفات فقط همراه با اقدام مرتبط
+ * ۶. پذیرش آمار ازدواج و طلاق
+ * ۷. پذیرش تغییر نام فقط با قرینه صریح ثبت احوال
+ * ۸. پذیرش اشاره به سازمان در متن همراه با موضوع مرتبط
  */
-function analyzeNewsRelevance(
+function evaluateRegistrationNews(
   title: string,
   description = ""
-): RelevanceAnalysis {
+): RelevanceDecision {
   const normalizedTitle = normalizeText(title);
   const normalizedDescription = normalizeText(description);
   const combined = `${normalizedTitle} ${normalizedDescription}`;
 
-  const rejected: RelevanceAnalysis = {
+  const rejected: RelevanceDecision = {
     relevant: false,
     reason: "شواهد کافی برای ارتباط با ثبت احوال وجود ندارد",
     matchedTerms: [],
@@ -514,7 +558,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // حذف موضوعات نامرتبط مشخص
+  // اولویت حذف موضوعات صریحاً نامرتبط
   if (includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)) {
     return {
       ...rejected,
@@ -526,7 +570,6 @@ function analyzeNewsRelevance(
     };
   }
 
-  // جلوگیری از پذیرش خبرهای مربوط به هویت و کارت شناسایی غیرمرتبط
   if (
     includesAny(
       normalizedTitle,
@@ -543,7 +586,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // وجود نام صریح سازمان در عنوان کافی است.
+  // نام صریح ثبت احوال در عنوان
   const strongTitleMatches = findMatchedTerms(
     normalizedTitle,
     STRONG_TERMS
@@ -557,7 +600,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // خدمات مشخص ثبت احوال در عنوان به‌تنهایی قابل پذیرش هستند.
+  // خدمات مشخص ثبت احوال در عنوان
   const directTitleMatches = findMatchedTerms(
     normalizedTitle,
     DIRECT_SERVICE_TERMS
@@ -571,7 +614,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // کارت ملی فقط همراه با یک اقدام مشخص پذیرفته می‌شود.
+  // کارت ملی فقط همراه با اقدام مشخص
   const cardMatches = findMatchedTerms(
     normalizedTitle,
     CARD_ID_TERMS
@@ -593,7 +636,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // شناسنامه باید همراه با اقدام یا خدمت مشخص باشد.
+  // شناسنامه فقط همراه با اقدام یا خدمت مشخص
   const shenasnamehMatches = findMatchedTerms(
     normalizedTitle,
     ["شناسنامه"]
@@ -618,7 +661,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // آمار ولادت و وفات یا ثبت و صدور گواهی مربوط به آن‌ها.
+  // ولادت و وفات فقط همراه با ثبت، آمار یا خدمت مشخص
   const birthDeathMatches = findMatchedTerms(
     normalizedTitle,
     BIRTH_DEATH_TERMS
@@ -643,7 +686,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // آمار ازدواج و طلاق، به شرط تصریح آمار در عنوان.
+  // آمار ازدواج و طلاق
   const marriageDivorceMatches = findMatchedTerms(
     normalizedTitle,
     MARRIAGE_DIVORCE_TERMS
@@ -668,7 +711,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // تغییر نام فقط با وجود قرینه صریح ثبت احوال پذیرفته می‌شود.
+  // تغییر نام فقط با قرینه صریح ثبت احوال
   const explicitRegistration = findMatchedTerms(
     combined,
     STRONG_TERMS
@@ -693,8 +736,7 @@ function analyzeNewsRelevance(
     };
   }
 
-  // اگر نام سازمان در متن خبر آمده باشد،
-  // باید موضوع مشخصی هم وجود داشته باشد.
+  // نام سازمان در متن همراه با موضوع یا خدمت مرتبط
   if (explicitRegistration.length > 0) {
     const serviceMatches = findMatchedTerms(
       combined,
@@ -718,7 +760,7 @@ function analyzeNewsRelevance(
     }
   }
 
-  // خبر رد شده؛ عبارت‌های نزدیک به موضوع برای Diagnostics ثبت می‌شوند.
+  // خبر رد شده؛ فقط موضوعات واقعی برای Diagnostics ثبت می‌شوند.
   return {
     ...rejected,
     matchedTerms: uniqueTerms(
@@ -731,7 +773,7 @@ function isRelevantNews(
   title: string,
   description = ""
 ): boolean {
-  return analyzeNewsRelevance(title, description).relevant;
+  return evaluateRegistrationNews(title, description).relevant;
 }
 
 // دریافت پاسخ همراه با متن، در محدوده زمانی تعیین‌شده
@@ -1082,7 +1124,6 @@ function getKeywordSamples(
     ...STRONG_TERMS,
     ...SECONDARY_TERMS,
     ...DIRECT_SERVICE_TERMS,
-    "جمعیت",
     "ولادت",
     "تولد",
     "وفات",
@@ -1113,7 +1154,7 @@ function getNearMatchSamples(
   const result: SourceResult["nearMatchSamples"] = [];
 
   for (const item of candidates) {
-    const analysis = analyzeNewsRelevance(
+    const analysis = evaluateRegistrationNews(
       item.title,
       item.description
     );
@@ -1190,7 +1231,7 @@ async function fetchSource(
     const items: NewsItem[] = [];
 
     for (const candidate of candidates) {
-      const analysis = analyzeNewsRelevance(
+      const analysis = evaluateRegistrationNews(
         candidate.title,
         candidate.description
       );
@@ -1313,8 +1354,6 @@ async function getNews(
       break;
     }
 
-    // اگر رسانه جدید باشد و سقف رسانه‌ها پر شده باشد،
-    // خبرهای آن رسانه وارد گزارش نمی‌شوند.
     if (
       !selectedSources.has(item.source) &&
       selectedSources.size >= MAX_MEDIA_TO_SEND
@@ -1517,7 +1556,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // حداقل یک رسانه برای ارسال گزارش کافی است.
     if (mediaCount < MIN_MEDIA_TO_SEND) {
       return NextResponse.json(
         {
