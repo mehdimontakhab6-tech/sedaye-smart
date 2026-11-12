@@ -1344,6 +1344,25 @@ async function sendToBale(
   const mediaCaption = firstPart.chunk;
   let remainingText = firstPart.remaining;
 
+console.info("[Instagram] Caption integrity audit", {
+  postId: post.id,
+
+  sourceCaptionLength: Array.from(post.caption).length,
+  completeTextLength: Array.from(completeText).length,
+
+  mediaCaptionLength: Array.from(mediaCaption).length,
+  continuationLength: Array.from(firstPart.remaining).length,
+
+  hasContinuation: firstPart.remaining.length > 0,
+
+  mediaCaptionWithinLimit:
+    Array.from(mediaCaption).length <= MEDIA_CAPTION_LIMIT,
+
+  continuationPrepared:
+    firstPart.remaining.length === 0 ||
+    Array.from(firstPart.remaining).length > 0,
+});
+
   const firstResponse = await fetch(
     `https://tapi.bale.ai/bot${token}/${method}`,
     {
