@@ -7,7 +7,7 @@ const MAX_NEWS = 20;
 const MIN_MEDIA_TO_SEND = 1;
 const MAX_MEDIA_TO_SEND = 20;
 const MAX_RESPONSE_BYTES = 256 * 1024;
-const MAX_ITEMS_PER_FEED = 30;
+const MAX_ITEMS_PER_FEED = 100;
 const REQUEST_TIMEOUT_MS = 7000;
 const IRAN_OFFSET_MS = 3.5 * 60 * 60 * 1000;
 
@@ -49,6 +49,12 @@ type SourceResult = {
   relevantItems: number;
   missingDate: number;
   outsideWindow: number;
+
+  // شمارنده‌های تشخیصی رد شدن آیتم‌ها در مرحله Parse
+  rejectedMissingTitle: number;
+  rejectedMissingLink: number;
+  rejectedDomain: number;
+
   error?: string;
   contentType?: string;
   finalUrl?: string;
@@ -484,7 +490,17 @@ function isBlockedDomain(url: string): boolean {
   }
 }
 
-function isIranianNewsLink(url: string): boolean {
+/**
+ * اعتبارسنجی لینک خبر بر اساس دامنه رسانه‌ای که RSS آن دریافت شده است.
+ *
+ * علاوه بر دامنه‌های .ir، دامنه اصلی رسانه و زیردامنه‌های آن
+ * نیز پذیرفته می‌شوند؛ بنابراین رسانه‌هایی مانند Mehrnews
+ * با دامنه .com به‌اشتباه رد نمی‌شوند.
+ */
+function isIranianNewsLink(
+  url: string,
+  source: SourceConfig
+): boolean {
   try {
     const parsed = new URL(url);
 
@@ -498,10 +514,32 @@ function isIranianNewsLink(url: string): boolean {
       return false;
     }
 
+    const sourceUrls = [
+      source.url,
+      ...(source.fallbackUrls || []),
+    ];
+
+    const sourceHosts = sourceUrls
+      .map((value) => {
+        try {
+          return normalizeDomain(new URL(value).hostname);
+        } catch {
+          return "";
+        }
+      })
+      .filter(Boolean);
+
+    const belongsToSource = sourceHosts.some(
+      (sourceHost) =>
+        host === sourceHost ||
+        host.endsWith(`.${sourceHost}`)
+    );
+
     return (
       host.endsWith(".ir") ||
-      host === "tasnimnews.ir" ||
-      host === "tasnimnews.com"
+      host === "tasnimnews.com" ||
+      host.endsWith(".tasnimnews.com") ||
+      belongsToSource
     );
   } catch {
     return false;
@@ -1212,7 +1250,18 @@ function extractLink(block: string): string {
   return "";
 }
 
-function parseFeed(xml: string): Candidate[] {
+/**
+ * استخراج آیتم‌های RSS و ثبت علت رد شدن هر آیتم.
+ *
+ * اعتبارسنجی لینک با دامنه همان منبع انجام می‌شود؛
+ * بنابراین لینک‌های دامنه اصلی رسانه، از جمله دامنه‌های .com،
+ * در صورت تطبیق با منبع پذیرفته خواهند شد.
+ */
+function parseFeed(
+  xml: string,
+  source: SourceConfig,
+  diagnostics?: SourceResult
+): Candidate[] {
   const blocks =
     xml.match(
       /<(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:item|entry)\s*>/gi
@@ -1228,6 +1277,30 @@ function parseFeed(xml: string): Candidate[] {
 
     const link = extractLink(block);
 
+    if (!title) {
+      if (diagnostics) {
+        diagnostics.rejectedMissingTitle++;
+      }
+
+      continue;
+    }
+
+    if (!link) {
+      if (diagnostics) {
+        diagnostics.rejectedMissingLink++;
+      }
+
+      continue;
+    }
+
+    if (!isIranianNewsLink(link, source)) {
+      if (diagnostics) {
+        diagnostics.rejectedDomain++;
+      }
+
+      continue;
+    }
+
     const description =
       extractTag(block, "description") ||
       extractTag(block, "summary") ||
@@ -1240,10 +1313,6 @@ function parseFeed(xml: string): Candidate[] {
       extractTag(block, "updated") ||
       extractTag(block, "dc:date") ||
       extractTag(block, "date");
-
-    if (!title || !link || !isIranianNewsLink(link)) {
-      continue;
-    }
 
     result.push({
       title,
@@ -1396,6 +1465,11 @@ async function fetchSource(
     relevantItems: 0,
     missingDate: 0,
     outsideWindow: 0,
+
+    rejectedMissingTitle: 0,
+    rejectedMissingLink: 0,
+    rejectedDomain: 0,
+
     samples: [],
     keywordSamples: [],
     matchedSamples: [],
@@ -1474,7 +1548,11 @@ async function fetchSource(
     diagnostics.rawItems =
       (body.match(/<(?:item|entry)\b/gi) || []).length;
 
-    const candidates = parseFeed(body);
+    const candidates = parseFeed(
+      body,
+      source,
+      diagnostics
+    );
 
     diagnostics.parsedItems = candidates.length;
 
@@ -1552,7 +1630,7 @@ async function fetchSource(
     diagnostics.error =
       error instanceof Error
         ? error.message
-        : "Unknown fetch error";
+        : "Unknown error";
 
     return { items: [], diagnostics };
   }
@@ -1936,6 +2014,20 @@ export async function GET(request: Request) {
         0
       ),
       windowItems: items.length,
+
+      // مجموع علت‌های رد شدن آیتم‌ها در مرحله Parse
+      rejectedMissingTitle: diagnostics.reduce(
+        (sum, item) => sum + item.rejectedMissingTitle,
+        0
+      ),
+      rejectedMissingLink: diagnostics.reduce(
+        (sum, item) => sum + item.rejectedMissingLink,
+        0
+      ),
+      rejectedDomain: diagnostics.reduce(
+        (sum, item) => sum + item.rejectedDomain,
+        0
+      ),
     };
 
     // Diagnostics هیچ‌وقت پیام بله ارسال نمی‌کند.
