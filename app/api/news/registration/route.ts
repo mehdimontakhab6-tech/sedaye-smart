@@ -61,7 +61,6 @@ type SourceResult = {
   responseType?: "rss" | "html" | "unknown";
   responsePreview?: string;
   tasnimRssLinks?: string[];
-  rawItemSample?: string;
   attempts?: Array<{
     url: string;
     status: number | null;
