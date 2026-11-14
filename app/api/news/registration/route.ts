@@ -1011,6 +1011,7 @@ async function fetchText(
       finalUrl: response.url || url,
       redirected: response.redirected,
     };
+  
   } catch (error) {
     const elapsed = Date.now() - startedAt;
 
@@ -1019,15 +1020,26 @@ async function fetchText(
         ? error.message
         : "Unknown fetch error";
 
-    if (timedOutPhase) {
+    // TypeScript ممکن است تغییر متغیر در callback را تشخیص ندهد.
+    const timeoutPhase =
+      timedOutPhase as "headers" | "body" | null;
+
+    if (timeoutPhase !== null) {
+      const phaseName =
+        timeoutPhase === "headers" ? "HEADERS" : "BODY";
+
       throw new Error(
-        `FETCH_TIMEOUT_${timedOutPhase.toUpperCase()}: ${elapsed}ms`
+        `FETCH_TIMEOUT_${phaseName}: ${elapsed}ms`
       );
     }
 
+    const phaseName =
+      phase === "headers" ? "HEADERS" : "BODY";
+
     throw new Error(
-      `FETCH_FAILED_${phase.toUpperCase()}: ${elapsed}ms: ${originalMessage}`
+      `FETCH_FAILED_${phaseName}: ${elapsed}ms: ${originalMessage}`
     );
+  }
   } finally {
     if (reader) {
       try {
