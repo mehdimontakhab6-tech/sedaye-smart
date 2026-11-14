@@ -188,6 +188,19 @@ const RSS_SOURCES: SourceConfig[] = [
   },
 ];
 
+const BLOCKED_DOMAINS: string[] = [
+  "reuters.com",
+  "apnews.com",
+  "bbc.com",
+  "bbc.co.uk",
+  "cnn.com",
+  "nytimes.com",
+  "theguardian.com",
+  "aljazeera.com",
+  "dw.com",
+  "voanews.com",
+];
+
 const STRONG_TERMS = [
   "سازمان ثبت احوال",
   "سازمان ثبت احوال کشور",
