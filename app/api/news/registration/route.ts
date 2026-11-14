@@ -9,6 +9,7 @@ const MAX_MEDIA_TO_SEND = 20;
 const MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_ITEMS_PER_FEED = 100;
 const REQUEST_TIMEOUT_MS = 7000;
+const MAX_BALE_MESSAGE_LENGTH = 3500;
 const IRAN_OFFSET_MS = 3.5 * 60 * 60 * 1000;
 
 const USER_AGENT =
@@ -49,12 +50,9 @@ type SourceResult = {
   relevantItems: number;
   missingDate: number;
   outsideWindow: number;
-
-  // شمارنده‌های تشخیصی رد شدن آیتم‌ها در مرحله Parse
   rejectedMissingTitle: number;
   rejectedMissingLink: number;
   rejectedDomain: number;
-
   error?: string;
   contentType?: string;
   finalUrl?: string;
@@ -104,7 +102,6 @@ type FetchTextResult = {
   redirected: boolean;
 };
 
-// همه منابع RSS برای بررسی خبرهای ثبت احوال
 const RSS_SOURCES: SourceConfig[] = [
   { name: "ایرنا", url: "https://www.irna.ir/rss" },
   { name: "ایسنا", url: "https://www.isna.ir/rss" },
@@ -490,13 +487,6 @@ function isBlockedDomain(url: string): boolean {
   }
 }
 
-/**
- * اعتبارسنجی لینک خبر بر اساس دامنه رسانه‌ای که RSS آن دریافت شده است.
- *
- * علاوه بر دامنه‌های .ir، دامنه اصلی رسانه و زیردامنه‌های آن
- * نیز پذیرفته می‌شوند؛ بنابراین رسانه‌هایی مانند Mehrnews
- * با دامنه .com به‌اشتباه رد نمی‌شوند.
- */
 function isIranianNewsLink(
   url: string,
   source: SourceConfig
@@ -858,13 +848,6 @@ function getResponsePreview(body: string): string {
     .slice(0, 350);
 }
 
-/**
- * دریافت تدریجی پاسخ با سقف حجم مشخص.
- *
- * این محدودیت هم برای RSS و هم برای پاسخ API بله اعمال می‌شود.
- * در صورت عبور از سقف، خواندن پاسخ متوقف می‌شود تا حافظه Worker
- * با پاسخ‌های غیرعادی و حجیم اشغال نشود.
- */
 async function fetchText(
   url: string,
   init: RequestInit = {},
@@ -1250,13 +1233,6 @@ function extractLink(block: string): string {
   return "";
 }
 
-/**
- * استخراج آیتم‌های RSS و ثبت علت رد شدن هر آیتم.
- *
- * اعتبارسنجی لینک با دامنه همان منبع انجام می‌شود؛
- * بنابراین لینک‌های دامنه اصلی رسانه، از جمله دامنه‌های .com،
- * در صورت تطبیق با منبع پذیرفته خواهند شد.
- */
 function parseFeed(
   xml: string,
   source: SourceConfig,
@@ -1269,7 +1245,6 @@ function parseFeed(
 
   const result: Candidate[] = [];
 
-  // جلوگیری از پردازش تعداد زیادی آیتم در یک RSS حجیم
   for (const block of blocks.slice(0, MAX_ITEMS_PER_FEED)) {
     const title =
       extractTag(block, "title") ||
@@ -1443,11 +1418,6 @@ async function fetchFeedAttempt(
   }
 }
 
-/**
- * diagnosticsMode:
- * در اجرای عادی false است تا محاسبات تشخیصی غیرضروری انجام نشود.
- * در درخواست Diagnostics فقط برای منبع انتخاب‌شده true می‌شود.
- */
 async function fetchSource(
   source: SourceConfig,
   window: ReportWindow,
@@ -1465,11 +1435,9 @@ async function fetchSource(
     relevantItems: 0,
     missingDate: 0,
     outsideWindow: 0,
-
     rejectedMissingTitle: 0,
     rejectedMissingLink: 0,
     rejectedDomain: 0,
-
     samples: [],
     keywordSamples: [],
     matchedSamples: [],
@@ -1556,7 +1524,6 @@ async function fetchSource(
 
     diagnostics.parsedItems = candidates.length;
 
-    // فقط در Diagnostics نمونه‌های اضافی محاسبه می‌شوند.
     if (diagnosticsMode) {
       diagnostics.keywordSamples =
         getKeywordSamples(candidates);
@@ -1575,7 +1542,6 @@ async function fetchSource(
     const items: NewsItem[] = [];
 
     for (const candidate of candidates) {
-      // هر خبر در اجرای عادی فقط یک بار ارزیابی می‌شود.
       const analysis = evaluateRegistrationNews(
         candidate.title,
         candidate.description
@@ -1636,10 +1602,6 @@ async function fetchSource(
   }
 }
 
-/**
- * حذف خبرهای تکراری یک رسانه.
- * انتشار همان خبر در رسانه‌های مستقل حفظ می‌شود.
- */
 function deduplicate(items: NewsItem[]): NewsItem[] {
   const seen = new Set<string>();
   const result: NewsItem[] = [];
@@ -1713,16 +1675,6 @@ async function getNews(
   return { items, diagnostics };
 }
 
-/**
- * تطبیق پارامتر source با نام فارسی، دامنه یا شناسه کوتاه رسانه.
- *
- * نمونه‌ها:
- * source=ایرنا
- * source=irna
- * source=tasnim
- * source=tasnimnews
- * source=isna
- */
 function normalizeSourceKey(value: string): string {
   return normalizeText(value)
     .replace(/^https?:\/\//, "")
@@ -1756,7 +1708,6 @@ function getSourceAliases(source: SourceConfig): string[] {
       aliases.add(normalizeSourceKey(hostname));
       aliases.add(normalizeSourceKey(withoutTld));
 
-      // مثال: tasnimnews -> tasnim
       aliases.add(
         normalizeSourceKey(
           withoutTld.replace(/news$/, "")
@@ -1784,6 +1735,9 @@ function findSource(value: string): SourceConfig | null {
   );
 }
 
+/**
+ * ارسال پیام به Bale و بررسی پاسخ واقعی API.
+ */
 async function sendBaleMessage(
   env: CloudflareEnv,
   message: string
@@ -1819,13 +1773,20 @@ async function sendBaleMessage(
     data = JSON.parse(response.body);
   } catch {
     throw new Error(
-      `Bale returned a non-JSON response (HTTP ${response.status})`
+      `Bale returned non-JSON response (HTTP ${response.status}): ${response.body.slice(0, 300)}`
     );
   }
 
   if (!response.ok) {
+    const description =
+      typeof data === "object" &&
+      data !== null &&
+      "description" in data
+        ? String((data as { description?: unknown }).description || "")
+        : "";
+
     throw new Error(
-      `Bale sendMessage failed (HTTP ${response.status})`
+      `Bale sendMessage failed (HTTP ${response.status}): ${description || response.body.slice(0, 300)}`
     );
   }
 
@@ -1835,18 +1796,33 @@ async function sendBaleMessage(
     !("ok" in data) ||
     (data as { ok?: unknown }).ok !== true
   ) {
+    const description =
+      typeof data === "object" &&
+      data !== null &&
+      "description" in data
+        ? String((data as { description?: unknown }).description || "")
+        : "";
+
     throw new Error(
-      "Bale did not confirm successful message delivery"
+      `Bale did not confirm successful delivery: ${description || response.body.slice(0, 300)}`
     );
   }
 
   return data;
 }
 
-function formatNewsMessage(
+/**
+ * ساخت پیام‌های مستقل با سقف طول مشخص.
+ * هر خبر به‌صورت یک بلوک کامل در یک پیام قرار می‌گیرد.
+ */
+function formatNewsMessages(
   items: NewsItem[],
   window: ReportWindow
-): string {
+): string[] {
+  if (items.length === 0) {
+    return [];
+  }
+
   const formatter = new Intl.DateTimeFormat("fa-IR", {
     timeZone: "Asia/Tehran",
     year: "numeric",
@@ -1867,17 +1843,56 @@ function formatNewsMessage(
     `📌 تعداد خبرها: ${items.length}`,
   ].join("\n");
 
-  const newsList = items
-    .map((item, index) =>
-      [
-        `${index + 1}. ${cleanNewsTitle(item.title)}`,
-        `🗞 منبع: ${item.source}`,
-        `🔗 ${item.link}`,
-      ].join("\n")
-    )
-    .join("\n\n");
+  if (header.length > MAX_BALE_MESSAGE_LENGTH) {
+    throw new Error(
+      "Report header exceeds Bale message length limit"
+    );
+  }
 
-  return newsList ? `${header}\n\n${newsList}` : header;
+  const messages: string[] = [];
+  let currentBlocks: string[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    const block = [
+      `${i + 1}. ${cleanNewsTitle(item.title)}`,
+      `🗞 منبع: ${item.source}`,
+      `🔗 ${item.link}`,
+    ].join("\n");
+
+    const candidateMessage =
+      `${header}\n\n${[...currentBlocks, block].join("\n\n")}`;
+
+    if (candidateMessage.length <= MAX_BALE_MESSAGE_LENGTH) {
+      currentBlocks.push(block);
+      continue;
+    }
+
+    if (currentBlocks.length > 0) {
+      messages.push(
+        `${header}\n\n${currentBlocks.join("\n\n")}`
+      );
+    }
+
+    const singleBlockMessage = `${header}\n\n${block}`;
+
+    if (singleBlockMessage.length > MAX_BALE_MESSAGE_LENGTH) {
+      throw new Error(
+        `News item ${i + 1} exceeds Bale message length limit`
+      );
+    }
+
+    currentBlocks = [block];
+  }
+
+  if (currentBlocks.length > 0) {
+    messages.push(
+      `${header}\n\n${currentBlocks.join("\n\n")}`
+    );
+  }
+
+  return messages;
 }
 
 function noCacheHeaders() {
@@ -1905,8 +1920,6 @@ export async function GET(request: Request) {
       previewNextWindow
     );
 
-    // Diagnostics بدون source فقط فهرست منابع را برمی‌گرداند.
-    // در این حالت هیچ RSSای دریافت نمی‌شود.
     if (diagnosticsOnly && !requestedSource) {
       return NextResponse.json(
         {
@@ -1942,7 +1955,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Diagnostics با source فقط همان رسانه را بررسی می‌کند.
     let sourcesToCheck = RSS_SOURCES;
     let diagnosticsMode = false;
 
@@ -2014,8 +2026,6 @@ export async function GET(request: Request) {
         0
       ),
       windowItems: items.length,
-
-      // مجموع علت‌های رد شدن آیتم‌ها در مرحله Parse
       rejectedMissingTitle: diagnostics.reduce(
         (sum, item) => sum + item.rejectedMissingTitle,
         0
@@ -2030,7 +2040,6 @@ export async function GET(request: Request) {
       ),
     };
 
-    // Diagnostics هیچ‌وقت پیام بله ارسال نمی‌کند.
     if (diagnosticsOnly) {
       return NextResponse.json(
         {
@@ -2072,14 +2081,57 @@ export async function GET(request: Request) {
       );
     }
 
-    // دریافت تنظیمات Cloudflare فقط در اجرای واقعی ارسال لازم است.
+    const messages = formatNewsMessages(items, window);
+
+    if (messages.length === 0) {
+      return NextResponse.json(
+        {
+          ok: true,
+          sent: false,
+          reason: "empty_message_list",
+          stats,
+        },
+        { headers: noCacheHeaders() }
+      );
+    }
+
     const { env } = await getCloudflareContext();
     const cloudflareEnv = env as CloudflareEnv;
 
-    await sendBaleMessage(
-      cloudflareEnv,
-      formatNewsMessage(items, window)
-    );
+    let sentMessages = 0;
+
+    for (let index = 0; index < messages.length; index++) {
+      try {
+        await sendBaleMessage(
+          cloudflareEnv,
+          messages[index]
+        );
+
+        sentMessages++;
+      } catch (error) {
+        return NextResponse.json(
+          {
+            ok: false,
+            sent: false,
+            reason: "bale_delivery_failed",
+            count: items.length,
+            mediaCount,
+            sentMessages,
+            totalMessages: messages.length,
+            failedMessage: index + 1,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unknown Bale delivery error",
+            stats,
+          },
+          {
+            status: 502,
+            headers: noCacheHeaders(),
+          }
+        );
+      }
+    }
 
     return NextResponse.json(
       {
@@ -2087,6 +2139,8 @@ export async function GET(request: Request) {
         sent: true,
         count: items.length,
         mediaCount,
+        sentMessages,
+        totalMessages: messages.length,
         stats,
       },
       { headers: noCacheHeaders() }
