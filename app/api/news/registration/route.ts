@@ -929,18 +929,25 @@ async function fetchText(
     null;
 
   try {
-    const response = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-      redirect: "follow",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept:
-          "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-        "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
-        ...(init.headers || {}),
-      },
-    });
+    const headers = new Headers({
+  "User-Agent": USER_AGENT,
+  Accept:
+    "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+  "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
+});
+
+new Headers(init.headers).forEach((value, key) => {
+  headers.set(key, value);
+});
+
+const response = await fetch(url, {
+  ...init,
+  method: init.method || "GET",
+  cache: "no-store",
+  signal: controller.signal,
+  redirect: "follow",
+  headers,
+});
 
     // دریافت Headerها تمام شده و خواندن بدنه آغاز می‌شود.
     currentPhase = "body";
