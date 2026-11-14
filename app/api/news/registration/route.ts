@@ -137,7 +137,6 @@ const RSS_SOURCES: SourceConfig[] = [
   { name: "ایمنا", url: "https://www.imna.ir/rss" },
   { name: "خبرگزاری آنا", url: "https://ana.ir/fa/rss/allnews" },
   { name: "ایسکانیوز", url: "https://www.iscanews.ir/rss" },
-  { name: "خبرگزاری برنا", url: "https://www.borna.news/fa/rss/allnews" },
 ];
 
 const BLOCKED_DOMAINS = [
@@ -1158,17 +1157,6 @@ async function fetchSource(
     diagnostics.responseType = selectedResponseType;
     diagnostics.responsePreview = getResponsePreview(body);
     diagnostics.rawItems = (body.match(/<(?:item|entry)\b/gi) || []).length;
-
-    // نمونه خام اولین آیتم برنا فقط در حالت تشخیصی برگردانده می‌شود.
-    if (diagnosticsMode && source.name === "خبرگزاری برنا") {
-      const firstRawItem = body.match(
-        /<(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:item|entry)\s*>/i
-      );
-
-      diagnostics.rawItemSample = firstRawItem
-        ? firstRawItem[0].slice(0, 5000)
-        : "هیچ item یا entry در XML پیدا نشد.";
-    }
 
     const candidates = parseFeed(body, source, diagnostics);
     diagnostics.parsedItems = candidates.length;
