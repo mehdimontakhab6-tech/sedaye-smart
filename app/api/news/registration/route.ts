@@ -391,6 +391,14 @@ function evaluateRegistrationNews(
     return { ...rejected, reason: "عنوان خبر خالی است" };
   }
 
+  if (containsTerm(normalizedTitle, "ثبت احوال")) {
+  return {
+    relevant: true,
+    reason: "وجود عبارت ثبت احوال در عنوان خبر",
+    matchedTerms: ["ثبت احوال"],
+  };
+  }
+  
   if (includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)) {
     return {
       ...rejected,
