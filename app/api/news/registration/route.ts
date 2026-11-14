@@ -913,15 +913,21 @@ async function fetchText(
   const controller = new AbortController();
   const startedAt = Date.now();
 
-  let phase: "headers" | "body" = "headers";
-  let timedOutPhase: "headers" | "body" | null = null;
+  const timeoutState: { phase: 0 | 1 | 2 } = {
+    phase: 0,
+  };
 
   const timeout = setTimeout(() => {
-    timedOutPhase = phase;
+    timeoutState.phase =
+      timeoutState.phase === 0 ? 1 : 2;
+
     controller.abort();
   }, timeoutMs);
 
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let currentPhase: "headers" | "body" = "headers";
+
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null =
+    null;
 
   try {
     const response = await fetch(url, {
@@ -937,7 +943,7 @@ async function fetchText(
       },
     });
 
-    phase = "body";
+    currentPhase = "body";
 
     const contentType =
       response.headers.get("content-type") || "";
@@ -975,6 +981,7 @@ async function fetchText(
     reader = response.body.getReader();
 
     const decoder = new TextDecoder("utf-8");
+
     let body = "";
     let totalBytes = 0;
 
@@ -998,7 +1005,9 @@ async function fetchText(
         );
       }
 
-      body += decoder.decode(value, { stream: true });
+      body += decoder.decode(value, {
+        stream: true,
+      });
     }
 
     body += decoder.decode();
@@ -1011,7 +1020,6 @@ async function fetchText(
       finalUrl: response.url || url,
       redirected: response.redirected,
     };
-  
   } catch (error) {
     const elapsed = Date.now() - startedAt;
 
@@ -1020,26 +1028,26 @@ async function fetchText(
         ? error.message
         : "Unknown fetch error";
 
-    // TypeScript ممکن است تغییر متغیر در callback را تشخیص ندهد.
-    const timeoutPhase =
-      timedOutPhase as "headers" | "body" | null;
-
-    if (timeoutPhase !== null) {
-      const phaseName =
-        timeoutPhase === "headers" ? "HEADERS" : "BODY";
-
+    if (timeoutState.phase === 1) {
       throw new Error(
-        `FETCH_TIMEOUT_${phaseName}: ${elapsed}ms`
+        `FETCH_TIMEOUT_HEADERS: ${elapsed}ms`
+      );
+    }
+
+    if (timeoutState.phase === 2) {
+      throw new Error(
+        `FETCH_TIMEOUT_BODY: ${elapsed}ms`
       );
     }
 
     const phaseName =
-      phase === "headers" ? "HEADERS" : "BODY";
+      currentPhase === "headers"
+        ? "HEADERS"
+        : "BODY";
 
     throw new Error(
       `FETCH_FAILED_${phaseName}: ${elapsed}ms: ${originalMessage}`
     );
-  }
   } finally {
     if (reader) {
       try {
