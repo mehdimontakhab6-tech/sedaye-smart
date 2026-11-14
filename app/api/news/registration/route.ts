@@ -60,6 +60,8 @@ type SourceResult = {
   redirected?: boolean;
   responseType?: "rss" | "html" | "unknown";
   responsePreview?: string;
+  tasnimRssLinks?: string[];
+  rawItemSample?: string;
   attempts?: Array<{
     url: string;
     status: number | null;
@@ -110,59 +112,20 @@ type FetchTextResult = {
 
 const RSS_SOURCES: SourceConfig[] = [
   { name: "ایرنا", url: "https://www.irna.ir/rss" },
-
   { name: "ایسنا", url: "https://www.isna.ir/rss" },
-
   { name: "مهر", url: "https://www.mehrnews.com/rss" },
-
   { name: "ایلنا", url: "https://www.ilna.ir/rss" },
-
-  {
-    name: "باشگاه خبرنگاران جوان",
-    url: "https://www.yjc.ir/fa/rss/allnews",
-  },
-
+  { name: "باشگاه خبرنگاران جوان", url: "https://www.yjc.ir/fa/rss/allnews" },
   { name: "خبرآنلاین", url: "https://www.khabaronline.ir/rss" },
-
   { name: "تابناک", url: "https://www.tabnak.ir/rss/" },
-
-  {
-    name: "عصر ایران",
-    url: "https://www.asriran.com/fa/rss/allnews",
-  },
-
-  {
-    name: "همشهری آنلاین",
-    url: "https://www.hamshahrionline.ir/rss",
-  },
-
-  {
-    name: "جام جم آنلاین",
-    url: "https://jamejamonline.ir/fa/rss/allnews",
-  },
-
-  {
-    name: "میزان",
-    url: "https://www.mizanonline.ir/fa/rss/allnews",
-  },
-
-  {
-    name: "شبکه خبر",
-    url: "https://www.irib-news.ir/fa/rss/allnews",
-  },
-
+  { name: "عصر ایران", url: "https://www.asriran.com/fa/rss/allnews" },
+  { name: "همشهری آنلاین", url: "https://www.hamshahrionline.ir/rss" },
+  { name: "جام جم آنلاین", url: "https://jamejamonline.ir/fa/rss/allnews" },
+  { name: "میزان", url: "https://www.mizanonline.ir/fa/rss/allnews" },
+  { name: "شبکه خبر", url: "https://www.irib-news.ir/fa/rss/allnews" },
   { name: "شانا", url: "https://www.shana.ir/rss" },
-
-  {
-    name: "ایکنا",
-    url: "https://iqna.ir/fa/rss/allnews",
-  },
-
-  {
-    name: "انتخاب",
-    url: "https://www.entekhab.ir/fa/rss/allnews",
-  },
-
+  { name: "ایکنا", url: "https://iqna.ir/fa/rss/allnews" },
+  { name: "انتخاب", url: "https://www.entekhab.ir/fa/rss/allnews" },
   {
     name: "تسنیم",
     url: "https://www.tasnimnews.ir/fa/rss",
@@ -170,284 +133,110 @@ const RSS_SOURCES: SourceConfig[] = [
       "https://www.tasnimnews.com/fa/rss/feed/0/8/0/%D9%85%D9%87%D9%85%D8%AA%D8%B1%DB%8C%D9%86-%D8%A7%D8%AE%D8%A8%D8%A7%D8%B1-%D8%AA%D8%B3%D9%86%DB%8C%D9%85",
     ],
   },
-
-  {
-    name: "خبرگزاری دانشجو",
-    url: "https://snn.ir/fa/rss/allnews",
-  },
-
+  { name: "خبرگزاری دانشجو", url: "https://snn.ir/fa/rss/allnews" },
   { name: "ایمنا", url: "https://www.imna.ir/rss" },
-
-  {
-    name: "خبرگزاری آنا",
-    url: "https://ana.ir/fa/rss/allnews",
-  },
-
-  {
-    name: "ایسکانیوز",
-    url: "https://www.iscanews.ir/rss",
-  },
-
-  {
-    name: "خبرگزاری برنا",
-    url: "https://www.borna.news/fa/rss/allnews",
-  },
+  { name: "خبرگزاری آنا", url: "https://ana.ir/fa/rss/allnews" },
+  { name: "ایسکانیوز", url: "https://www.iscanews.ir/rss" },
+  { name: "خبرگزاری برنا", url: "https://www.borna.news/fa/rss/allnews" },
 ];
 
-const BLOCKED_DOMAINS: string[] = [
-  "reuters.com",
-  "apnews.com",
-  "bbc.com",
-  "bbc.co.uk",
-  "cnn.com",
-  "nytimes.com",
-  "theguardian.com",
-  "aljazeera.com",
-  "dw.com",
+const BLOCKED_DOMAINS = [
+  "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "cnn.com",
+  "nytimes.com", "theguardian.com", "aljazeera.com", "dw.com",
   "voanews.com",
 ];
 
 const STRONG_TERMS = [
-  "سازمان ثبت احوال",
-  "سازمان ثبت احوال کشور",
-  "ثبت احوال",
-  "اداره ثبت احوال",
-  "ادارات ثبت احوال",
-  "رئیس سازمان ثبت احوال",
-  "رییس سازمان ثبت احوال",
-  "رئیس ثبت احوال",
-  "رییس ثبت احوال",
-  "مدیرکل ثبت احوال",
-  "مدیر کل ثبت احوال",
-  "معاون سازمان ثبت احوال",
-  "سخنگوی سازمان ثبت احوال",
-  "پایگاه اطلاعات جمعیت سازمان ثبت احوال",
-  "سامانه سازمان ثبت احوال",
-  "درگاه سازمان ثبت احوال",
-  "ثبت وقایع حیاتی",
+  "سازمان ثبت احوال", "سازمان ثبت احوال کشور", "ثبت احوال",
+  "اداره ثبت احوال", "ادارات ثبت احوال", "رئیس سازمان ثبت احوال",
+  "رییس سازمان ثبت احوال", "رئیس ثبت احوال", "رییس ثبت احوال",
+  "مدیرکل ثبت احوال", "مدیر کل ثبت احوال", "معاون سازمان ثبت احوال",
+  "سخنگوی سازمان ثبت احوال", "پایگاه اطلاعات جمعیت سازمان ثبت احوال",
+  "سامانه سازمان ثبت احوال", "درگاه سازمان ثبت احوال", "ثبت وقایع حیاتی",
 ];
 
 const SECONDARY_TERMS = [
-  "کارت ملی",
-  "کارت هوشمند ملی",
-  "کارت ملی هوشمند",
-  "کد ملی",
-  "شماره ملی",
-  "شناسنامه",
-  "صدور شناسنامه",
-  "تعویض شناسنامه",
-  "شناسنامه المثنی",
-  "شناسنامه نوزاد",
-  "گواهی ولادت",
-  "گواهی فوت",
-  "اطلاعات هویتی",
-  "اسناد هویتی",
-  "احراز هویت",
-  "پایگاه جمعیت",
-  "آمار ولادت",
-  "آمار تولد",
-  "آمار فوت",
-  "آمار وفات",
-  "آمار ازدواج",
-  "آمار طلاق",
-  "ثبت ولادت",
-  "ثبت وفات",
-  "ثبت ازدواج",
-  "ثبت طلاق",
+  "کارت ملی", "کارت هوشمند ملی", "کارت ملی هوشمند", "کد ملی",
+  "شماره ملی", "شناسنامه", "صدور شناسنامه", "تعویض شناسنامه",
+  "شناسنامه المثنی", "شناسنامه نوزاد", "گواهی ولادت", "گواهی فوت",
+  "اطلاعات هویتی", "اسناد هویتی", "احراز هویت", "پایگاه جمعیت",
+  "آمار ولادت", "آمار تولد", "آمار فوت", "آمار وفات", "آمار ازدواج",
+  "آمار طلاق", "ثبت ولادت", "ثبت وفات", "ثبت ازدواج", "ثبت طلاق",
   "خدمات هویتی",
 ];
 
 const DIRECT_SERVICE_TERMS = [
-  "صدور شناسنامه",
-  "تعویض شناسنامه",
-  "شناسنامه المثنی",
-  "شناسنامه نوزاد",
-  "گواهی ولادت",
-  "گواهی فوت",
-  "پایگاه اطلاعات جمعیت",
-  "درگاه خدمات الکترونیک ثبت احوال",
-  "خدمات الکترونیک ثبت احوال",
-  "اصلاح مشخصات شناسنامه",
-  "اصلاح مشخصات هویتی",
-  "ثبت ولادت",
-  "ثبت وفات",
-  "ثبت ازدواج",
-  "ثبت طلاق",
-  "ثبت وقایع حیاتی",
+  "صدور شناسنامه", "تعویض شناسنامه", "شناسنامه المثنی",
+  "شناسنامه نوزاد", "گواهی ولادت", "گواهی فوت",
+  "پایگاه اطلاعات جمعیت", "درگاه خدمات الکترونیک ثبت احوال",
+  "خدمات الکترونیک ثبت احوال", "اصلاح مشخصات شناسنامه",
+  "اصلاح مشخصات هویتی", "ثبت ولادت", "ثبت وفات", "ثبت ازدواج",
+  "ثبت طلاق", "ثبت وقایع حیاتی",
 ];
 
 const BLOCKED_TITLE_TERMS = [
-  "قیمت خودرو",
-  "قیمت دلار",
-  "قیمت طلا",
-  "قیمت سکه",
-  "قیمت مسکن",
-  "بورس امروز",
-  "شاخص بورس",
-  "نتیجه فوتبال",
-  "نتایج فوتبال",
-  "لیگ برتر",
-  "جدول لیگ",
-  "ترکیب استقلال",
-  "ترکیب پرسپولیس",
-  "نقل و انتقالات فوتبال",
-  "پیش بینی هوا",
-  "پیش‌بینی هوا",
-  "فال روزانه",
-  "اوقات شرعی",
-  "سهمیه ارز",
-  "خرید ارز",
-  "فروش ارز",
-  "قیمت ارز",
-  "نرخ ارز",
-  "دلار سهمیه ای",
-  "دلار مسافرتی",
-  "ارز مسافرتی",
-  "محصولات کشاورزی",
-  "صادرات کشاورزی",
+  "قیمت خودرو", "قیمت دلار", "قیمت طلا", "قیمت سکه", "قیمت مسکن",
+  "بورس امروز", "شاخص بورس", "نتیجه فوتبال", "نتایج فوتبال",
+  "لیگ برتر", "جدول لیگ", "ترکیب استقلال", "ترکیب پرسپولیس",
+  "نقل و انتقالات فوتبال", "پیش بینی هوا", "پیش‌بینی هوا",
+  "فال روزانه", "اوقات شرعی", "سهمیه ارز", "خرید ارز", "فروش ارز",
+  "قیمت ارز", "نرخ ارز", "دلار سهمیه ای", "دلار مسافرتی",
+  "ارز مسافرتی", "محصولات کشاورزی", "صادرات کشاورزی",
   "شناسنامه دار محصولات",
 ];
 
 const NON_REGISTRATION_CONTEXT_TERMS = [
-  "هویت بصری",
-  "هویت برند",
-  "هویت فرهنگی",
-  "هویت تاریخی",
-  "هویت سیاسی",
-  "هویت هنری",
-  "هویت معماری",
-  "هویت شهری",
-  "هویت باشگاه",
-  "هویت تیم",
-  "کارت ملی خودرو",
-  "کارت شناسایی خودرو",
-  "شناسایی خودرو",
-  "هویت دیجیتال برند",
-  "سازمان امور مالیاتی",
-  "مودیان مالیاتی",
-  "هویت اقتصادی",
-  "فرار مالیاتی",
-  "مالیات بر ارزش افزوده",
-  "اظهارنامه مالیاتی",
-  "درگاه ملی خدمات مالیاتی",
-  "بانک مرکزی",
-  "صرافی",
+  "هویت بصری", "هویت برند", "هویت فرهنگی", "هویت تاریخی",
+  "هویت سیاسی", "هویت هنری", "هویت معماری", "هویت شهری",
+  "هویت باشگاه", "هویت تیم", "کارت ملی خودرو",
+  "کارت شناسایی خودرو", "شناسایی خودرو", "هویت دیجیتال برند",
+  "سازمان امور مالیاتی", "مودیان مالیاتی", "هویت اقتصادی",
+  "فرار مالیاتی", "مالیات بر ارزش افزوده", "اظهارنامه مالیاتی",
+  "درگاه ملی خدمات مالیاتی", "بانک مرکزی", "صرافی",
 ];
 
 const CARD_ID_TERMS = [
-  "کارت ملی",
-  "کارت هوشمند ملی",
-  "کارت ملی هوشمند",
+  "کارت ملی", "کارت هوشمند ملی", "کارت ملی هوشمند",
 ];
 
 const CARD_ACTION_TERMS = [
-  "صدور",
-  "تمدید",
-  "تعویض",
-  "اعتبار",
-  "تمدید اعتبار",
-  "هوشمندسازی",
-  "هوشمند سازی",
-  "ثبت نام",
-  "ثبت‌نام",
-  "دریافت",
-  "تحویل",
-  "ارائه",
-  "فعال سازی",
-  "فعال‌سازی",
-  "غیرفعال سازی",
-  "غیرفعال‌سازی",
-  "پیگیری",
-  "نوبت دهی",
-  "نوبت‌دهی",
-  "درخواست",
-  "مهلت",
-  "خدمات",
-  "سامانه",
-  "انقضا",
+  "صدور", "تمدید", "تعویض", "اعتبار", "تمدید اعتبار",
+  "هوشمندسازی", "هوشمند سازی", "ثبت نام", "ثبت‌نام", "دریافت",
+  "تحویل", "ارائه", "فعال سازی", "فعال‌سازی", "غیرفعال سازی",
+  "غیرفعال‌سازی", "پیگیری", "نوبت دهی", "نوبت‌دهی", "درخواست",
+  "مهلت", "خدمات", "سامانه", "انقضا",
 ];
 
 const SHENASNAMEH_ACTION_TERMS = [
-  "صدور",
-  "تعویض",
-  "اصلاح",
-  "المثنی",
-  "نوزاد",
-  "هوشمند",
-  "خدمات",
-  "درخواست",
-  "ثبت نام",
-  "ثبت‌نام",
-  "دریافت",
-  "تحویل",
-  "استعلام",
-  "سامانه",
-  "مهلت",
-  "اعتبار",
-  "تغییر مشخصات",
+  "صدور", "تعویض", "اصلاح", "المثنی", "نوزاد", "هوشمند",
+  "خدمات", "درخواست", "ثبت نام", "ثبت‌نام", "دریافت", "تحویل",
+  "استعلام", "سامانه", "مهلت", "اعتبار", "تغییر مشخصات",
 ];
 
-const BIRTH_DEATH_TERMS = [
-  "ولادت",
-  "تولد",
-  "وفات",
-  "فوت",
-];
-
+const BIRTH_DEATH_TERMS = ["ولادت", "تولد", "وفات", "فوت"];
 const EVENT_ACTION_TERMS = [
-  "ثبت",
-  "آمار",
-  "گواهی",
-  "صدور",
-  "خدمات",
-  "وقایع حیاتی",
-  "ثبت احوال",
-  "اطلاعات جمعیت",
+  "ثبت", "آمار", "گواهی", "صدور", "خدمات", "وقایع حیاتی",
+  "ثبت احوال", "اطلاعات جمعیت",
 ];
-
-const MARRIAGE_DIVORCE_TERMS = [
-  "ازدواج",
-  "طلاق",
-];
-
+const MARRIAGE_DIVORCE_TERMS = ["ازدواج", "طلاق"];
 const NAME_CHANGE_TERMS = [
-  "تغییر نام",
-  "تغییر نام خانوادگی",
-  "اصلاح نام",
-  "اصلاح نام خانوادگی",
+  "تغییر نام", "تغییر نام خانوادگی", "اصلاح نام", "اصلاح نام خانوادگی",
 ];
-
 const NEAR_MATCH_TERMS = [
-  "ثبت احوال",
-  "سازمان ثبت احوال",
-  "کارت ملی",
-  "کارت هوشمند ملی",
-  "کارت ملی هوشمند",
-  "کد ملی",
-  "شماره ملی",
-  "شناسنامه",
-  "ولادت",
-  "تولد",
-  "وفات",
-  "فوت",
-  "ازدواج",
-  "طلاق",
-  "گواهی ولادت",
-  "گواهی فوت",
-  "ثبت وقایع حیاتی",
-  "پایگاه اطلاعات جمعیت",
-  "تغییر نام",
-  "تغییر نام خانوادگی",
-  "اصلاح نام",
-  "اصلاح نام خانوادگی",
+  "ثبت احوال", "سازمان ثبت احوال", "کارت ملی",
+  "کارت هوشمند ملی", "کارت ملی هوشمند", "کد ملی", "شماره ملی",
+  "شناسنامه", "ولادت", "تولد", "وفات", "فوت", "ازدواج", "طلاق",
+  "گواهی ولادت", "گواهی فوت", "ثبت وقایع حیاتی",
+  "پایگاه اطلاعات جمعیت", "تغییر نام", "تغییر نام خانوادگی",
+  "اصلاح نام", "اصلاح نام خانوادگی",
 ];
 
 function normalizeText(value: unknown): string {
   return String(value ?? "")
     .replace(/ي/g, "ی")
     .replace(/ك/g, "ک")
-    .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
-    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+    .replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
     .replace(/\u200c/g, " ")
     .replace(/[\u200b-\u200f\uFEFF]/g, "")
     .replace(/\s+/g, " ")
@@ -466,31 +255,15 @@ function decodeXml(value: string): string {
     .replace(/&gt;/gi, ">")
     .replace(/&#(\d+);/g, (_, digits: string) => {
       const code = Number(digits);
-
-      if (
-        !Number.isInteger(code) ||
-        code < 0 ||
-        code > 0x10ffff ||
-        (code >= 0xd800 && code <= 0xdfff)
-      ) {
-        return "";
-      }
-
-      return String.fromCodePoint(code);
+      return Number.isInteger(code) && code >= 0 &&
+        code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff)
+        ? String.fromCodePoint(code) : "";
     })
     .replace(/&#x([0-9a-f]+);/gi, (_, digits: string) => {
       const code = parseInt(digits, 16);
-
-      if (
-        !Number.isInteger(code) ||
-        code < 0 ||
-        code > 0x10ffff ||
-        (code >= 0xd800 && code <= 0xdfff)
-      ) {
-        return "";
-      }
-
-      return String.fromCodePoint(code);
+      return Number.isInteger(code) && code >= 0 &&
+        code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff)
+        ? String.fromCodePoint(code) : "";
     });
 }
 
@@ -506,10 +279,7 @@ function cleanText(value: unknown): string {
 
 function cleanNewsTitle(title: string): string {
   return title
-    .replace(
-      /\s*[-–—|،:]?\s*(?:(?:کد|شماره|شناسه)(?:\s+خبر)?)\s*[:：#-]?\s*[۰-۹0-9]+\s*$/i,
-      ""
-    )
+    .replace(/\s*[-–—|،:]?\s*(?:(?:کد|شماره|شناسه)(?:\s+خبر)?)\s*[:：#-]?\s*[۰-۹0-9]+\s*$/i, "")
     .replace(/\s*[\[(（]\s*[۰-۹0-9]{4,}\s*[\])）]\s*$/, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -521,14 +291,11 @@ function escapeRegExp(value: string): string {
 
 function extractTag(block: string, tag: string): string {
   const escaped = escapeRegExp(tag);
-
   const expression = new RegExp(
     `<${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escaped}\\s*>`,
     "i"
   );
-
   const match = block.match(expression);
-
   return match ? cleanText(match[1]) : "";
 }
 
@@ -539,61 +306,41 @@ function normalizeDomain(host: string): string {
 function isBlockedDomain(url: string): boolean {
   try {
     const hostname = normalizeDomain(new URL(url).hostname);
-
     return BLOCKED_DOMAINS.some(
-      (domain) =>
-        hostname === domain ||
-        hostname.endsWith(`.${domain}`)
+      domain => hostname === domain || hostname.endsWith(`.${domain}`)
     );
   } catch {
     return true;
   }
 }
 
-function isIranianNewsLink(
-  url: string,
-  source: SourceConfig
-): boolean {
+function isIranianNewsLink(url: string, source: SourceConfig): boolean {
   try {
     const parsed = new URL(url);
-
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      return false;
-    }
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
 
     const host = normalizeDomain(parsed.hostname);
+    if (isBlockedDomain(url)) return false;
 
-    if (isBlockedDomain(url)) {
-      return false;
-    }
-
-    const sourceUrls = [
+    const sourceHosts = [
       source.url,
       ...(source.fallbackUrls || []),
-    ];
-
-    const sourceHosts = sourceUrls
-      .map((value) => {
-        try {
-          return normalizeDomain(new URL(value).hostname);
-        } catch {
-          return "";
-        }
-      })
-      .filter(Boolean);
+    ].map(value => {
+      try {
+        return normalizeDomain(new URL(value).hostname);
+      } catch {
+        return "";
+      }
+    }).filter(Boolean);
 
     const belongsToSource = sourceHosts.some(
-      (sourceHost) =>
-        host === sourceHost ||
-        host.endsWith(`.${sourceHost}`)
+      sourceHost => host === sourceHost || host.endsWith(`.${sourceHost}`)
     );
 
-    return (
-      host.endsWith(".ir") ||
+    return host.endsWith(".ir") ||
       host === "tasnimnews.com" ||
       host.endsWith(".tasnimnews.com") ||
-      belongsToSource
-    );
+      belongsToSource;
   } catch {
     return false;
   }
@@ -602,28 +349,21 @@ function isIranianNewsLink(
 function containsTerm(text: string, term: string): boolean {
   const normalizedText = normalizeText(text);
   const normalizedTerm = normalizeText(term);
-
-  if (!normalizedText || !normalizedTerm) {
-    return false;
-  }
+  if (!normalizedText || !normalizedTerm) return false;
 
   const expression = new RegExp(
     `(^|[^\\p{L}\\p{N}])${escapeRegExp(normalizedTerm)}(?=$|[^\\p{L}\\p{N}])`,
     "u"
   );
-
   return expression.test(normalizedText);
 }
 
 function includesAny(text: string, terms: string[]): boolean {
-  return terms.some((term) => containsTerm(text, term));
+  return terms.some(term => containsTerm(text, term));
 }
 
-function findMatchedTerms(
-  text: string,
-  terms: string[]
-): string[] {
-  return terms.filter((term) => containsTerm(text, term));
+function findMatchedTerms(text: string, terms: string[]): string[] {
+  return terms.filter(term => containsTerm(text, term));
 }
 
 function uniqueTerms(terms: string[]): string[] {
@@ -641,8 +381,7 @@ function evaluateRegistrationNews(
   description = ""
 ): RelevanceDecision {
   const normalizedTitle = normalizeText(title);
-  const normalizedDescription = normalizeText(description);
-  const combined = `${normalizedTitle} ${normalizedDescription}`;
+  const combined = `${normalizedTitle} ${normalizeText(description)}`;
 
   const rejected: RelevanceDecision = {
     relevant: false,
@@ -651,45 +390,27 @@ function evaluateRegistrationNews(
   };
 
   if (!normalizedTitle) {
-    return {
-      ...rejected,
-      reason: "عنوان خبر خالی است",
-    };
+    return { ...rejected, reason: "عنوان خبر خالی است" };
   }
 
   if (includesAny(normalizedTitle, BLOCKED_TITLE_TERMS)) {
     return {
       ...rejected,
       reason: "عنوان شامل موضوع صریحاً نامرتبط است",
-      matchedTerms: findMatchedTerms(
-        normalizedTitle,
-        BLOCKED_TITLE_TERMS
-      ),
+      matchedTerms: findMatchedTerms(normalizedTitle, BLOCKED_TITLE_TERMS),
     };
   }
 
-  if (
-    includesAny(
-      normalizedTitle,
-      NON_REGISTRATION_CONTEXT_TERMS
-    )
-  ) {
+  if (includesAny(normalizedTitle, NON_REGISTRATION_CONTEXT_TERMS)) {
     return {
       ...rejected,
       reason: "عنوان در زمینه هویتی غیرمرتبط قرار دارد",
-      matchedTerms: findMatchedTerms(
-        normalizedTitle,
-        NON_REGISTRATION_CONTEXT_TERMS
-      ),
+      matchedTerms: findMatchedTerms(normalizedTitle, NON_REGISTRATION_CONTEXT_TERMS),
     };
   }
 
-  const strongTitleMatches = findMatchedTerms(
-    normalizedTitle,
-    STRONG_TERMS
-  );
-
-  if (strongTitleMatches.length > 0) {
+  const strongTitleMatches = findMatchedTerms(normalizedTitle, STRONG_TERMS);
+  if (strongTitleMatches.length) {
     return {
       relevant: true,
       reason: "وجود عبارت صریح ثبت احوال در عنوان",
@@ -697,12 +418,8 @@ function evaluateRegistrationNews(
     };
   }
 
-  const directTitleMatches = findMatchedTerms(
-    normalizedTitle,
-    DIRECT_SERVICE_TERMS
-  );
-
-  if (directTitleMatches.length > 0) {
+  const directTitleMatches = findMatchedTerms(normalizedTitle, DIRECT_SERVICE_TERMS);
+  if (directTitleMatches.length) {
     return {
       relevant: true,
       reason: "وجود خدمت مشخص ثبت احوال در عنوان",
@@ -710,158 +427,77 @@ function evaluateRegistrationNews(
     };
   }
 
-  const cardMatches = findMatchedTerms(
-    normalizedTitle,
-    CARD_ID_TERMS
-  );
-
-  const cardActions = findMatchedTerms(
-    normalizedTitle,
-    CARD_ACTION_TERMS
-  );
-
-  if (cardMatches.length > 0 && cardActions.length > 0) {
+  const cardMatches = findMatchedTerms(normalizedTitle, CARD_ID_TERMS);
+  const cardActions = findMatchedTerms(normalizedTitle, CARD_ACTION_TERMS);
+  if (cardMatches.length && cardActions.length) {
     return {
       relevant: true,
       reason: "موضوع کارت ملی همراه با اقدام مشخص",
-      matchedTerms: uniqueTerms([
-        ...cardMatches,
-        ...cardActions,
-      ]),
+      matchedTerms: uniqueTerms([...cardMatches, ...cardActions]),
     };
   }
 
-  const shenasnamehMatches = findMatchedTerms(
-    normalizedTitle,
-    ["شناسنامه"]
-  );
-
-  const shenasnamehActions = findMatchedTerms(
-    normalizedTitle,
-    SHENASNAMEH_ACTION_TERMS
-  );
-
-  if (
-    shenasnamehMatches.length > 0 &&
-    shenasnamehActions.length > 0
-  ) {
+  const shenasnamehMatches = findMatchedTerms(normalizedTitle, ["شناسنامه"]);
+  const shenasnamehActions = findMatchedTerms(normalizedTitle, SHENASNAMEH_ACTION_TERMS);
+  if (shenasnamehMatches.length && shenasnamehActions.length) {
     return {
       relevant: true,
       reason: "موضوع شناسنامه همراه با اقدام یا خدمت مشخص",
-      matchedTerms: uniqueTerms([
-        ...shenasnamehMatches,
-        ...shenasnamehActions,
-      ]),
+      matchedTerms: uniqueTerms([...shenasnamehMatches, ...shenasnamehActions]),
     };
   }
 
-  const birthDeathMatches = findMatchedTerms(
-    normalizedTitle,
-    BIRTH_DEATH_TERMS
-  );
-
-  const eventActions = findMatchedTerms(
-    normalizedTitle,
-    EVENT_ACTION_TERMS
-  );
-
-  if (
-    birthDeathMatches.length > 0 &&
-    eventActions.length > 0
-  ) {
+  const birthDeathMatches = findMatchedTerms(normalizedTitle, BIRTH_DEATH_TERMS);
+  const eventActions = findMatchedTerms(normalizedTitle, EVENT_ACTION_TERMS);
+  if (birthDeathMatches.length && eventActions.length) {
     return {
       relevant: true,
       reason: "موضوع ولادت یا وفات همراه با ثبت، آمار یا خدمت",
-      matchedTerms: uniqueTerms([
-        ...birthDeathMatches,
-        ...eventActions,
-      ]),
+      matchedTerms: uniqueTerms([...birthDeathMatches, ...eventActions]),
     };
   }
 
-  const marriageDivorceMatches = findMatchedTerms(
-    normalizedTitle,
-    MARRIAGE_DIVORCE_TERMS
-  );
-
-  const statisticsMatches = findMatchedTerms(
-    normalizedTitle,
-    ["آمار", "آمارهای", "آمار جدید"]
-  );
-
-  if (
-    marriageDivorceMatches.length > 0 &&
-    statisticsMatches.length > 0
-  ) {
+  const marriageDivorceMatches = findMatchedTerms(normalizedTitle, MARRIAGE_DIVORCE_TERMS);
+  const statisticsMatches = findMatchedTerms(normalizedTitle, ["آمار", "آمارهای", "آمار جدید"]);
+  if (marriageDivorceMatches.length && statisticsMatches.length) {
     return {
       relevant: true,
       reason: "عنوان شامل آمار ازدواج یا طلاق است",
-      matchedTerms: uniqueTerms([
-        ...marriageDivorceMatches,
-        ...statisticsMatches,
-      ]),
+      matchedTerms: uniqueTerms([...marriageDivorceMatches, ...statisticsMatches]),
     };
   }
 
-  const explicitRegistration = findMatchedTerms(
-    combined,
-    STRONG_TERMS
-  );
-
-  const nameChangeMatches = findMatchedTerms(
-    combined,
-    NAME_CHANGE_TERMS
-  );
-
-  if (
-    explicitRegistration.length > 0 &&
-    nameChangeMatches.length > 0
-  ) {
+  const explicitRegistration = findMatchedTerms(combined, STRONG_TERMS);
+  const nameChangeMatches = findMatchedTerms(combined, NAME_CHANGE_TERMS);
+  if (explicitRegistration.length && nameChangeMatches.length) {
     return {
       relevant: true,
       reason: "تغییر نام همراه با اشاره صریح به ثبت احوال",
-      matchedTerms: uniqueTerms([
-        ...explicitRegistration,
-        ...nameChangeMatches,
-      ]),
+      matchedTerms: uniqueTerms([...explicitRegistration, ...nameChangeMatches]),
     };
   }
 
-  if (explicitRegistration.length > 0) {
-    const serviceMatches = findMatchedTerms(
-      combined,
-      [
-        ...SECONDARY_TERMS,
-        ...DIRECT_SERVICE_TERMS,
-        ...CARD_ID_TERMS,
-        ...NAME_CHANGE_TERMS,
-      ]
-    );
-
-    if (serviceMatches.length > 0) {
+  if (explicitRegistration.length) {
+    const serviceMatches = findMatchedTerms(combined, [
+      ...SECONDARY_TERMS, ...DIRECT_SERVICE_TERMS,
+      ...CARD_ID_TERMS, ...NAME_CHANGE_TERMS,
+    ]);
+    if (serviceMatches.length) {
       return {
         relevant: true,
         reason: "اشاره به ثبت احوال و یک خدمت یا موضوع مرتبط در متن",
-        matchedTerms: uniqueTerms([
-          ...explicitRegistration,
-          ...serviceMatches,
-        ]),
+        matchedTerms: uniqueTerms([...explicitRegistration, ...serviceMatches]),
       };
     }
   }
 
   return {
     ...rejected,
-    matchedTerms: uniqueTerms(
-      findMatchedTerms(combined, NEAR_MATCH_TERMS)
-    ),
+    matchedTerms: uniqueTerms(findMatchedTerms(combined, NEAR_MATCH_TERMS)),
   };
 }
 
-function isRelevantNews(
-  title: string,
-  description = ""
-): boolean {
+function isRelevantNews(title: string, description = ""): boolean {
   return evaluateRegistrationNews(title, description).relevant;
 }
 
@@ -871,17 +507,12 @@ function detectResponseType(
 ): "rss" | "html" | "unknown" {
   const sample = body.replace(/^\uFEFF/, "").trimStart();
   const normalizedContentType = contentType.toLowerCase();
-
-  if (!sample) {
-    return "unknown";
-  }
+  if (!sample) return "unknown";
 
   if (
     /^\s*(?:<!doctype\s+html\b|<html\b)/i.test(sample) ||
     /<\s*(?:head|body)\b[^>]*>/i.test(sample)
-  ) {
-    return "html";
-  }
+  ) return "html";
 
   if (
     /<\?xml\b/i.test(sample) ||
@@ -889,26 +520,60 @@ function detectResponseType(
     /<feed\b/i.test(sample) ||
     /<rdf:RDF\b/i.test(sample) ||
     /<(?:item|entry)\b/i.test(sample)
-  ) {
-    return "rss";
-  }
+  ) return "rss";
 
   if (
     normalizedContentType.includes("text/html") ||
     normalizedContentType.includes("application/xhtml")
-  ) {
-    return "html";
-  }
+  ) return "html";
 
   return "unknown";
 }
 
 function getResponsePreview(body: string): string {
-  return body
-    .replace(/[\r\n\t]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 350);
+  return body.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 350);
+}
+
+/**
+ * لینک‌های RSS تسنیم را از HTML صفحه فهرست استخراج می‌کند.
+ * فقط دامنه‌های رسمی تسنیم و آدرس‌هایی که در مسیر یا query آن‌ها rss وجود دارد پذیرفته می‌شوند.
+ */
+function extractTasnimRssLinks(html: string, baseUrl: string): string[] {
+  const anchors = html.match(/<a\b[^>]*>/gi) || [];
+  const links = new Set<string>();
+
+  for (const anchor of anchors) {
+    const match = anchor.match(
+      /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i
+    );
+    const href = match?.[1] || match?.[2] || match?.[3];
+    if (!href) continue;
+
+    try {
+      const parsed = new URL(decodeXml(href.trim()), baseUrl);
+      const hostname = normalizeDomain(parsed.hostname);
+
+      const isTasnimDomain =
+        hostname === "tasnimnews.ir" ||
+        hostname.endsWith(".tasnimnews.ir") ||
+        hostname === "tasnimnews.com" ||
+        hostname.endsWith(".tasnimnews.com");
+
+      const hasRssPath = /rss/i.test(parsed.pathname) || /rss/i.test(parsed.search);
+
+      if (
+        isTasnimDomain &&
+        hasRssPath &&
+        ["http:", "https:"].includes(parsed.protocol)
+      ) {
+        links.add(parsed.toString());
+      }
+    } catch {
+      // لینک نامعتبر نادیده گرفته می‌شود.
+    }
+  }
+
+  return [...links].slice(0, 40);
 }
 
 async function fetchText(
@@ -918,34 +583,24 @@ async function fetchText(
 ): Promise<FetchTextResult> {
   const controller = new AbortController();
   const startedAt = Date.now();
-
   let currentPhase: "headers" | "body" = "headers";
-
-  const timeoutState: { phase: 0 | 1 | 2 } = {
-    phase: 0,
-  };
+  const timeoutState: { phase: 0 | 1 | 2 } = { phase: 0 };
 
   const timeout = setTimeout(() => {
-    timeoutState.phase =
-      currentPhase === "headers" ? 1 : 2;
-
+    timeoutState.phase = currentPhase === "headers" ? 1 : 2;
     controller.abort();
   }, timeoutMs);
 
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null =
-    null;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   try {
     const headers = new Headers({
       "User-Agent": USER_AGENT,
-      Accept:
-        "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
       "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
     });
 
-    new Headers(init.headers).forEach((value, key) => {
-      headers.set(key, value);
-    });
+    new Headers(init.headers).forEach((value, key) => headers.set(key, value));
 
     const response = await fetch(url, {
       ...init,
@@ -957,27 +612,12 @@ async function fetchText(
     });
 
     currentPhase = "body";
+    const contentType = response.headers.get("content-type") || "";
+    const contentLength = Number(response.headers.get("content-length") || 0);
 
-    const contentType =
-      response.headers.get("content-type") || "";
-
-    const contentLength = Number(
-      response.headers.get("content-length") || 0
-    );
-
-    if (
-      Number.isFinite(contentLength) &&
-      contentLength > MAX_RESPONSE_BYTES
-    ) {
-      try {
-        await response.body?.cancel();
-      } catch {
-        // Ignore cancellation errors.
-      }
-
-      throw new Error(
-        `Response exceeded ${MAX_RESPONSE_BYTES} byte limit`
-      );
+    if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
+      try { await response.body?.cancel(); } catch {}
+      throw new Error(`Response exceeded ${MAX_RESPONSE_BYTES} byte limit`);
     }
 
     if (!response.body) {
@@ -992,35 +632,22 @@ async function fetchText(
     }
 
     reader = response.body.getReader();
-
     const decoder = new TextDecoder("utf-8");
-
     let body = "";
     let totalBytes = 0;
 
     while (true) {
       const { done, value } = await reader.read();
-
       if (done) break;
       if (!value) continue;
-
       totalBytes += value.byteLength;
 
       if (totalBytes > MAX_RESPONSE_BYTES) {
-        try {
-          await reader.cancel();
-        } catch {
-          // Ignore cancellation errors.
-        }
-
-        throw new Error(
-          `Response exceeded ${MAX_RESPONSE_BYTES} byte limit`
-        );
+        try { await reader.cancel(); } catch {}
+        throw new Error(`Response exceeded ${MAX_RESPONSE_BYTES} byte limit`);
       }
 
-      body += decoder.decode(value, {
-        stream: true,
-      });
+      body += decoder.decode(value, { stream: true });
     }
 
     body += decoder.decode();
@@ -1035,41 +662,17 @@ async function fetchText(
     };
   } catch (error) {
     const elapsed = Date.now() - startedAt;
+    const originalMessage = error instanceof Error ? error.message : "Unknown fetch error";
 
-    const originalMessage =
-      error instanceof Error
-        ? error.message
-        : "Unknown fetch error";
+    if (timeoutState.phase === 1) throw new Error(`FETCH_TIMEOUT_HEADERS: ${elapsed}ms`);
+    if (timeoutState.phase === 2) throw new Error(`FETCH_TIMEOUT_BODY: ${elapsed}ms`);
 
-    if (timeoutState.phase === 1) {
-      throw new Error(
-        `FETCH_TIMEOUT_HEADERS: ${elapsed}ms`
-      );
-    }
-
-    if (timeoutState.phase === 2) {
-      throw new Error(
-        `FETCH_TIMEOUT_BODY: ${elapsed}ms`
-      );
-    }
-
-    const phaseName =
-      currentPhase === "headers"
-        ? "HEADERS"
-        : "BODY";
-
-    throw new Error(
-      `FETCH_FAILED_${phaseName}: ${elapsed}ms: ${originalMessage}`
-    );
+    const phaseName = currentPhase === "headers" ? "HEADERS" : "BODY";
+    throw new Error(`FETCH_FAILED_${phaseName}: ${elapsed}ms: ${originalMessage}`);
   } finally {
     if (reader) {
-      try {
-        reader.releaseLock();
-      } catch {
-        // Ignore release errors.
-      }
+      try { reader.releaseLock(); } catch {}
     }
-
     clearTimeout(timeout);
   }
 }
@@ -1091,10 +694,7 @@ async function probeIsnaHeaders(
   const targetUrl = "https://www.isna.ir/rss";
   const controller = new AbortController();
   const startedAt = Date.now();
-
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
     const response = await fetch(targetUrl, {
@@ -1103,8 +703,7 @@ async function probeIsnaHeaders(
       signal: controller.signal,
       headers: {
         "User-Agent": userAgent,
-        Accept:
-          "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
         "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
       },
     });
@@ -1113,18 +712,12 @@ async function probeIsnaHeaders(
       userAgentType,
       elapsedMs: Date.now() - startedAt,
       status: response.status,
-      contentType:
-        response.headers.get("content-type") || "",
+      contentType: response.headers.get("content-type") || "",
       finalUrl: response.url || targetUrl,
       redirected: response.redirected,
     };
 
-    try {
-      void response.body?.cancel();
-    } catch {
-      // Ignore cancellation errors.
-    }
-
+    try { void response.body?.cancel(); } catch {}
     return result;
   } catch (error) {
     return {
@@ -1134,12 +727,11 @@ async function probeIsnaHeaders(
       contentType: "",
       finalUrl: targetUrl,
       redirected: false,
-      error:
-        error instanceof Error
-          ? error.name === "AbortError"
-            ? `FETCH_TIMEOUT_HEADERS: ${Date.now() - startedAt}ms`
-            : error.message
-          : "Unknown fetch error",
+      error: error instanceof Error
+        ? error.name === "AbortError"
+          ? `FETCH_TIMEOUT_HEADERS: ${Date.now() - startedAt}ms`
+          : error.message
+        : "Unknown fetch error",
     };
   } finally {
     clearTimeout(timeout);
@@ -1148,66 +740,35 @@ async function probeIsnaHeaders(
 
 function parseGregorianDate(value: string): Date | null {
   const input = value.trim();
-
   if (!input) return null;
 
   const direct = new Date(input);
-
-  if (!Number.isNaN(direct.getTime())) {
-    return direct;
-  }
+  if (!Number.isNaN(direct.getTime())) return direct;
 
   const match = input.match(
     /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/
   );
-
   if (!match) return null;
 
   const [, y, m, d, h = "0", min = "0", sec = "0"] = match;
-
-  const result = new Date(
-    Date.UTC(
-      Number(y),
-      Number(m) - 1,
-      Number(d),
-      Number(h),
-      Number(min),
-      Number(sec)
-    )
-  );
+  const result = new Date(Date.UTC(
+    Number(y), Number(m) - 1, Number(d),
+    Number(h), Number(min), Number(sec)
+  ));
 
   if (
     result.getUTCFullYear() !== Number(y) ||
     result.getUTCMonth() !== Number(m) - 1 ||
     result.getUTCDate() !== Number(d)
-  ) {
-    return null;
-  }
+  ) return null;
 
   return Number.isNaN(result.getTime()) ? null : result;
 }
 
-function jalaliToGregorian(
-  jy: number,
-  jm: number,
-  jd: number
-): Date | null {
-  if (
-    jy < 1200 ||
-    jy > 1600 ||
-    jm < 1 ||
-    jm > 12 ||
-    jd < 1 ||
-    jd > 31
-  ) {
-    return null;
-  }
+function jalaliToGregorian(jy: number, jm: number, jd: number): Date | null {
+  if (jy < 1200 || jy > 1600 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return null;
 
-  const jalaliMonthDays = [
-    31, 31, 31, 31, 31, 31,
-    30, 30, 30, 30, 30, 29,
-  ];
-
+  const jalaliMonthDays = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
   if (jm <= 6 && jd > 31) return null;
   if (jm >= 7 && jm <= 11 && jd > 30) return null;
   if (jm === 12 && jd > 30) return null;
@@ -1215,35 +776,25 @@ function jalaliToGregorian(
   let year = jy - 979;
   const month = jm - 1;
   const day = jd - 1;
-
   let days =
     365 * year +
     Math.floor(year / 33) * 8 +
     Math.floor(((year % 33) + 3) / 4);
 
-  for (let i = 0; i < month; i++) {
-    days += jalaliMonthDays[i];
-  }
-
+  for (let i = 0; i < month; i++) days += jalaliMonthDays[i];
   days += day;
 
   let gDays = days + 79;
   let gy = 1600 + 400 * Math.floor(gDays / 146097);
-
   gDays %= 146097;
-
   let leap = true;
 
   if (gDays >= 36525) {
     gDays--;
     gy += 100 * Math.floor(gDays / 36524);
     gDays %= 36524;
-
-    if (gDays >= 365) {
-      gDays++;
-    } else {
-      leap = false;
-    }
+    if (gDays >= 365) gDays++;
+    else leap = false;
   }
 
   gy += 4 * Math.floor(gDays / 1461);
@@ -1256,30 +807,20 @@ function jalaliToGregorian(
     gDays %= 365;
   }
 
-  const gregorianMonthDays = [
-    31,
-    leap ? 29 : 28,
-    31, 30, 31, 30,
-    31, 31, 30, 31, 30, 31,
-  ];
-
+  const gregorianMonthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   let gm = 0;
-
   while (gm < 12 && gDays >= gregorianMonthDays[gm]) {
     gDays -= gregorianMonthDays[gm];
     gm++;
   }
 
   if (gm >= 12) return null;
-
   return new Date(Date.UTC(gy, gm, gDays + 1));
 }
 
 function parseDate(value: string): Date | null {
   const input = cleanText(value);
-
   if (!input) return null;
-
   const normalized = normalizeText(input);
 
   const numericJalali = normalized.match(
@@ -1292,23 +833,13 @@ function parseDate(value: string): Date | null {
       Number(numericJalali[2]),
       Number(numericJalali[3])
     );
-
     if (date) return date;
   }
 
   const months: Record<string, number> = {
-    فروردین: 1,
-    اردیبهشت: 2,
-    خرداد: 3,
-    تیر: 4,
-    مرداد: 5,
-    شهریور: 6,
-    مهر: 7,
-    آبان: 8,
-    آذر: 9,
-    دی: 10,
-    بهمن: 11,
-    اسفند: 12,
+    فروردین: 1, اردیبهشت: 2, خرداد: 3, تیر: 4,
+    مرداد: 5, شهریور: 6, مهر: 7, آبان: 8,
+    آذر: 9, دی: 10, بهمن: 11, اسفند: 12,
   };
 
   const textualJalali = normalized.match(
@@ -1321,49 +852,26 @@ function parseDate(value: string): Date | null {
       months[textualJalali[2]],
       Number(textualJalali[1])
     );
-
     if (date) return date;
   }
 
   return parseGregorianDate(input);
 }
 
-function getReportWindow(
-  now = new Date(),
-  preview = false
-): ReportWindow {
+function getReportWindow(now = new Date(), preview = false): ReportWindow {
   const iranNow = new Date(now.getTime() + IRAN_OFFSET_MS);
-
   const year = iranNow.getUTCFullYear();
   const month = iranNow.getUTCMonth();
   const day = iranNow.getUTCDate();
-
   const hour = iranNow.getUTCHours();
   const minute = iranNow.getUTCMinutes();
 
-  const todayBoundary = Date.UTC(
-    year,
-    month,
-    day,
-    22,
-    30,
-    0
-  );
+  const todayBoundary = Date.UTC(year, month, day, 22, 30, 0);
+  const beforeBoundary = hour < 22 || (hour === 22 && minute < 30);
 
-  const beforeBoundary =
-    hour < 22 || (hour === 22 && minute < 30);
-
-  let endLocal: number;
-
-  if (preview) {
-    endLocal = beforeBoundary
-      ? todayBoundary
-      : todayBoundary + 24 * 60 * 60 * 1000;
-  } else {
-    endLocal = beforeBoundary
-      ? todayBoundary - 24 * 60 * 60 * 1000
-      : todayBoundary;
-  }
+  const endLocal = preview
+    ? beforeBoundary ? todayBoundary : todayBoundary + 24 * 60 * 60 * 1000
+    : beforeBoundary ? todayBoundary - 24 * 60 * 60 * 1000 : todayBoundary;
 
   const startLocal = endLocal - 24 * 60 * 60 * 1000;
 
@@ -1378,37 +886,22 @@ function extractLink(block: string): string {
 
   for (const tag of links) {
     const href = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i);
-
     if (!href?.[1]) continue;
 
     const rel = tag.match(/\brel\s*=\s*["']([^"']+)["']/i);
     const relValue = (rel?.[1] || "").toLowerCase();
-
-    if (relValue && relValue !== "alternate") {
-      continue;
-    }
+    if (relValue && relValue !== "alternate") continue;
 
     return decodeXml(href[1]).trim();
   }
 
-  const rssLink = block.match(
-    /<link(?:\s[^>]*)?>([\s\S]*?)<\/link\s*>/i
-  );
+  const rssLink = block.match(/<link(?:\s[^>]*)?>([\s\S]*?)<\/link\s*>/i);
+  if (rssLink?.[1]) return cleanText(rssLink[1]);
 
-  if (rssLink?.[1]) {
-    return cleanText(rssLink[1]);
-  }
-
-  const guid = block.match(
-    /<guid(?:\s[^>]*)?>([\s\S]*?)<\/guid\s*>/i
-  );
-
+  const guid = block.match(/<guid(?:\s[^>]*)?>([\s\S]*?)<\/guid\s*>/i);
   if (guid?.[1]) {
     const value = cleanText(guid[1]);
-
-    if (/^https?:\/\//i.test(value)) {
-      return value;
-    }
+    if (/^https?:\/\//i.test(value)) return value;
   }
 
   return "";
@@ -1419,41 +912,28 @@ function parseFeed(
   source: SourceConfig,
   diagnostics?: SourceResult
 ): Candidate[] {
-  const blocks =
-    xml.match(
-      /<(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:item|entry)\s*>/gi
-    ) || [];
+  const blocks = xml.match(
+    /<(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:item|entry)\s*>/gi
+  ) || [];
 
   const result: Candidate[] = [];
 
   for (const block of blocks.slice(0, MAX_ITEMS_PER_FEED)) {
-    const title =
-      extractTag(block, "title") ||
-      extractTag(block, "media:title");
-
+    const title = extractTag(block, "title") || extractTag(block, "media:title");
     const link = extractLink(block);
 
     if (!title) {
-      if (diagnostics) {
-        diagnostics.rejectedMissingTitle++;
-      }
-
+      if (diagnostics) diagnostics.rejectedMissingTitle++;
       continue;
     }
 
     if (!link) {
-      if (diagnostics) {
-        diagnostics.rejectedMissingLink++;
-      }
-
+      if (diagnostics) diagnostics.rejectedMissingLink++;
       continue;
     }
 
     if (!isIranianNewsLink(link, source)) {
-      if (diagnostics) {
-        diagnostics.rejectedDomain++;
-      }
-
+      if (diagnostics) diagnostics.rejectedDomain++;
       continue;
     }
 
@@ -1470,64 +950,34 @@ function parseFeed(
       extractTag(block, "dc:date") ||
       extractTag(block, "date");
 
-    result.push({
-      title,
-      link,
-      description,
-      publishedAt: published,
-    });
+    result.push({ title, link, description, publishedAt: published });
   }
 
   return result;
 }
 
-function getKeywordSamples(
-  candidates: Candidate[]
-): SourceResult["keywordSamples"] {
+function getKeywordSamples(candidates: Candidate[]): SourceResult["keywordSamples"] {
   const keywords = [
-    ...STRONG_TERMS,
-    ...SECONDARY_TERMS,
-    ...DIRECT_SERVICE_TERMS,
-    "ولادت",
-    "تولد",
-    "وفات",
-    "فوت",
-    "ازدواج",
-    "طلاق",
+    ...STRONG_TERMS, ...SECONDARY_TERMS, ...DIRECT_SERVICE_TERMS,
+    "ولادت", "تولد", "وفات", "فوت", "ازدواج", "طلاق",
   ];
 
   return candidates
-    .filter((item) =>
-      includesAny(
-        `${item.title} ${item.description}`,
-        keywords
-      )
-    )
+    .filter(item => includesAny(`${item.title} ${item.description}`, keywords))
     .slice(0, 10)
-    .map((item) => ({
+    .map(item => ({
       title: item.title,
       publishedAt: item.publishedAt,
       description: item.description.slice(0, 240),
     }));
 }
 
-function getNearMatchSamples(
-  candidates: Candidate[]
-): SourceResult["nearMatchSamples"] {
+function getNearMatchSamples(candidates: Candidate[]): SourceResult["nearMatchSamples"] {
   const result: SourceResult["nearMatchSamples"] = [];
 
   for (const item of candidates) {
-    const analysis = evaluateRegistrationNews(
-      item.title,
-      item.description
-    );
-
-    if (
-      analysis.relevant ||
-      analysis.matchedTerms.length === 0
-    ) {
-      continue;
-    }
+    const analysis = evaluateRegistrationNews(item.title, item.description);
+    if (analysis.relevant || analysis.matchedTerms.length === 0) continue;
 
     result.push({
       title: item.title,
@@ -1535,28 +985,20 @@ function getNearMatchSamples(
       matchedTerms: analysis.matchedTerms,
     });
 
-    if (result.length >= 10) {
-      break;
-    }
+    if (result.length >= 10) break;
   }
 
   return result;
 }
 
-async function fetchFeedAttempt(
-  url: string
-): Promise<{
+async function fetchFeedAttempt(url: string): Promise<{
   response: FetchTextResult | null;
   responseType: "rss" | "html" | "unknown";
   attempt: NonNullable<SourceResult["attempts"]>[number];
 }> {
   try {
     const response = await fetchText(url);
-
-    const responseType = detectResponseType(
-      response.body,
-      response.contentType
-    );
+    const responseType = detectResponseType(response.body, response.contentType);
 
     const attempt = {
       url,
@@ -1566,22 +1008,12 @@ async function fetchFeedAttempt(
       redirected: response.redirected,
       responseType,
       preview: getResponsePreview(response.body),
-      ...(!response.ok
-        ? { error: `HTTP ${response.status}` }
-        : {}),
+      ...(!response.ok ? { error: `HTTP ${response.status}` } : {}),
     };
 
-    return {
-      response,
-      responseType,
-      attempt,
-    };
+    return { response, responseType, attempt };
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unknown fetch error";
-
+    const message = error instanceof Error ? error.message : "Unknown fetch error";
     return {
       response: null,
       responseType: "unknown",
@@ -1603,10 +1035,7 @@ async function fetchSource(
   source: SourceConfig,
   window: ReportWindow,
   diagnosticsMode = false
-): Promise<{
-  items: NewsItem[];
-  diagnostics: SourceResult;
-}> {
+): Promise<{ items: NewsItem[]; diagnostics: SourceResult }> {
   const diagnostics: SourceResult = {
     source: source.name,
     url: source.url,
@@ -1628,29 +1057,70 @@ async function fetchSource(
   };
 
   try {
+    // آرایه عمداً قابل‌تغییر است تا RSSهای کشف‌شده تسنیم نیز آزمایش شوند.
     const urlsToTry = [
       source.url,
       ...(source.fallbackUrls || []),
     ];
 
+    const attemptedUrls = new Set<string>();
     let selectedResponse: FetchTextResult | null = null;
-    let selectedResponseType: "rss" | "html" | "unknown" =
-      "unknown";
+    let selectedResponseType: "rss" | "html" | "unknown" = "unknown";
 
-    for (const attemptUrl of urlsToTry) {
+    for (let index = 0; index < urlsToTry.length; index++) {
+      const attemptUrl = urlsToTry[index];
+      if (attemptedUrls.has(attemptUrl)) continue;
+      attemptedUrls.add(attemptUrl);
+
       const result = await fetchFeedAttempt(attemptUrl);
-
       diagnostics.attempts!.push(result.attempt);
 
       diagnostics.status = result.response?.status ?? null;
-      diagnostics.contentType =
-        result.response?.contentType || "";
-      diagnostics.finalUrl =
-        result.response?.finalUrl || attemptUrl;
-      diagnostics.redirected =
-        result.response?.redirected || false;
+      diagnostics.contentType = result.response?.contentType || "";
+      diagnostics.finalUrl = result.response?.finalUrl || attemptUrl;
+      diagnostics.redirected = result.response?.redirected || false;
       diagnostics.responseType = result.responseType;
       diagnostics.responsePreview = result.attempt.preview;
+
+      // صفحه اصلی تسنیم ممکن است HTML باشد و لینک RSSها را معرفی کند.
+      // از همان پاسخ دریافت‌شده استفاده می‌شود و درخواست تکراری ایجاد نمی‌شود.
+      if (
+        diagnosticsMode &&
+        source.name === "تسنیم" &&
+        result.response &&
+        result.response.ok &&
+        result.responseType === "html"
+      ) {
+        const discoveredLinks = extractTasnimRssLinks(
+          result.response.body,
+          result.response.finalUrl
+        );
+
+        diagnostics.tasnimRssLinks = discoveredLinks;
+
+        for (const discoveredUrl of discoveredLinks) {
+          if (!attemptedUrls.has(discoveredUrl) && !urlsToTry.includes(discoveredUrl)) {
+            urlsToTry.push(discoveredUrl);
+          }
+        }
+      } else if (
+        source.name === "تسنیم" &&
+        result.response &&
+        result.response.ok &&
+        result.responseType === "html"
+      ) {
+        // در اجرای اصلی نیز RSSهای کشف‌شده باید قابل آزمایش باشند.
+        const discoveredLinks = extractTasnimRssLinks(
+          result.response.body,
+          result.response.finalUrl
+        );
+
+        for (const discoveredUrl of discoveredLinks) {
+          if (!attemptedUrls.has(discoveredUrl) && !urlsToTry.includes(discoveredUrl)) {
+            urlsToTry.push(discoveredUrl);
+          }
+        }
+      }
 
       if (
         result.response &&
@@ -1670,83 +1140,62 @@ async function fetchSource(
       if (lastAttempt?.error) {
         diagnostics.error = lastAttempt.error;
       } else if (lastAttempt?.responseType === "html") {
-        diagnostics.error =
-          "Expected RSS/XML but received HTML from all attempted URLs";
-      } else if (
-        lastAttempt?.status &&
-        lastAttempt.status >= 400
-      ) {
-        diagnostics.error =
-          `HTTP ${lastAttempt.status} from all attempted URLs`;
+        diagnostics.error = "Expected RSS/XML but received HTML from all attempted URLs";
+      } else if (lastAttempt?.status && lastAttempt.status >= 400) {
+        diagnostics.error = `HTTP ${lastAttempt.status} from all attempted URLs`;
       } else {
-        diagnostics.error =
-          "No valid RSS/XML response received from source";
+        diagnostics.error = "No valid RSS/XML response received from source";
       }
 
       return { items: [], diagnostics };
     }
 
     const body = selectedResponse.body;
-
     diagnostics.status = selectedResponse.status;
     diagnostics.contentType = selectedResponse.contentType;
     diagnostics.finalUrl = selectedResponse.finalUrl;
     diagnostics.redirected = selectedResponse.redirected;
     diagnostics.responseType = selectedResponseType;
     diagnostics.responsePreview = getResponsePreview(body);
+    diagnostics.rawItems = (body.match(/<(?:item|entry)\b/gi) || []).length;
 
-    diagnostics.rawItems =
-      (body.match(/<(?:item|entry)\b/gi) || []).length;
+    // نمونه خام اولین آیتم برنا فقط در حالت تشخیصی برگردانده می‌شود.
+    if (diagnosticsMode && source.name === "خبرگزاری برنا") {
+      const firstRawItem = body.match(
+        /<(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:item|entry)\s*>/i
+      );
 
-    const candidates = parseFeed(
-      body,
-      source,
-      diagnostics
-    );
+      diagnostics.rawItemSample = firstRawItem
+        ? firstRawItem[0].slice(0, 5000)
+        : "هیچ item یا entry در XML پیدا نشد.";
+    }
 
+    const candidates = parseFeed(body, source, diagnostics);
     diagnostics.parsedItems = candidates.length;
 
     if (diagnosticsMode) {
-      diagnostics.keywordSamples =
-        getKeywordSamples(candidates);
-
-      diagnostics.nearMatchSamples =
-        getNearMatchSamples(candidates);
-
-      diagnostics.samples = candidates
-        .slice(0, 5)
-        .map((item) => ({
-          title: item.title,
-          publishedAt: item.publishedAt,
-        }));
-
-      diagnostics.candidateSamples = candidates
-        .slice(0, 30)
-        .map((item) => ({
-          title: item.title,
-          publishedAt: item.publishedAt,
-          description: item.description.slice(0, 500),
-        }));
+      diagnostics.keywordSamples = getKeywordSamples(candidates);
+      diagnostics.nearMatchSamples = getNearMatchSamples(candidates);
+      diagnostics.samples = candidates.slice(0, 5).map(item => ({
+        title: item.title,
+        publishedAt: item.publishedAt,
+      }));
+      diagnostics.candidateSamples = candidates.slice(0, 30).map(item => ({
+        title: item.title,
+        publishedAt: item.publishedAt,
+        description: item.description.slice(0, 500),
+      }));
     }
 
     const items: NewsItem[] = [];
 
     for (const candidate of candidates) {
-      const analysis = evaluateRegistrationNews(
-        candidate.title,
-        candidate.description
-      );
-
-      if (!analysis.relevant) {
-        continue;
-      }
+      const analysis = evaluateRegistrationNews(candidate.title, candidate.description);
+      if (!analysis.relevant) continue;
 
       diagnostics.relevantItems++;
 
-      if (
-        diagnosticsMode &&
-        diagnostics.matchedSamples.length < 10
-      ) {
+      if (diagnosticsMode && diagnostics.matchedSamples.length < 10) {
         diagnostics.matchedSamples.push({
           title: candidate.title,
           publishedAt: candidate.publishedAt,
@@ -1755,19 +1204,13 @@ async function fetchSource(
         });
       }
 
-      const publishedDate = parseDate(
-        candidate.publishedAt
-      );
-
+      const publishedDate = parseDate(candidate.publishedAt);
       if (!publishedDate) {
         diagnostics.missingDate++;
         continue;
       }
 
-      if (
-        publishedDate < window.start ||
-        publishedDate >= window.end
-      ) {
+      if (publishedDate < window.start || publishedDate >= window.end) {
         diagnostics.outsideWindow++;
         continue;
       }
@@ -1783,11 +1226,7 @@ async function fetchSource(
 
     return { items, diagnostics };
   } catch (error) {
-    diagnostics.error =
-      error instanceof Error
-        ? error.message
-        : "Unknown error";
-
+    diagnostics.error = error instanceof Error ? error.message : "Unknown error";
     return { items: [], diagnostics };
   }
 }
@@ -1803,29 +1242,18 @@ async function fetchAllSourcesDiagnostics(
   concurrency = 4
 ): Promise<SourceResult[]> {
   const results: SourceResult[] = new Array(sources.length);
-
   let nextIndex = 0;
 
   async function worker(): Promise<void> {
     while (true) {
       const index = nextIndex++;
-
-      if (index >= sources.length) {
-        return;
-      }
+      if (index >= sources.length) return;
 
       const startedAt = Date.now();
 
       try {
-        const result = await fetchSource(
-          sources[index],
-          window,
-          true
-        );
-
-        result.diagnostics.elapsedMs =
-          Date.now() - startedAt;
-
+        const result = await fetchSource(sources[index], window, true);
+        result.diagnostics.elapsedMs = Date.now() - startedAt;
         results[index] = result.diagnostics;
       } catch (error) {
         results[index] = {
@@ -1841,10 +1269,9 @@ async function fetchAllSourcesDiagnostics(
           rejectedMissingTitle: 0,
           rejectedMissingLink: 0,
           rejectedDomain: 0,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Unknown diagnostics error",
+          error: error instanceof Error
+            ? error.message
+            : "Unknown diagnostics error",
           samples: [],
           candidateSamples: [],
           keywordSamples: [],
@@ -1862,14 +1289,12 @@ async function fetchAllSourcesDiagnostics(
   );
 
   await Promise.all(
-    Array.from(
-      { length: workerCount },
-      () => worker()
-    )
+    Array.from({ length: workerCount }, () => worker())
   );
 
   return results;
-  }
+}
+
 function deduplicate(items: NewsItem[]): NewsItem[] {
   const seen = new Set<string>();
   const result: NewsItem[] = [];
@@ -1882,9 +1307,7 @@ function deduplicate(items: NewsItem[]): NewsItem[] {
 
     const key = `${item.source}:${titleKey}`;
 
-    if (!titleKey || seen.has(key)) {
-      continue;
-    }
+    if (!titleKey || seen.has(key)) continue;
 
     seen.add(key);
     result.push(item);
@@ -1902,18 +1325,13 @@ async function getNews(
   diagnostics: SourceResult[];
 }> {
   const results = await Promise.all(
-    sources.map((source) =>
+    sources.map(source =>
       fetchSource(source, window, diagnosticsMode)
     )
   );
 
-  const diagnostics = results.map(
-    (result) => result.diagnostics
-  );
-
-  const allItems = results.flatMap(
-    (result) => result.items
-  );
+  const diagnostics = results.map(result => result.diagnostics);
+  const allItems = results.flatMap(result => result.items);
 
   const sortedItems = deduplicate(allItems).sort(
     (a, b) =>
@@ -1925,9 +1343,7 @@ async function getNews(
   const items: NewsItem[] = [];
 
   for (const item of sortedItems) {
-    if (items.length >= MAX_NEWS) {
-      break;
-    }
+    if (items.length >= MAX_NEWS) break;
 
     if (
       !selectedSources.has(item.source) &&
@@ -1954,13 +1370,9 @@ function normalizeSourceKey(value: string): string {
 
 function getSourceAliases(source: SourceConfig): string[] {
   const aliases = new Set<string>();
-
   aliases.add(normalizeSourceKey(source.name));
 
-  const urls = [
-    source.url,
-    ...(source.fallbackUrls || []),
-  ];
+  const urls = [source.url, ...(source.fallbackUrls || [])];
 
   for (const value of urls) {
     try {
@@ -1968,19 +1380,11 @@ function getSourceAliases(source: SourceConfig): string[] {
         .toLowerCase()
         .replace(/^www\./, "");
 
-      const withoutTld = hostname.replace(
-        /\.(ir|com|org|net)$/,
-        ""
-      );
+      const withoutTld = hostname.replace(/\.(ir|com|org|net)$/, "");
 
       aliases.add(normalizeSourceKey(hostname));
       aliases.add(normalizeSourceKey(withoutTld));
-
-      aliases.add(
-        normalizeSourceKey(
-          withoutTld.replace(/news$/, "")
-        )
-      );
+      aliases.add(normalizeSourceKey(withoutTld.replace(/news$/, "")));
     } catch {
       // URL نامعتبر به فهرست نام‌های جایگزین اضافه نمی‌شود.
     }
@@ -1991,16 +1395,11 @@ function getSourceAliases(source: SourceConfig): string[] {
 
 function findSource(value: string): SourceConfig | null {
   const requested = normalizeSourceKey(value);
+  if (!requested) return null;
 
-  if (!requested) {
-    return null;
-  }
-
-  return (
-    RSS_SOURCES.find((source) =>
-      getSourceAliases(source).includes(requested)
-    ) || null
-  );
+  return RSS_SOURCES.find(source =>
+    getSourceAliases(source).includes(requested)
+  ) || null;
 }
 
 /**
@@ -2014,18 +1413,14 @@ async function sendBaleMessage(
   const chatId = env.BALE_GROUP_ID;
 
   if (!token || !chatId) {
-    throw new Error(
-      "BALE_SMART_TOKEN or BALE_GROUP_ID is missing"
-    );
+    throw new Error("BALE_SMART_TOKEN or BALE_GROUP_ID is missing");
   }
 
   const response = await fetchText(
     `https://tapi.bale.ai/bot${token}/sendMessage`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
         text: message,
@@ -2050,7 +1445,9 @@ async function sendBaleMessage(
       typeof data === "object" &&
       data !== null &&
       "description" in data
-        ? String((data as { description?: unknown }).description || "")
+        ? String(
+            (data as { description?: unknown }).description || ""
+          )
         : "";
 
     throw new Error(
@@ -2068,7 +1465,9 @@ async function sendBaleMessage(
       typeof data === "object" &&
       data !== null &&
       "description" in data
-        ? String((data as { description?: unknown }).description || "")
+        ? String(
+            (data as { description?: unknown }).description || ""
+          )
         : "";
 
     throw new Error(
@@ -2087,9 +1486,7 @@ function formatNewsMessages(
   items: NewsItem[],
   window: ReportWindow
 ): string[] {
-  if (items.length === 0) {
-    return [];
-  }
+  if (items.length === 0) return [];
 
   const formatter = new Intl.DateTimeFormat("fa-IR", {
     timeZone: "Asia/Tehran",
@@ -2100,9 +1497,7 @@ function formatNewsMessages(
     minute: "2-digit",
   });
 
-  const mediaCount = new Set(
-    items.map((item) => item.source)
-  ).size;
+  const mediaCount = new Set(items.map(item => item.source)).size;
 
   const header = [
     "⚫️ ثبت احوال در رسانه‌ها",
@@ -2112,9 +1507,7 @@ function formatNewsMessages(
   ].join("\n");
 
   if (header.length > MAX_BALE_MESSAGE_LENGTH) {
-    throw new Error(
-      "Report header exceeds Bale message length limit"
-    );
+    throw new Error("Report header exceeds Bale message length limit");
   }
 
   const messages: string[] = [];
@@ -2155,9 +1548,7 @@ function formatNewsMessages(
   }
 
   if (currentBlocks.length > 0) {
-    messages.push(
-      `${header}\n\n${currentBlocks.join("\n\n")}`
-    );
+    messages.push(`${header}\n\n${currentBlocks.join("\n\n")}`);
   }
 
   return messages;
@@ -2176,7 +1567,6 @@ export async function GET(request: Request) {
     if (url.searchParams.get("probe") === "isna") {
       const [currentUA, browserUA] = await Promise.all([
         probeIsnaHeaders(USER_AGENT, "current"),
-
         probeIsnaHeaders(
           "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
           "android_chrome"
@@ -2217,19 +1607,18 @@ export async function GET(request: Request) {
     ) {
       const startedAt = Date.now();
 
-      const diagnostics =
-        await fetchAllSourcesDiagnostics(
-          RSS_SOURCES,
-          window,
-          4
-        );
+      const diagnostics = await fetchAllSourcesDiagnostics(
+        RSS_SOURCES,
+        window,
+        4
+      );
 
       const stats = {
         totalSources: RSS_SOURCES.length,
         checkedSources: diagnostics.length,
 
         successfulSources: diagnostics.filter(
-          (item) =>
+          item =>
             item.status !== null &&
             item.status >= 200 &&
             item.status < 300 &&
@@ -2238,14 +1627,13 @@ export async function GET(request: Request) {
         ).length,
 
         failedSources: diagnostics.filter(
-          (item) => Boolean(item.error)
+          item => Boolean(item.error)
         ).length,
 
         timedOutSources: diagnostics.filter(
-          (item) =>
+          item =>
             (item.attempts || []).some(
-              (attempt) =>
-                attempt.error?.includes("FETCH_TIMEOUT")
+              attempt => attempt.error?.includes("FETCH_TIMEOUT")
             )
         ).length,
 
@@ -2291,12 +1679,9 @@ export async function GET(request: Request) {
 
         requestConcurrency: 4,
         elapsedMs: Date.now() - startedAt,
-
         previewNextWindow,
-
         windowStart: window.start.toISOString(),
         windowEnd: window.end.toISOString(),
-
         maximumResponseBytes: MAX_RESPONSE_BYTES,
         maximumItemsPerFeed: MAX_ITEMS_PER_FEED,
       };
@@ -2341,7 +1726,7 @@ export async function GET(request: Request) {
             maximumResponseBytes: MAX_RESPONSE_BYTES,
             maximumItemsPerFeed: MAX_ITEMS_PER_FEED,
           },
-          availableSources: RSS_SOURCES.map((source) => ({
+          availableSources: RSS_SOURCES.map(source => ({
             name: source.name,
             url: source.url,
             fallbackUrls: source.fallbackUrls || [],
@@ -2363,9 +1748,7 @@ export async function GET(request: Request) {
             ok: false,
             error: "منبع در فهرست RSS تعریف نشده است.",
             requestedSource,
-            availableSources: RSS_SOURCES.map(
-              (source) => source.name
-            ),
+            availableSources: RSS_SOURCES.map(source => source.name),
           },
           {
             status: 400,
@@ -2385,24 +1768,28 @@ export async function GET(request: Request) {
     );
 
     const mediaCount = new Set(
-      items.map((item) => item.source)
+      items.map(item => item.source)
     ).size;
 
     const stats = {
       totalSources: RSS_SOURCES.length,
       checkedSources: sourcesToCheck.length,
+
       totalFetched: diagnostics.reduce(
         (sum, item) => sum + item.rawItems,
         0
       ),
+
       parsedItems: diagnostics.reduce(
         (sum, item) => sum + item.parsedItems,
         0
       ),
+
       relevantBeforeWindow: diagnostics.reduce(
         (sum, item) => sum + item.relevantItems,
         0
       ),
+
       selected: items.length,
       mediaCount,
       minimumMedia: MIN_MEDIA_TO_SEND,
@@ -2413,23 +1800,29 @@ export async function GET(request: Request) {
       previewNextWindow,
       windowStart: window.start.toISOString(),
       windowEnd: window.end.toISOString(),
+
       noDate: diagnostics.reduce(
         (sum, item) => sum + item.missingDate,
         0
       ),
+
       outsideWindow: diagnostics.reduce(
         (sum, item) => sum + item.outsideWindow,
         0
       ),
+
       windowItems: items.length,
+
       rejectedMissingTitle: diagnostics.reduce(
         (sum, item) => sum + item.rejectedMissingTitle,
         0
       ),
+
       rejectedMissingLink: diagnostics.reduce(
         (sum, item) => sum + item.rejectedMissingLink,
         0
       ),
+
       rejectedDomain: diagnostics.reduce(
         (sum, item) => sum + item.rejectedDomain,
         0
@@ -2515,10 +1908,9 @@ export async function GET(request: Request) {
             sentMessages,
             totalMessages: messages.length,
             failedMessage: index + 1,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Unknown Bale delivery error",
+            error: error instanceof Error
+              ? error.message
+              : "Unknown Bale delivery error",
             stats,
           },
           {
@@ -2545,10 +1937,9 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown error",
+        error: error instanceof Error
+          ? error.message
+          : "Unknown error",
       },
       {
         status: 500,
