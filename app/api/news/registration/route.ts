@@ -911,10 +911,15 @@ async function fetchText(
   timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<FetchTextResult> {
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    timeoutMs
-  );
+  const startedAt = Date.now();
+
+  let phase: "headers" | "body" = "headers";
+  let timedOutPhase: "headers" | "body" | null = null;
+
+  const timeout = setTimeout(() => {
+    timedOutPhase = phase;
+    controller.abort();
+  }, timeoutMs);
 
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
@@ -932,6 +937,8 @@ async function fetchText(
       },
     });
 
+    phase = "body";
+
     const contentType =
       response.headers.get("content-type") || "";
 
@@ -946,7 +953,7 @@ async function fetchText(
       try {
         await response.body?.cancel();
       } catch {
-        // لغو پاسخ در صورت بسته‌شدن stream ممکن است خطا بدهد.
+        // Ignore cancellation errors.
       }
 
       throw new Error(
@@ -974,13 +981,8 @@ async function fetchText(
     while (true) {
       const { done, value } = await reader.read();
 
-      if (done) {
-        break;
-      }
-
-      if (!value) {
-        continue;
-      }
+      if (done) break;
+      if (!value) continue;
 
       totalBytes += value.byteLength;
 
@@ -988,7 +990,7 @@ async function fetchText(
         try {
           await reader.cancel();
         } catch {
-          // خطای احتمالی لغو stream نادیده گرفته می‌شود.
+          // Ignore cancellation errors.
         }
 
         throw new Error(
@@ -1009,12 +1011,29 @@ async function fetchText(
       finalUrl: response.url || url,
       redirected: response.redirected,
     };
+  } catch (error) {
+    const elapsed = Date.now() - startedAt;
+
+    const originalMessage =
+      error instanceof Error
+        ? error.message
+        : "Unknown fetch error";
+
+    if (timedOutPhase) {
+      throw new Error(
+        `FETCH_TIMEOUT_${timedOutPhase.toUpperCase()}: ${elapsed}ms`
+      );
+    }
+
+    throw new Error(
+      `FETCH_FAILED_${phase.toUpperCase()}: ${elapsed}ms: ${originalMessage}`
+    );
   } finally {
     if (reader) {
       try {
         reader.releaseLock();
       } catch {
-        // ممکن است stream قبلاً لغو شده باشد.
+        // Ignore release errors.
       }
     }
 
