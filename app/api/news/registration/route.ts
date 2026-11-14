@@ -1062,6 +1062,79 @@ async function fetchText(
   }
 }
 
+type ProbeResult = {
+  userAgentType: "current" | "android_chrome";
+  elapsedMs: number;
+  status: number | null;
+  contentType: string;
+  finalUrl: string;
+  redirected: boolean;
+  error?: string;
+};
+
+async function probeIsnaHeaders(
+  userAgent: string,
+  userAgentType: ProbeResult["userAgentType"]
+): Promise<ProbeResult> {
+  const targetUrl = "https://www.isna.ir/rss";
+  const controller = new AbortController();
+  const startedAt = Date.now();
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": userAgent,
+        Accept:
+          "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
+      },
+    });
+
+    const result: ProbeResult = {
+      userAgentType,
+      elapsedMs: Date.now() - startedAt,
+      status: response.status,
+      contentType:
+        response.headers.get("content-type") || "",
+      finalUrl: response.url || targetUrl,
+      redirected: response.redirected,
+    };
+
+    // بدنه RSS در این آزمایش لازم نیست.
+    try {
+      void response.body?.cancel();
+    } catch {
+      // Ignore cancellation errors.
+    }
+
+    return result;
+  } catch (error) {
+    return {
+      userAgentType,
+      elapsedMs: Date.now() - startedAt,
+      status: null,
+      contentType: "",
+      finalUrl: targetUrl,
+      redirected: false,
+      error:
+        error instanceof Error
+          ? error.name === "AbortError"
+            ? `FETCH_TIMEOUT_HEADERS: ${Date.now() - startedAt}ms`
+            : error.message
+          : "Unknown fetch error",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function parseGregorianDate(value: string): Date | null {
   const input = value.trim();
 
@@ -2001,6 +2074,28 @@ function noCacheHeaders() {
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
+
+    if (url.searchParams.get("probe") === "isna") {
+      const [currentUA, browserUA] = await Promise.all([
+        probeIsnaHeaders(USER_AGENT, "current"),
+
+        probeIsnaHeaders(
+          "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+          "android_chrome"
+        ),
+      ]);
+
+      return NextResponse.json(
+        {
+          ok: true,
+          diagnosticsOnly: true,
+          probe: "isna-user-agent-comparison",
+          target: "https://www.isna.ir/rss",
+          results: [currentUA, browserUA],
+        },
+        { headers: noCacheHeaders() }
+      );
+    }
 
     const diagnosticsOnly =
       url.searchParams.get("diagnostics") === "1";
