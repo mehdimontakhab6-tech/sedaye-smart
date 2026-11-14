@@ -913,18 +913,18 @@ async function fetchText(
   const controller = new AbortController();
   const startedAt = Date.now();
 
+  let currentPhase: "headers" | "body" = "headers";
+
   const timeoutState: { phase: 0 | 1 | 2 } = {
     phase: 0,
   };
 
   const timeout = setTimeout(() => {
     timeoutState.phase =
-      timeoutState.phase === 0 ? 1 : 2;
+      currentPhase === "headers" ? 1 : 2;
 
     controller.abort();
   }, timeoutMs);
-
-  let currentPhase: "headers" | "body" = "headers";
 
   let reader: ReadableStreamDefaultReader<Uint8Array> | null =
     null;
@@ -943,6 +943,7 @@ async function fetchText(
       },
     });
 
+    // دریافت Headerها تمام شده و خواندن بدنه آغاز می‌شود.
     currentPhase = "body";
 
     const contentType =
