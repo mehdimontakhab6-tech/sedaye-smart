@@ -13,8 +13,7 @@ const MAX_BALE_MESSAGE_LENGTH = 3500;
 const IRAN_OFFSET_MS = 3.5 * 60 * 60 * 1000;
 
 const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-
+  "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36";
 type CloudflareEnv = {
   BALE_SMART_TOKEN?: string;
   BALE_GROUP_ID?: string;
