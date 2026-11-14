@@ -1276,6 +1276,37 @@ async function sendToBale(
     .replace(/[\p{S}\p{Z}\s_#]+$/gu, "")
     .replace(/[،؛:!?؟]+$/gu, "")
     .trim();
+  
+  // حذف لینک‌های انتهایی کپشن، چه در خط مستقل و چه چسبیده به متن
+  const trailingLinkPattern =
+    /(?:https?:\/\/|www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+\.[a-z]{2,}(?:\/[^\s]*)?/iu;
+
+  // حذف لینک در انتهای خط مستقل
+  cleanedCaption = cleanedCaption.replace(
+    /^[ \t]*(?:https?:\/\/|www\.)\S+[ \t]*$/gim,
+    "",
+  );
+
+  // حذف لینک در انتهای آخرین جمله
+  cleanedCaption = cleanedCaption.replace(
+    /[ \t]+(?:https?:\/\/|www\.)\S+[ \t]*$/iu,
+    "",
+  );
+
+  // حذف دامنه‌های بدون پیشوند https
+  cleanedCaption = cleanedCaption.replace(
+    new RegExp(
+      "[ \\\\t]+" + trailingLinkPattern.source + "[ \\\\t]*$",
+      "iu",
+    ),
+    "",
+  );
+
+  // پاک‌سازی فاصله و خطوط خالی انتهایی
+  cleanedCaption = cleanedCaption
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
   const completeText = cleanedCaption
     ? `${TITLE}\n\n${cleanedCaption}`
