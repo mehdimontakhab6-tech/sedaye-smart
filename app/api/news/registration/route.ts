@@ -104,20 +104,59 @@ type FetchTextResult = {
 
 const RSS_SOURCES: SourceConfig[] = [
   { name: "ایرنا", url: "https://www.irna.ir/rss" },
+
   { name: "ایسنا", url: "https://www.isna.ir/rss" },
+
   { name: "مهر", url: "https://www.mehrnews.com/rss" },
+
   { name: "ایلنا", url: "https://www.ilna.ir/rss" },
-  { name: "باشگاه خبرنگاران جوان", url: "https://www.yjc.ir/fa/rss/allnews" },
+
+  {
+    name: "باشگاه خبرنگاران جوان",
+    url: "https://www.yjc.ir/fa/rss/allnews",
+  },
+
   { name: "خبرآنلاین", url: "https://www.khabaronline.ir/rss" },
-  { name: "تابناک", url: "https://www.tabnak.ir/fa/rss/allnews" },
-  { name: "عصر ایران", url: "https://www.asriran.com/fa/rss/allnews" },
-  { name: "همشهری آنلاین", url: "https://www.hamshahrionline.ir/rss" },
-  { name: "جام جم آنلاین", url: "https://jamejamonline.ir/fa/rss/allnews" },
-  { name: "میزان", url: "https://www.mizanonline.ir/fa/rss/allnews" },
-  { name: "شبکه خبر", url: "https://www.iribnews.ir/fa/rss/allnews" },
+
+  { name: "تابناک", url: "https://www.tabnak.ir/rss/" },
+
+  {
+    name: "عصر ایران",
+    url: "https://www.asriran.com/fa/rss/allnews",
+  },
+
+  {
+    name: "همشهری آنلاین",
+    url: "https://www.hamshahrionline.ir/rss",
+  },
+
+  {
+    name: "جام جم آنلاین",
+    url: "https://jamejamonline.ir/fa/rss/allnews",
+  },
+
+  {
+    name: "میزان",
+    url: "https://www.mizanonline.ir/fa/rss/allnews",
+  },
+
+  {
+    name: "شبکه خبر",
+    url: "https://www.irib-news.ir/fa/rss/allnews",
+  },
+
   { name: "شانا", url: "https://www.shana.ir/rss" },
-  { name: "ایکنا", url: "https://iqna.ir/fa/rss" },
-  { name: "انتخاب", url: "https://www.entekhab.ir/fa/rss/allnews" },
+
+  {
+    name: "ایکنا",
+    url: "https://iqna.ir/fa/rss/allnews",
+  },
+
+  {
+    name: "انتخاب",
+    url: "https://www.entekhab.ir/fa/rss/allnews",
+  },
+
   {
     name: "تسنیم",
     url: "https://www.tasnimnews.ir/fa/rss",
@@ -125,23 +164,28 @@ const RSS_SOURCES: SourceConfig[] = [
       "https://www.tasnimnews.com/fa/rss/feed/0/8/0/%D9%85%D9%87%D9%85%D8%AA%D8%B1%DB%8C%D9%86-%D8%A7%D8%AE%D8%A8%D8%A7%D8%B1-%D8%AA%D8%B3%D9%86%DB%8C%D9%85",
     ],
   },
-  { name: "خبرگزاری دانشجو", url: "https://snn.ir/fa/rss/allnews" },
-  { name: "ایمنا", url: "https://www.imna.ir/rss" },
-  { name: "خبرگزاری آنا", url: "https://ana.ir/fa/rss/allnews" },
-  { name: "ایسکانیوز", url: "https://www.iscanews.ir/rss" },
-];
 
-const BLOCKED_DOMAINS = [
-  "reuters.com",
-  "apnews.com",
-  "bbc.com",
-  "bbc.co.uk",
-  "cnn.com",
-  "nytimes.com",
-  "theguardian.com",
-  "aljazeera.com",
-  "dw.com",
-  "voanews.com",
+  {
+    name: "خبرگزاری دانشجو",
+    url: "https://snn.ir/fa/rss/allnews",
+  },
+
+  { name: "ایمنا", url: "https://www.imna.ir/rss" },
+
+  {
+    name: "خبرگزاری آنا",
+    url: "https://ana.ir/fa/rss/allnews",
+  },
+
+  {
+    name: "ایسکانیوز",
+    url: "https://www.iscanews.ir/rss",
+  },
+
+  {
+    name: "خبرگزاری برنا",
+    url: "https://www.borna.news/fa/rss/allnews",
+  },
 ];
 
 const STRONG_TERMS = [
