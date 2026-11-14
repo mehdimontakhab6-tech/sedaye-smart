@@ -1696,7 +1696,7 @@ body {
 
     <section class="events glass">
       <div class="section-title">
-        📌 رویدادها و مناسبت‌ها
+        📌 مناسبت‌ها
       </div>
 
       <div class="events-grid">
@@ -2070,4 +2070,4 @@ const internationalEvents = internationalEventCandidates.filter(
       }
     );
   }
-  }
+}
