@@ -45,6 +45,7 @@ type SourceResult = {
   source: string;
   url: string;
   status: number | null;
+  elapsedMs?: number;
   rawItems: number;
   parsedItems: number;
   relevantItems: number;
@@ -955,7 +956,6 @@ async function fetchText(
       headers,
     });
 
-    // دریافت Headerها تمام شده و خواندن بدنه آغاز می‌شود.
     currentPhase = "body";
 
     const contentType =
@@ -1119,7 +1119,6 @@ async function probeIsnaHeaders(
       redirected: response.redirected,
     };
 
-    // بدنه RSS در این آزمایش لازم نیست.
     try {
       void response.body?.cancel();
     } catch {
@@ -1793,6 +1792,84 @@ async function fetchSource(
   }
 }
 
+/**
+ * بررسی گروهی تمام منابع RSS با محدودیت تعداد درخواست‌های هم‌زمان.
+ * این تابع فقط دریافت و پردازش RSS را انجام می‌دهد و هیچ پیامی
+ * به Bale ارسال نمی‌کند.
+ */
+async function fetchAllSourcesDiagnostics(
+  sources: SourceConfig[],
+  window: ReportWindow,
+  concurrency = 4
+): Promise<SourceResult[]> {
+  const results: SourceResult[] = new Array(sources.length);
+
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++;
+
+      if (index >= sources.length) {
+        return;
+      }
+
+      const startedAt = Date.now();
+
+      try {
+        const result = await fetchSource(
+          sources[index],
+          window,
+          true
+        );
+
+        result.diagnostics.elapsedMs =
+          Date.now() - startedAt;
+
+        results[index] = result.diagnostics;
+      } catch (error) {
+        results[index] = {
+          source: sources[index].name,
+          url: sources[index].url,
+          status: null,
+          elapsedMs: Date.now() - startedAt,
+          rawItems: 0,
+          parsedItems: 0,
+          relevantItems: 0,
+          missingDate: 0,
+          outsideWindow: 0,
+          rejectedMissingTitle: 0,
+          rejectedMissingLink: 0,
+          rejectedDomain: 0,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unknown diagnostics error",
+          samples: [],
+          candidateSamples: [],
+          keywordSamples: [],
+          matchedSamples: [],
+          nearMatchSamples: [],
+          attempts: [],
+        };
+      }
+    }
+  }
+
+  const workerCount = Math.min(
+    Math.max(1, concurrency),
+    sources.length
+  );
+
+  await Promise.all(
+    Array.from(
+      { length: workerCount },
+      () => worker()
+    )
+  );
+
+  return results;
+  }
 function deduplicate(items: NewsItem[]): NewsItem[] {
   const seen = new Set<string>();
   const result: NewsItem[] = [];
@@ -2133,6 +2210,111 @@ export async function GET(request: Request) {
       previewNextWindow
     );
 
+    // بررسی گروهی تمام منابع RSS؛ بدون ارسال پیام به Bale
+    if (
+      diagnosticsOnly &&
+      url.searchParams.get("all") === "1"
+    ) {
+      const startedAt = Date.now();
+
+      const diagnostics =
+        await fetchAllSourcesDiagnostics(
+          RSS_SOURCES,
+          window,
+          4
+        );
+
+      const stats = {
+        totalSources: RSS_SOURCES.length,
+        checkedSources: diagnostics.length,
+
+        successfulSources: diagnostics.filter(
+          (item) =>
+            item.status !== null &&
+            item.status >= 200 &&
+            item.status < 300 &&
+            item.responseType === "rss" &&
+            !item.error
+        ).length,
+
+        failedSources: diagnostics.filter(
+          (item) => Boolean(item.error)
+        ).length,
+
+        timedOutSources: diagnostics.filter(
+          (item) =>
+            (item.attempts || []).some(
+              (attempt) =>
+                attempt.error?.includes("FETCH_TIMEOUT")
+            )
+        ).length,
+
+        totalFetched: diagnostics.reduce(
+          (sum, item) => sum + item.rawItems,
+          0
+        ),
+
+        parsedItems: diagnostics.reduce(
+          (sum, item) => sum + item.parsedItems,
+          0
+        ),
+
+        relevantBeforeWindow: diagnostics.reduce(
+          (sum, item) => sum + item.relevantItems,
+          0
+        ),
+
+        missingDate: diagnostics.reduce(
+          (sum, item) => sum + item.missingDate,
+          0
+        ),
+
+        outsideWindow: diagnostics.reduce(
+          (sum, item) => sum + item.outsideWindow,
+          0
+        ),
+
+        rejectedMissingTitle: diagnostics.reduce(
+          (sum, item) => sum + item.rejectedMissingTitle,
+          0
+        ),
+
+        rejectedMissingLink: diagnostics.reduce(
+          (sum, item) => sum + item.rejectedMissingLink,
+          0
+        ),
+
+        rejectedDomain: diagnostics.reduce(
+          (sum, item) => sum + item.rejectedDomain,
+          0
+        ),
+
+        requestConcurrency: 4,
+        elapsedMs: Date.now() - startedAt,
+
+        previewNextWindow,
+
+        windowStart: window.start.toISOString(),
+        windowEnd: window.end.toISOString(),
+
+        maximumResponseBytes: MAX_RESPONSE_BYTES,
+        maximumItemsPerFeed: MAX_ITEMS_PER_FEED,
+      };
+
+      return NextResponse.json(
+        {
+          ok: true,
+          diagnosticsOnly: true,
+          fetched: true,
+          mode: "all-sources",
+          sentToBale: false,
+          stats,
+          sources: diagnostics,
+        },
+        { headers: noCacheHeaders() }
+      );
+    }
+
     if (diagnosticsOnly && !requestedSource) {
       return NextResponse.json(
         {
@@ -2140,8 +2322,9 @@ export async function GET(request: Request) {
           diagnosticsOnly: true,
           fetched: false,
           message:
-            "برای بررسی یک منبع، پارامتر source را مشخص کنید.",
+            "برای بررسی یک منبع، پارامتر source را مشخص کنید؛ برای بررسی همه منابع از all=1 استفاده کنید.",
           usage: [
+            "?diagnostics=1&all=1",
             "?diagnostics=1&source=ایرنا",
             "?diagnostics=1&source=irna",
             "?diagnostics=1&source=tasnim",
