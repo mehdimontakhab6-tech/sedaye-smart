@@ -1394,21 +1394,57 @@ console.info("[Instagram] Caption integrity audit", {
     Array.from(firstPart.remaining).length > 0,
 });
 
-  const firstResponse = await fetch(
-    `https://tapi.bale.ai/bot${token}/${method}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+  
+  const baleMediaStartedAt = Date.now();
+
+  console.info("[Instagram][Bale] Media upload started", {
+    username,
+    postId: post.id,
+    mediaType: post.mediaType,
+    method,
+    captionLength: Array.from(mediaCaption).length,
+  });
+
+  let firstResponse: Response;
+
+  try {
+    firstResponse = await fetch(
+      `https://tapi.bale.ai/bot${token}/${method}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          [mediaField]: post.mediaUrl,
+          caption: mediaCaption,
+        }),
+        signal: AbortSignal.timeout(35000),
       },
-      body: JSON.stringify({
-        chat_id: chatId,
-        [mediaField]: post.mediaUrl,
-        caption: mediaCaption,
-      }),
-      signal: AbortSignal.timeout(25000),
-    },
-  );
+    );
+
+    console.info("[Instagram][Bale] Media response received", {
+      username,
+      postId: post.id,
+      mediaType: post.mediaType,
+      httpStatus: firstResponse.status,
+      durationMs: Date.now() - baleMediaStartedAt,
+    });
+  } catch (error) {
+    console.error("[Instagram][Bale] Media upload failed", {
+      username,
+      postId: post.id,
+      mediaType: post.mediaType,
+      durationMs: Date.now() - baleMediaStartedAt,
+      errorName:
+        error instanceof Error ? error.name : "Unknown",
+      errorMessage:
+        error instanceof Error ? error.message : String(error),
+    });
+
+    throw error;
+  }
 
   const firstResult = await firstResponse
     .json()
