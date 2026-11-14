@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
 
-const MAX_NEWS = 20;
+const MAX_NEWS = 30;
 const MIN_MEDIA_TO_SEND = 1;
 const MAX_MEDIA_TO_SEND = 20;
 const MAX_RESPONSE_BYTES = 256 * 1024;
@@ -14,6 +14,7 @@ const IRAN_OFFSET_MS = 3.5 * 60 * 60 * 1000;
 
 const USER_AGENT =
   "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36";
+
 type CloudflareEnv = {
   BALE_SMART_TOKEN?: string;
   BALE_GROUP_ID?: string;
@@ -69,6 +70,11 @@ type SourceResult = {
     error?: string;
   }>;
   samples: Array<{ title: string; publishedAt: string }>;
+  candidateSamples: Array<{
+    title: string;
+    publishedAt: string;
+    description: string;
+  }>;
   keywordSamples: Array<{
     title: string;
     publishedAt: string;
@@ -930,24 +936,24 @@ async function fetchText(
 
   try {
     const headers = new Headers({
-  "User-Agent": USER_AGENT,
-  Accept:
-    "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-  "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
-});
+      "User-Agent": USER_AGENT,
+      Accept:
+        "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+      "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
+    });
 
-new Headers(init.headers).forEach((value, key) => {
-  headers.set(key, value);
-});
+    new Headers(init.headers).forEach((value, key) => {
+      headers.set(key, value);
+    });
 
-const response = await fetch(url, {
-  ...init,
-  method: init.method || "GET",
-  cache: "no-store",
-  signal: controller.signal,
-  redirect: "follow",
-  headers,
-});
+    const response = await fetch(url, {
+      ...init,
+      method: init.method || "GET",
+      cache: "no-store",
+      signal: controller.signal,
+      redirect: "follow",
+      headers,
+    });
 
     // دریافت Headerها تمام شده و خواندن بدنه آغاز می‌شود.
     currentPhase = "body";
@@ -1615,6 +1621,7 @@ async function fetchSource(
     rejectedMissingLink: 0,
     rejectedDomain: 0,
     samples: [],
+    candidateSamples: [],
     keywordSamples: [],
     matchedSamples: [],
     nearMatchSamples: [],
@@ -1712,6 +1719,14 @@ async function fetchSource(
         .map((item) => ({
           title: item.title,
           publishedAt: item.publishedAt,
+        }));
+
+      diagnostics.candidateSamples = candidates
+        .slice(0, 30)
+        .map((item) => ({
+          title: item.title,
+          publishedAt: item.publishedAt,
+          description: item.description.slice(0, 500),
         }));
     }
 
