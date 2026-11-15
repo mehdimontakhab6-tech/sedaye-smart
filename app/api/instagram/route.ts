@@ -1276,6 +1276,14 @@ async function sendToBale(
     .replace(/[\p{S}\p{Z}\s_#]+$/gu, "")
     .replace(/[،؛:!?؟]+$/gu, "")
     .trim();
+
+  // حذف بخش منابع از انتهای کل کپشن، پیش از تقسیم پیام
+cleanedCaption = cleanedCaption
+  .replace(
+    /(?:^|\n)\s*(?:منبع|منابع)\s*:?\s*[\s\S]*$/u,
+    "",
+  )
+  .trim();
   
   // حذف لینک‌های انتهایی کپشن، چه در خط مستقل و چه چسبیده به متن
   const trailingLinkPattern =
