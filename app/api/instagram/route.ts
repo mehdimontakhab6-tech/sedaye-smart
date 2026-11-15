@@ -1375,7 +1375,38 @@ async function sendToBale(
   const mediaCaption = firstPart.chunk;
   let remainingText = firstPart.remaining;
 
-console.info("[Instagram] Caption integrity audit", {
+  console.info("[Instagram] FULL TEXT DIAGNOSTIC", {
+  postId: post.id,
+
+  sourceCaptionEnd:
+    Array.from(post.caption).slice(-250).join(""),
+
+  completeTextEnd:
+    Array.from(completeText).slice(-250).join(""),
+
+  mediaCaptionEnd:
+    Array.from(mediaCaption).slice(-150).join(""),
+
+  continuationStart:
+    Array.from(firstPart.remaining).slice(0, 250).join(""),
+
+  continuationEnd:
+    Array.from(firstPart.remaining).slice(-250).join(""),
+
+  sourceLength:
+    Array.from(post.caption).length,
+
+  completeLength:
+    Array.from(completeText).length,
+
+  mediaLength:
+    Array.from(mediaCaption).length,
+
+  continuationLength:
+    Array.from(firstPart.remaining).length,
+});
+
+  console.info("[Instagram] Caption integrity audit", {
   postId: post.id,
 
   sourceCaptionLength: Array.from(post.caption).length,
@@ -1393,7 +1424,6 @@ console.info("[Instagram] Caption integrity audit", {
     firstPart.remaining.length === 0 ||
     Array.from(firstPart.remaining).length > 0,
 });
-
   
   const baleMediaStartedAt = Date.now();
 
