@@ -251,11 +251,30 @@ function htmlToText(html: string): string {
             return inner;
           }
 
-          if (linkText.includes(href)) {
-            return inner;
-          }
+          let hostname = "";
 
-          return `${inner}\n${href}`;
+try {
+  hostname = new URL(href).hostname
+    .replace(/^www\./i, "")
+    .toLowerCase();
+} catch {
+  return inner;
+}
+
+const normalizedText = linkText
+  .replace(/^https?:\/\//i, "")
+  .replace(/^www\./i, "")
+  .replace(/[/?#].*$/, "")
+  .toLowerCase();
+
+if (
+  linkText.includes(href) ||
+  normalizedText === hostname
+) {
+  return inner;
+}
+
+return `${inner}\n${href}`;
         },
       )
       .replace(/<br\b[^>]*>/gi, "\n")
