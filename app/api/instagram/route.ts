@@ -9,8 +9,8 @@ const TIME_ZONE = "Asia/Tehran";
 
 const SOURCES = {
   modiryar_com: { limit: 4 },
+  "gahname_modir": { limit: 3 },
   "hr.garden": { limit: 2 },
-  "hr.gofteman": { limit: 3 },
 } as const;
 
 type Username = keyof typeof SOURCES;
@@ -103,7 +103,7 @@ function sourceForHour(hour: number): Username | null {
   }
 
   if ([17, 19, 21].includes(hour)) {
-    return "hr.gofteman";
+  return "gahname_modir";
   }
 
   return null;
@@ -124,11 +124,11 @@ function emptyState(date: string): State {
         sentIds: [],
         pendingIds: [],
       },
-      "hr.gofteman": {
-        sentToday: 0,
-        sentIds: [],
-        pendingIds: [],
-      },
+      "gahname_modir": {
+  sentToday: 0,
+  sentIds: [],
+  pendingIds: [],
+},
     },
   };
 }
