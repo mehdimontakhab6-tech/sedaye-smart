@@ -1196,6 +1196,41 @@ async function readArchivedPosts(
   return posts;
 }
 
+function removeTrailingInstagramExtras(caption: string): string {
+  const lines = caption.split("\n");
+
+  while (lines.length > 0) {
+    const line = lines[lines.length - 1].trim();
+
+    if (!line) {
+      lines.pop();
+      continue;
+    }
+
+    // حذف خط جداکننده
+    if (/^(?:[-–—_*~=•·]\s*){2,}$/.test(line)) {
+      lines.pop();
+      continue;
+    }
+
+    // حذف خطوط صرفاً شامل هشتگ
+    if (/^(?:#[\p{L}\p{M}\p{N}_‌]+\s*)+$/u.test(line)) {
+      lines.pop();
+      continue;
+    }
+
+    // حذف عنوان انگلیسی انتهای متن
+    if (/^[\p{Script=Latin}\d\s.,:;!?'"()\-–—&/]+$/u.test(line)) {
+      lines.pop();
+      continue;
+    }
+
+    break;
+  }
+
+  return lines.join("\n").trim();
+}
+
 async function sendToBale(
   env: Env,
   username: Username,
@@ -1315,7 +1350,10 @@ cleanedCaption = cleanedCaption
     .replace(/[ \t]+$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-
+  
+// حذف هشتگ‌ها، عنوان انگلیسی و خط جداکننده انتهایی
+cleanedCaption = removeTrailingInstagramExtras(cleanedCaption);
+  
   const completeText = cleanedCaption
     ? `${TITLE}\n\n${cleanedCaption}`
     : TITLE;
