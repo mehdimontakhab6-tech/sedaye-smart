@@ -1354,6 +1354,18 @@ cleanedCaption = cleanedCaption
 // حذف هشتگ‌ها، عنوان انگلیسی و خط جداکننده انتهایی
 cleanedCaption = removeTrailingInstagramExtras(cleanedCaption);
   
+// حذف تمام شناسه‌های کاربری اینستاگرام در انتهای کپشن
+cleanedCaption = cleanedCaption.replace(
+  /(?:^|\s)@[a-zA-Z0-9._]{2,30}\s*$/gm,
+  "",
+);
+
+// پاک‌سازی خطوط و فاصله‌های انتهایی
+cleanedCaption = cleanedCaption
+  .replace(/[ \t]+$/gm, "")
+  .replace(/\n{3,}/g, "\n\n")
+  .trim();
+
   const completeText = cleanedCaption
     ? `${TITLE}\n\n${cleanedCaption}`
     : TITLE;
