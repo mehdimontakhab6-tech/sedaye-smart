@@ -1219,8 +1219,15 @@ function removeTrailingInstagramExtras(caption: string): string {
       continue;
     }
 
-    // حذف عنوان انگلیسی انتهای متن
-    if (/^[\p{Script=Latin}\d\s.,:;!?'"()\-–—&/]+$/u.test(line)) {
+    // حذف متن انگلیسی انتهایی، حتی اگر با ایموجی شروع شده باشد
+    const normalizedLine = line.replace(
+      /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\s]+/gu,
+      "",
+    );
+
+    if (
+      /^[\p{Script=Latin}\d\s.,:;!?'"()\-–—&/]+$/u.test(normalizedLine)
+    ) {
       lines.pop();
       continue;
     }
